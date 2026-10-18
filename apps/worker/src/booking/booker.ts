@@ -98,13 +98,12 @@ export class Booker {
       // Select Preferred Slot if available
       if (customer.preferredSlot) {
         const slotSelect = page.locator(PORTAL_SELECTORS.preferredSlot);
-        if (await slotSelect.count()) {
-          const availableOptions = await slotSelect.locator("option").allTextContents();
-          const matched = availableOptions.find((opt) =>
-            opt.toLowerCase().includes(customer.preferredSlot!.toLowerCase())
-          );
-          if (matched) {
-            await slotSelect.selectOption({ label: matched });
+        if ((await slotSelect.count()) > 0) {
+          try {
+            await slotSelect.selectOption({ label: customer.preferredSlot });
+          } catch {
+            // Fallback: select by index if label differs
+            await slotSelect.selectOption({ index: 0 });
           }
         }
       }

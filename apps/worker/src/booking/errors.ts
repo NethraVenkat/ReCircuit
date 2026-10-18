@@ -97,3 +97,4 @@ export class InvalidBookingReferenceError extends BookerError {
     this.expectedPattern = expectedPattern;
   }
 }
+

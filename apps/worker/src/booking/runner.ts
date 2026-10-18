@@ -11,6 +11,7 @@ import {
   type PlanLeg,
   type StatusEvent,
 } from "@recircuit/core";
+import type { BrowserSession } from "../browser/session.js";
 import { Booker } from "./booker.js";
 import type { BookerOptions, BookerResult, LegBookingContext } from "./types.js";
 import { BookerError } from "./errors.js";
@@ -32,7 +33,8 @@ export class BookingRunner {
    */
   public static async bookLegWithTransitions(
     context: LegBookingContext,
-    options: BookerOptions = {}
+    options: BookerOptions = {},
+    existingSession?: BrowserSession
   ): Promise<LegBookingExecutionResult> {
     const { leg, plan } = context;
     const auditEvents: StatusEvent[] = [];
@@ -62,7 +64,8 @@ export class BookingRunner {
           ...context,
           leg: currentLeg,
         },
-        options
+        options,
+        existingSession
       );
 
       // 3. Handle Human Verification (CAPTCHA)
@@ -135,7 +138,8 @@ export class BookingRunner {
   public static async resumeLegWithCaptcha(
     context: LegBookingContext,
     captchaCode: string,
-    options: BookerOptions = {}
+    options: BookerOptions = {},
+    existingSession?: BrowserSession
   ): Promise<LegBookingExecutionResult> {
     const { leg } = context;
     const auditEvents: StatusEvent[] = [];
@@ -166,7 +170,8 @@ export class BookingRunner {
       {
         ...options,
         captchaCode,
-      }
+      },
+      existingSession
     );
 
     if (bookerResult.success && bookerResult.bookingReference) {
@@ -192,3 +197,4 @@ export class BookingRunner {
     throw new BookerError("Resumed booking failed to produce valid booking reference.", "RESUME_FAILED");
   }
 }
+
