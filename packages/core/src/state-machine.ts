@@ -1,7 +1,7 @@
 /**
  * packages/core/src/state-machine.ts
  *
- * Deterministic state machine for ReRoute (both Request pipeline and Leg lifecycle).
+ * Deterministic state machine for ReCircuit (both Request pipeline and Leg lifecycle).
  *
  * RULES:
  *  - The LLM never decides eligibility, money, or state transitions.

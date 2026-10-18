@@ -1,4 +1,6 @@
-# ReRoute — Autonomous Reverse-Logistics Agent
+# ReCircuit — Autonomous Reverse-Logistics Agent
+
+ReCircuit is the reverse-logistics agent that gets your e-waste to the right recycler, books the pickups after approval, and proves every status it reports.
 
 ## Monorepo Layout
 

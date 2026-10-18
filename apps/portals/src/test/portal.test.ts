@@ -1,7 +1,7 @@
 /**
  * apps/portals/src/test/portal.test.ts
  *
- * Vitest tests for the ReRoute Mock Recycler Portals:
+ * Vitest tests for the ReCircuit Mock Recycler Portals:
  * - Each site: valid booking returns reference in right format (DEC-xxxxx, PPK-xxxxx, QSH-xxxxx)
  * - Tracking finds that reference and shows RECEIVED
  * - Invalid submissions rejected: unsupported item, bad pincode, bad phone, PaperPlus under 5 kg, Deccan missing data-wipe ack
@@ -30,7 +30,7 @@ import { POST as handlePostReset } from "../app/api/reset/route";
 
 const TEST_DATA_DIR = path.resolve(__dirname, "../../.data-test");
 
-describe("ReRoute Mock Recycler Portals Test Suite", () => {
+describe("ReCircuit Mock Recycler Portals Test Suite", () => {
   let repo: FileRepository;
 
   beforeEach(async () => {

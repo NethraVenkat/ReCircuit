@@ -1,7 +1,7 @@
 /**
  * packages/core/src/state-machine.test.ts
  *
- * Vitest tests for the ReRoute state machine (Request pipeline + Leg lifecycle).
+ * Vitest tests for the ReCircuit state machine (Request pipeline + Leg lifecycle).
  */
 
 import { describe, it, expect } from "vitest";

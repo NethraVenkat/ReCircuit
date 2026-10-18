@@ -1,7 +1,7 @@
 /**
  * packages/core/src/approval/approval-service.ts
  *
- * Approval service for ReRoute reverse-logistics planning.
+ * Approval service for ReCircuit reverse-logistics planning.
  * Deterministic transition coordinator for PLAN_CREATED -> AWAITING_APPROVAL -> APPROVED / REJECTED.
  */
 

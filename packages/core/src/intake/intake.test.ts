@@ -35,7 +35,7 @@ import {
   itemCategoryToTaxonomyCategories,
 } from "./taxonomy.js";
 import type { ItemCategory } from "../types.js";
-import { clearFakeFixtures, LlmOutputError } from "@reroute/llm";
+import { clearFakeFixtures, LlmOutputError } from "@recircuit/llm";
 
 describe("Stage 3: User Intake + Item Classification Test Suite", () => {
   beforeEach(() => {
@@ -480,7 +480,7 @@ describe("Stage 3: User Intake + Item Classification Test Suite", () => {
   // 19. Category Outside Enum & Negative Quantity Schema Validation Retries
   // -------------------------------------------------------------------------
   it("retries then throws LlmOutputError on category outside enum or negative quantity", async () => {
-    const { registerFakeFixture } = await import("@reroute/llm");
+    const { registerFakeFixture } = await import("@recircuit/llm");
 
     // Invalid category
     registerFakeFixture("invalid_cat_fixture", [
@@ -517,7 +517,7 @@ describe("Stage 3: User Intake + Item Classification Test Suite", () => {
   // 20. Privacy: User Personal Data (name, phone, street address) Never Reaches LLM Prompts
   // -------------------------------------------------------------------------
   it("proves customer personal data (name, phone, street address) is never passed into LLM prompts", async () => {
-    const { FakeLlmAdapter } = await import("@reroute/llm");
+    const { FakeLlmAdapter } = await import("@recircuit/llm");
     const adapter = new FakeLlmAdapter();
 
     // Verify system prompt never solicits user personal data

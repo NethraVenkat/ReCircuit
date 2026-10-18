@@ -8,8 +8,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "apps/portals/src"),
-      "@reroute/llm": path.resolve(__dirname, "packages/llm/src"),
-      "@reroute/core": path.resolve(__dirname, "packages/core/src"),
+      "@recircuit/llm": path.resolve(__dirname, "packages/llm/src"),
+      "@recircuit/core": path.resolve(__dirname, "packages/core/src"),
     },
   },
   test: {

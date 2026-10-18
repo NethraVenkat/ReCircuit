@@ -2,7 +2,7 @@
 /**
  * scripts/plan-cli.mjs
  *
- * CLI runner for ReRoute End-to-End Planning & Split Routing:
+ * CLI runner for ReCircuit End-to-End Planning & Split Routing:
  * Intake -> Discover Recyclers -> Read Policies -> Check Eligibility -> Create Plan
  *
  * Usage:
@@ -24,7 +24,7 @@ import {
   requestApproval,
   formatApprovalCard,
   DEFAULT_SLOT_PREFERENCE,
-} from "@reroute/core";
+} from "@recircuit/core";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -36,7 +36,7 @@ async function main() {
   }
 
   console.log(`\n================================================================`);
-  console.log(`  ReRoute Autonomous Routing & Plan Generator`);
+  console.log(`  ReCircuit Autonomous Routing & Plan Generator`);
   console.log(`================================================================\n`);
   console.log(`📝 User Intake Text: "${text}"\n`);
 

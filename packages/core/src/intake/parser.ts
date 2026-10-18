@@ -5,11 +5,11 @@
  * then pipes the LLM proposal through deterministic postProcessIntake.
  */
 
-import { generateStructured } from "@reroute/llm";
+import { generateStructured } from "@recircuit/llm";
 import { LlmProposedIntakeSchema, type ValidatedIntakeResult, type LlmProposedIntake } from "./schema.js";
 import { postProcessIntake } from "./post-processor.js";
 
-export const INTAKE_SYSTEM_PROMPT = `You are the household intake parser for ReRoute, an autonomous reverse-logistics agent for e-waste and recycling pickups in Hyderabad, India.
+export const INTAKE_SYSTEM_PROMPT = `You are the household intake parser for ReCircuit, an autonomous reverse-logistics agent for e-waste and recycling pickups in Hyderabad, India.
 
 Your goal is to parse household free-text requests into structured proposals.
 Rules:

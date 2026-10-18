@@ -11,7 +11,7 @@
 
 import fs from "fs";
 import path from "path";
-import { recordDecision, requestApproval, formatApprovalCard, hashPlan } from "@reroute/core";
+import { recordDecision, requestApproval, formatApprovalCard, hashPlan } from "@recircuit/core";
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -216,3 +216,4 @@ main().catch((err) => {
   console.error("Fatal approval error:", err);
   process.exit(1);
 });
+

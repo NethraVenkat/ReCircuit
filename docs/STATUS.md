@@ -1,4 +1,4 @@
-# ReRoute — Build Status
+# ReCircuit — Build Status
 
 ## Stage 1 — Data Model + State Machine (Completed)
 

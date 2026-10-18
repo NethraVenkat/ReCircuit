@@ -1,4 +1,4 @@
-# ReRoute — Implementation Plan
+# ReCircuit — Implementation Plan
 
 Calendar: today is Sat 17 Oct 2026 (IST). Build & Submit opens Tue 20 Oct 11:00 IST and closes Fri 23 Oct (confirm exact time). Jury validation 23–26 Oct.
 

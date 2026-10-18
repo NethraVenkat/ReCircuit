@@ -1,6 +1,6 @@
 -- =============================================================================
 -- supabase/migrations/0001_init.sql
--- ReRoute initial schema
+-- ReCircuit initial schema
 -- =============================================================================
 
 -- In PostgreSQL 13+ and Supabase, gen_random_uuid() is built-in natively.

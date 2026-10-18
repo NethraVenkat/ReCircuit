@@ -1,7 +1,7 @@
 /**
  * packages/core/src/types.ts
  *
- * All domain types for ReRoute.
+ * All domain types for ReCircuit.
  * Zero network I/O — pure value types only.
  */
 

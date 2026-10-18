@@ -1,5 +1,5 @@
 {
-  "name": "@reroute/worker",
+  "name": "@recircuit/worker",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,9 +9,9 @@
   },
   "dependencies": {
     "@browserbasehq/stagehand": "^4.2.1",
-    "@reroute/core": "*",
-    "@reroute/db": "*",
-    "@reroute/llm": "*",
+    "@recircuit/core": "*",
+    "@recircuit/db": "*",
+    "@recircuit/llm": "*",
     "zod": "^3.23.8"
   }
 }

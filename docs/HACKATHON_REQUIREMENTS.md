@@ -1,4 +1,4 @@
-# ReRoute — Hackathon Requirements and Traceability
+# ReCircuit — Hackathon Requirements and Traceability
 
 Sources: official problem brief ("E-waste & Recycling Pickup Coordinator", Social Impact & Sustainability AI), hackathon rules, and the team build spec. Status column is updated as stages complete; nothing is PASS until a test run proves it.
 

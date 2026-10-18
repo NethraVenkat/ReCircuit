@@ -1,8 +1,8 @@
 {
-  "name": "@reroute/llm",
+  "name": "@recircuit/llm",
   "version": "0.0.1",
   "private": true,
-  "description": "Provider-agnostic structured LLM completion library for ReRoute",
+  "description": "Provider-agnostic structured LLM completion library for ReCircuit",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

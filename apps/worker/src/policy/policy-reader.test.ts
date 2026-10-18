@@ -16,8 +16,8 @@ import path from "path";
 import { describe, it, expect, beforeEach } from "vitest";
 import { readRecyclerPolicy, extractPolicyViaDomFallback } from "./policy-reader.js";
 import { openSession, ConfigurationError, type BrowserSession } from "../browser/session.js";
-import { FakeLlmAdapter, clearFakeFixtures, registerFakeFixture } from "@reroute/llm";
-import { DECCAN_PAGE_TEXT, DECCAN_EXTRACTION, validatePolicyAgainstPageText } from "@reroute/core";
+import { FakeLlmAdapter, clearFakeFixtures, registerFakeFixture } from "@recircuit/llm";
+import { DECCAN_PAGE_TEXT, DECCAN_EXTRACTION, validatePolicyAgainstPageText } from "@recircuit/core";
 
 describe("Stage 4 Fixes: Worker Policy Reader Unit Tests", () => {
   let fakeSession: BrowserSession;

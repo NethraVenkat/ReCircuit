@@ -2,7 +2,7 @@
 /**
  * scripts/policies-cli.mjs
  *
- * CLI runner for ReRoute Browser Policy Discovery.
+ * CLI runner for ReCircuit Browser Policy Discovery.
  * Discovers and extracts policies from Deccan, PaperPlus, and QuickScrap.
  * Automatically spins up local portal servers if not already running.
  *
@@ -69,7 +69,7 @@ async function ensurePortalsRunning() {
 
 async function main() {
   console.log(`\n======================================================`);
-  console.log(`  ReRoute Policy Discovery CLI (Mode: ${modeArg.toUpperCase()})`);
+  console.log(`  ReCircuit Policy Discovery CLI (Mode: ${modeArg.toUpperCase()})`);
   console.log(`======================================================\n`);
 
   let spawnedChild = null;

@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 const TEST_ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret-token";
 
-test.describe("ReRoute Mock Recycler Portals E2E Suite", () => {
+test.describe("ReCircuit Mock Recycler Portals E2E Suite", () => {
   // Reset demo state before tests
   test.beforeAll(async ({ request }) => {
     test.setTimeout(60000);

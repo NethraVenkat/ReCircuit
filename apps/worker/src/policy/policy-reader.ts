@@ -15,8 +15,8 @@ import {
   collectQuotesFromExtraction,
   type ExtractedPolicy,
   type GenericPolicyExtraction,
-} from "@reroute/core";
-import { getAdapter, type LlmAdapter } from "@reroute/llm";
+} from "@recircuit/core";
+import { getAdapter, type LlmAdapter } from "@recircuit/llm";
 import type { BrowserSession } from "../browser/session.js";
 import { discoverPolicyPages } from "./discovery.js";
 

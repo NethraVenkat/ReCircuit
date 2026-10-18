@@ -1,4 +1,4 @@
-# ReRoute — State Machine Reference
+# ReCircuit — State Machine Reference
 
 > **Stage 1** — Data Model & Deterministic State Machine
 > Pure TypeScript state machine in `packages/core`. Zero network I/O, zero LLM decisions.

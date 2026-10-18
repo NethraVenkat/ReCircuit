@@ -1,4 +1,4 @@
-# ReRoute — Architecture
+# ReCircuit — Architecture
 
 Autonomous reverse-logistics agent for household recycling.
 Status: **design (Stage 0)**. Nothing below is implemented yet; see `STATUS.md`.
@@ -7,7 +7,7 @@ Status: **design (Stage 0)**. Nothing below is implemented yet; see `STATUS.md`.
 
 1. **The LLM interprets; code decides.** The LLM parses text, reads messy policy pages and explains plans. Eligibility, money, approval and state transitions are deterministic TypeScript in `packages/core`, unit-tested without any network. Eligibility, pricing, and routing (Stage 5) MUST use canonical taxonomy categories (the 16 canonical categories defined in `CANONICAL_CATEGORIES` via `isCanonicalCategory`), never coarse domain categories (`ItemCategory`).
 2. **No evidence, no transition.** Every leg state change goes through `transitionState()`, which rejects a move whose required evidence is missing.
-3. **The browser acts on real pages.** Booking and verification happen by driving the mock recycler websites in Browserbase sessions (or local Playwright in offline dev). The ReRoute agent and verifier never call portal JSON APIs; they operate HTML pages via browser.
+3. **The browser acts on real pages.** Booking and verification happen by driving the mock recycler websites in Browserbase sessions (or local Playwright in offline dev). The ReCircuit agent and verifier never call portal JSON APIs; they operate HTML pages via browser.
 4. **Fail closed.** Extraction failure, timeout, missing reference or tracking mismatch stops the leg in a visible state (`FAILED`, `NEEDS_HUMAN`, or stays put). It never reports success it did not observe.
 5. **Small, one language.** TypeScript end to end, npm workspaces, three deployable apps, one database.
 
@@ -49,7 +49,7 @@ Browserbase browsers run in the cloud, so **the portals must be publicly reachab
 ## 3. Repository layout (planned)
 
 ```
-reroute/
+recircuit/
   apps/
     web/        Next.js dashboard + API routes (no long-running work)
     portals/    Next.js mock recycler sites; RECYCLER_ID env selects Deccan / PaperPlus / QuickScrap

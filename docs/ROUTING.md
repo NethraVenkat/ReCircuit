@@ -1,6 +1,6 @@
-# ReRoute — Eligibility, Pricing, and Split Routing Engine
+# ReCircuit — Eligibility, Pricing, and Split Routing Engine
 
-This document details the deterministic, LLM-free routing system implemented in `packages/core/src/routing/` for Stage 5 of ReRoute.
+This document details the deterministic, LLM-free routing system implemented in `packages/core/src/routing/` for Stage 5 of ReCircuit.
 
 ---
 

@@ -24,7 +24,7 @@ const PORTALS = [
 const RESET = "\x1b[0m";
 const children = [];
 
-console.log("🚀 Starting ReRoute Mock Recycler Portals...\n");
+console.log("🚀 Starting ReCircuit Mock Recycler Portals...\n");
 
 PORTALS.forEach(({ id, name, port, color }) => {
   const env = {

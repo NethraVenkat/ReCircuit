@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Recycler Portal - ReRoute",
+  title: "Recycler Portal - ReCircuit",
   description: "Mock Recycler Websites for Reverse Logistics Agent",
 };
 

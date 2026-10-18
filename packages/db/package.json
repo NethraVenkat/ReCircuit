@@ -1,8 +1,8 @@
 {
-  "name": "@reroute/db",
+  "name": "@recircuit/db",
   "version": "0.0.1",
   "private": true,
-  "description": "ReRoute Supabase client and typed query helpers",
+  "description": "ReCircuit Supabase client and typed query helpers",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@reroute/core": "*"
+    "@recircuit/core": "*"
   },
   "devDependencies": {
     "typescript": "^5.5.4"

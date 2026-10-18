@@ -33,7 +33,7 @@ stateDiagram-v2
 
 ## 3. Approval Reasons & Approval Card
 
-Every plan evaluated by ReRoute generates a deterministic list of `ApprovalReason` flags:
+Every plan evaluated by ReCircuit generates a deterministic list of `ApprovalReason` flags:
 - **`BOOKING_SUBMISSION`**: **Always present**. Every booking submission requires human sign-off.
 - **`FEE_CAP_EXCEEDED`**: Present if the total pickup fees exceed the user's stated fee cap (`feeCapInr`).
 - **`FEE_CHARGED`**: Present if any pickup leg incurs a non-zero fee.
@@ -120,3 +120,4 @@ Transitions request to `REJECTED`, creates 0 legs, and closes the request.
 npm run approve -- --request=<requestId> --choose-plan=2
 ```
 Switches active plan to Option 2, invalidates previous approvals, updates the plan hash, and presents the new Approval Card for decision.
+

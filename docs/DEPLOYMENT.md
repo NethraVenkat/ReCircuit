@@ -1,12 +1,12 @@
-# ReRoute — Deployment Guide & Status
+# ReCircuit — Deployment Guide & Status
 
-This document describes the deployment architecture for ReRoute, the mock recycler portals, and deployment status.
+This document describes the deployment architecture for ReCircuit, the mock recycler portals, and deployment status.
 
 ---
 
 ## 1. Portal Architecture & Deployment Strategy
 
-ReRoute interacts with three distinct mock recycler portals representing different Hyderabad e-waste and scrap vendors:
+ReCircuit interacts with three distinct mock recycler portals representing different Hyderabad e-waste and scrap vendors:
 1. **Deccan E-Cycle Solutions** (`deccan`): Formal e-waste recycler, requires data wipe acknowledgement, free pickup for >= 5 kg, flat ₹180 fee below 5 kg.
 2. **PaperPlus Kabadi** (`paperplus`): Specialized dry scrap aggregator, minimum 5 kg weight required, rejects electronics, requires human verification CAPTCHA.
 3. **QuickScrap Hyderabad** (`quickscrap`): Unregistered doorstep scrap aggregator, flat ₹50 convenience fee, rate card per item.
@@ -67,8 +67,8 @@ Deploy `apps/portals` three times with distinct project names and environment va
 
 Set the resulting public URLs in `.env.local` or worker environment:
 ```env
-PORTAL_DECCAN_URL=https://deccan-reroute.vercel.app
-PORTAL_PAPERPLUS_URL=https://paperplus-reroute.vercel.app
-PORTAL_QUICKSCRAP_URL=https://quickscrap-reroute.vercel.app
+PORTAL_DECCAN_URL=https://deccan-recircuit.vercel.app
+PORTAL_PAPERPLUS_URL=https://paperplus-recircuit.vercel.app
+PORTAL_QUICKSCRAP_URL=https://quickscrap-recircuit.vercel.app
 ```
 

@@ -1,4 +1,4 @@
-# ReRoute — Stage 0–3 Adversarial Audit & Remediation Report
+# ReCircuit — Stage 0–3 Adversarial Audit & Remediation Report
 
 **Date:** October 18, 2026  
 **Auditor:** Autonomous Pair Programmer (Agentic Audit Round)  
@@ -109,7 +109,7 @@ node scripts/intake-cli.mjs "one laptop, Bengaluru"
 **Output:**
 ```
 Resulting State: NEEDS_CLARIFICATION
-Clarification: [LOCATION_OUTSIDE_SERVICE_AREA] ReRoute currently only operates within Hyderabad (Telangana). We noticed "Bengaluru". Is there a Hyderabad address for pickup?
+Clarification: [LOCATION_OUTSIDE_SERVICE_AREA] ReCircuit currently only operates within Hyderabad (Telangana). We noticed "Bengaluru". Is there a Hyderabad address for pickup?
 ```
 
 ---
@@ -125,7 +125,7 @@ Clarification: [LOCATION_OUTSIDE_SERVICE_AREA] ReRoute currently only operates w
 
 ## 6. Audit Conclusion
 
-All Stage 0–3 modules are verified, completely offline functional, robustly tested, and strictly compliant with the deterministic safety rules of ReRoute.
+All Stage 0–3 modules are verified, completely offline functional, robustly tested, and strictly compliant with the deterministic safety rules of ReCircuit.
 
 **Stage 4 (Browser Automation & Policy Reader) may now begin.**
 

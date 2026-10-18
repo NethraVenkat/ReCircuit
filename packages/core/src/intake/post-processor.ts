@@ -250,7 +250,7 @@ export function postProcessIntake(
     city = proposed.location.city || "Outside Service Area";
     clarifications.push({
       code: "LOCATION_OUTSIDE_SERVICE_AREA",
-      question: `ReRoute currently only operates within Hyderabad (Telangana). We noticed "${city}". Is there a Hyderabad address for pickup?`,
+      question: `ReCircuit currently only operates within Hyderabad (Telangana). We noticed "${city}". Is there a Hyderabad address for pickup?`,
       affectedItemIds: [],
     });
   }

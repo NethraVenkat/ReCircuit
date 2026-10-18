@@ -1,9 +1,9 @@
 /**
  * packages/core/src/index.ts
  *
- * Public surface of @reroute/core.
+ * Public surface of @recircuit/core.
  * All exports are re-exported from sub-modules so consumers
- * can import from "@reroute/core" directly.
+ * can import from "@recircuit/core" directly.
  */
 
 // Domain types

@@ -217,7 +217,7 @@ function AdminPageContent(): JSX.Element {
             <div>
               <h2 className="text-base font-bold text-slate-900">Agent Test Failure Switches</h2>
               <p className="text-xs text-slate-500">
-                Trigger simulated portal failures to test the ReRoute agent’s error handling and verification invariants.
+                Trigger simulated portal failures to test the ReCircuit agent’s error handling and verification invariants.
               </p>
             </div>
             <span className="text-xs font-bold text-purple-700 uppercase">Test Swappable</span>

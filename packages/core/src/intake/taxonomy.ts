@@ -1,7 +1,7 @@
 /**
  * packages/core/src/intake/taxonomy.ts
  *
- * Canonical taxonomy for ReRoute (code, not LLM).
+ * Canonical taxonomy for ReCircuit (code, not LLM).
  * Determines group, hazardClass, and default per-unit estimated weights.
  */
 
