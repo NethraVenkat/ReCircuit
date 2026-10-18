@@ -17,6 +17,7 @@
     "policies": "node scripts/policies-cli.mjs",
     "plan": "node scripts/plan-cli.mjs",
     "approve": "node scripts/approve-cli.mjs",
+    "book": "node scripts/book-cli.mjs",
     "portals:dev": "node scripts/start-portals.cjs"
   },
   "devDependencies": {
