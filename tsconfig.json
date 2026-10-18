@@ -3,7 +3,8 @@
   "references": [
     { "path": "packages/llm" },
     { "path": "packages/core" },
-    { "path": "packages/db" }
+    { "path": "packages/db" },
+    { "path": "apps/worker" }
   ]
 }
 

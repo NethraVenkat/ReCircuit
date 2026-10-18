@@ -2,10 +2,28 @@ import React from "react";
 import { PaperPlusLayout } from "@/components/PaperPlusLayout";
 import { RECYCLER_CONFIGS } from "@/lib/config";
 
+import { getRepository } from "@/lib/repository";
+
 export const dynamic = "force-dynamic";
 
-export default function WhatWeTakePage(): JSX.Element {
+export default async function WhatWeTakePage(): Promise<JSX.Element> {
   const config = RECYCLER_CONFIGS.paperplus;
+  const repo = getRepository();
+  const switches = await repo.getFailureSwitches("paperplus");
+
+  if (switches.hideFeeInfo) {
+    return (
+      <PaperPlusLayout activePath="/what-we-take">
+        <div className="space-y-6">
+          <h2 className="text-3xl font-black text-amber-950">What PaperPlus Buys & Full Rate Card</h2>
+          <div data-testid="fee-info-hidden" className="p-6 bg-amber-50 border-2 border-amber-300 rounded text-amber-950 text-sm">
+            <p className="font-bold">Notice: Rate card updates underway.</p>
+            <p className="text-xs mt-1">Scrap paper rates and minimum weight requirements are temporarily unlisted.</p>
+          </div>
+        </div>
+      </PaperPlusLayout>
+    );
+  }
 
   return (
     <PaperPlusLayout activePath="/what-we-take">

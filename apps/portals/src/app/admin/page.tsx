@@ -17,6 +17,7 @@ function AdminPageContent(): JSX.Element {
     failNextSubmit: false,
     omitNextReference: false,
     changedPolicyLayout: false,
+    hideFeeInfo: false,
   });
   const [_loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
@@ -222,7 +223,7 @@ function AdminPageContent(): JSX.Element {
             <span className="text-xs font-bold text-purple-700 uppercase">Test Swappable</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Switch 1: Fail submit with HTTP 500 */}
             <div className="p-4 rounded border bg-slate-50 space-y-2">
               <div className="flex justify-between items-center">
@@ -271,6 +272,23 @@ function AdminPageContent(): JSX.Element {
               </div>
               <p className="text-[11px] text-slate-600">
                 Renames headings and moves fee schedule on policy pages to test LLM extraction robustness. Toggled.
+              </p>
+            </div>
+
+            {/* Switch 4: Hide fee info */}
+            <div className="p-4 rounded border bg-slate-50 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold">Hide Fee Info</span>
+                <input
+                  type="checkbox"
+                  data-testid="switch-hide-fee-info"
+                  checked={switches.hideFeeInfo}
+                  onChange={() => handleToggleSwitch("hideFeeInfo")}
+                  className="rounded text-rose-600 w-4 h-4"
+                />
+              </div>
+              <p className="text-[11px] text-slate-600">
+                Omits fee thresholds and rates on policy pages to simulate extraction error and POLICY_UNREADABLE. Toggled.
               </p>
             </div>
           </div>

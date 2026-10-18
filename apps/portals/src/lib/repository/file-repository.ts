@@ -19,6 +19,7 @@ const DEFAULT_SWITCHES: FailureSwitches = {
   failNextSubmit: false,
   omitNextReference: false,
   changedPolicyLayout: false,
+  hideFeeInfo: false,
 };
 
 export class FileRepository implements BookingRepository {

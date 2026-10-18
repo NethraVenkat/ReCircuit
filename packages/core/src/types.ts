@@ -65,6 +65,9 @@ export type ItemCategory =
 /** Recycler registration status at snapshot time */
 export type RegistrationStatus = "REGISTERED" | "NOT_FOUND" | "EXPIRED" | "SUSPENDED";
 
+/** Canonical Recycler identifiers */
+export type RecyclerId = "deccan" | "paperplus" | "quickscrap";
+
 // ---------------------------------------------------------------------------
 // Evidence types
 // ---------------------------------------------------------------------------

@@ -52,14 +52,31 @@
 | `packages/core/src/intake/post-processor.ts` — dynamic mapping to domain Request category & hazardClass | ✅ Done |
 | TypeScript RFC4122 v4 UUID assignment (never LLM) | ✅ Done |
 | CLI `npm run intake -- "<text>"` | ✅ Done |
-| Vitest tests — intake & classification (`intake.test.ts` - 14 tests, `llm.test.ts` - 6 tests) | ✅ Done |
+| Vitest tests — intake & classification (`intake.test.ts` - 22 tests, `llm.test.ts` - 6 tests) | ✅ Done |
 | Embedded PostgreSQL migrations & schema verification (`migrations.test.ts` - 5 tests) | ✅ Done |
-| Total Vitest unit tests: 145 passing across all packages (0 warnings, 0 failures) | ✅ Done |
+
+## Stage 4 — Browser Policy Discovery + Portal Deployment (Completed)
+
+| Component / Requirement | Status | Notes |
+|---|---|---|
+| Part A — Portals Reachability / Vercel Deployment | 🟡 LOCAL ONLY | Vercel CLI unauthenticated (`npx vercel login`); Supabase NOT CONFIGURED |
+| `docs/DEPLOYMENT.md` & `.env.example` portal URLs | ✅ Done | Documented architecture, local defaults, and deployment commands |
+| `apps/worker/src/browser/session.ts` | ✅ Done | OpenSession supports local Playwright & cloud Browserbase |
+| `apps/worker/src/policy/discovery.ts` | ✅ Done | Discovers policy/rates links via DOM navigation (capped at 4 pages) |
+| `packages/core/src/policy/policy-schema.ts` | ✅ Done | Zod schemas for extracted policy, rate cards, and citations |
+| `packages/core/src/policy/anti-hallucination.ts` | ✅ Done | Verbatim quote check in page text + numbers-in-quotes grounding check |
+| Admin Failure Switch `hideFeeInfo` in `apps/portals` | ✅ Done | Toggles unlisted fee schedules across Deccan, PaperPlus, QuickScrap |
+| `scripts/policies-cli.mjs` (`npm run policies`) | ✅ Done | CLI runner with auto-portal server lifecycle management |
+| Unit tests (`policy.test.ts` - 7 tests, `policy-reader.test.ts` - 4 tests) | ✅ Done |
+| Playwright E2E tests (`policies.spec.ts` - 5 tests) | ✅ Done | Live browser discovery, quote grounding, and failure switches |
+| Total Vitest tests: 171 passing across 7 files | ✅ Done | 0 warnings, 0 failures |
+| Total Playwright E2E tests: 15 passing across 2 files | ✅ Done | 100% passing |
 
 ## Known Issues
 
-- `FileRepository` writes to local filesystem and does not persist on Vercel serverless; production deployment needs Supabase.
-- Live LLM smoke requires external API keys (`LLM_API_KEY`); fake provider used for deterministic CI/CD testing.
+- `FileRepository` writes to local filesystem and does not persist on Vercel serverless; production deployment needs Supabase (`SUPABASE_URL` not yet configured).
+- Vercel CLI is unauthenticated; portals run locally on ports 3101, 3102, 3103.
+- Cloud Browserbase requires deployed public portal URLs and `BROWSERBASE_API_KEY`; local Playwright mode (`BROWSER_MODE=local`) runs offline.
 
 ## Hackathon Test Cases
 

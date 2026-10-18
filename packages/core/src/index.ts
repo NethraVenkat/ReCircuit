@@ -13,6 +13,7 @@ export type {
   HazardClass,
   ItemCategory,
   RegistrationStatus,
+  RecyclerId,
   Item,
   Recycler,
   RecyclerPolicy,
@@ -74,4 +75,7 @@ export type { TransitionCheck, TransitionCheckOk, TransitionCheckFail, Transitio
 
 // Intake & Taxonomy
 export * from "./intake/index.js";
+
+// Policy Discovery & Extraction
+export * from "./policy/index.js";
 

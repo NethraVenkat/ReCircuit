@@ -5,7 +5,7 @@ import { FakeLlmAdapter } from "./adapters/fake.js";
 import { AnthropicAdapter } from "./adapters/anthropic.js";
 import { OpenAiAdapter } from "./adapters/openai.js";
 
-function getAdapter(provider?: string): LlmAdapter {
+export function getAdapter(provider?: string): LlmAdapter {
   const chosen = (provider || process.env.LLM_PROVIDER || "fake").toLowerCase() as LlmProvider;
   switch (chosen) {
     case "anthropic":

@@ -13,6 +13,7 @@ const DEFAULT_SWITCHES: FailureSwitches = {
   failNextSubmit: false,
   omitNextReference: false,
   changedPolicyLayout: false,
+  hideFeeInfo: false,
 };
 
 export class SupabaseRepository implements BookingRepository {
@@ -171,6 +172,7 @@ export class SupabaseRepository implements BookingRepository {
       failNextSubmit: data.fail_next_submit ?? false,
       omitNextReference: data.omit_next_reference ?? false,
       changedPolicyLayout: data.changed_policy_layout ?? false,
+      hideFeeInfo: data.hide_fee_info ?? false,
     };
   }
 

@@ -1,9 +1,30 @@
-import React from "react";
 import { QuickScrapLayout } from "@/components/QuickScrapLayout";
+import { getRepository } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
-export default function RatesPage(): JSX.Element {
+export default async function RatesPage(): Promise<JSX.Element> {
+  const repo = getRepository();
+  const switches = await repo.getFailureSwitches("quickscrap");
+
+  if (switches.hideFeeInfo) {
+    return (
+      <QuickScrapLayout activePath="/rates">
+        <div className="space-y-6">
+          <div className="border-b border-slate-800 pb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wider text-white">
+              QuickScrap Tariff & Aggregator Rate Card
+            </h2>
+          </div>
+          <div data-testid="fee-info-hidden" className="p-6 bg-slate-900 border border-amber-600/50 rounded text-amber-200 text-sm font-mono">
+            <p className="font-bold text-amber-400">Notice: Tariff undergoing revision.</p>
+            <p className="text-xs mt-1 text-slate-300">Standard logistics fees and scrap payouts are temporarily unlisted.</p>
+          </div>
+        </div>
+      </QuickScrapLayout>
+    );
+  }
+
   return (
     <QuickScrapLayout activePath="/rates">
       <div className="space-y-6">

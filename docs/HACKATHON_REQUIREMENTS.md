@@ -38,8 +38,8 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 | P0-3 | City/location input | `packages/core/src/intake/localities` | `intake.test.ts` | locality + Hyderabad pincode resolution | PASS |
 | P0-4 | Fee-cap input | `packages/core/src/intake/post-processor` | `intake.test.ts` | `feeCapInr` anti-hallucination validation | PASS |
 | P0-5 | Three recycler portals, different layouts | apps/portals | portal unit + Playwright E2E | 3 local ports (3101, 3102, 3103), verified | PASS |
-| P0-6 | Browserbase/Stagehand policy extraction | PolicyReader | policy tests | session ids, replay links | NOT STARTED |
-| P0-7 | Evidence capture | Storage + `status_events` | state tests | screenshots in storage | NOT STARTED |
+| P0-6 | Browser policy discovery & extraction | apps/worker + packages/core | `policy.test.ts`, `policy-reader.test.ts`, `policies.spec.ts` | local Playwright session discovery, verbatim quote validation, anti-hallucination checks, and `POLICY_UNREADABLE` fail closed | PARTIAL (Local mode complete; Browserbase cloud pending keys) |
+| P0-7 | Evidence capture (screenshots + sessions) | apps/worker session + `PolicyEvidence` | `policies.spec.ts` | screenshot written to `.data/evidence`, sessionId + url in PolicyEvidence | PARTIAL (Local evidence complete; Supabase storage pending keys) |
 | P0-8 | Eligibility matrix | core/eligibility + UI | eligibility tests | matrix view | NOT STARTED |
 | P0-9 | Cost/payout calculations | core/pricing | pricing tests | plan totals | NOT STARTED |
 | P0-10 | Multi-recycler split routing | core/routing | routing tests | split plan chosen in demo | NOT STARTED |

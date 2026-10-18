@@ -52,6 +52,115 @@ export class FakeLlmAdapter implements LlmAdapter {
     // 3. Built-in defaults based on common test inputs
     const lower = user.toLowerCase();
 
+    // Policy extraction fixtures
+    const isPolicyPrompt =
+      options.system.toLowerCase().includes("polic") ||
+      lower.includes("recycling policy") ||
+      lower.includes("policy extraction");
+
+    if (isPolicyPrompt) {
+      if (lower.includes("deccan")) {
+        return JSON.stringify({
+          recyclerId: "deccan",
+          companyName: "Deccan E-Cycle Solutions",
+          acceptedCategories: ["laptop", "desktop", "mobile_phone", "charger_cable", "battery_household"],
+          rejectedCategories: ["newspaper", "cardboard"],
+          rates: [
+            { item: "Dead or Functional Laptop", payout: "₹250", fee: "₹0" },
+            { item: "Dead or Functional Mobile Phone", payout: "₹60", fee: "₹0" },
+          ],
+          freeThresholdKg: 5,
+          underWeightFeeInr: 180,
+          minWeightKg: 0,
+          convenienceFeeInr: null,
+          requiresDataWipeAck: true,
+          quotes: [
+            "Under 5 kg total weight",
+            "₹180 standard pickup charge",
+            "5 kg or more total weight",
+            "₹0 (FREE Pickup)",
+            "Dead or Functional Laptop: ₹250 cash payout each",
+            "Dead or Functional Mobile Phone: ₹60 cash payout each",
+          ],
+          status: "SUCCESS",
+          evidence: {
+            url: "http://localhost:3101/pickup-charges",
+            screenshotRef: ".data/evidence/deccan-policy.png",
+            extractedAt: new Date().toISOString(),
+            sessionId: "fake-session-deccan",
+          },
+        });
+      }
+
+      if (lower.includes("paperplus")) {
+        return JSON.stringify({
+          recyclerId: "paperplus",
+          companyName: "PaperPlus Kabadi",
+          acceptedCategories: ["newspaper", "cardboard", "books_magazines"],
+          rejectedCategories: ["laptop", "battery_household"],
+          rates: [
+            { item: "Newspaper (Raddi)", payout: "₹14 / kg", fee: "₹0" },
+            { item: "Corrugated Cardboard", payout: "₹9 / kg", fee: "₹0" },
+          ],
+          freeThresholdKg: null,
+          underWeightFeeInr: null,
+          minWeightKg: 5,
+          convenienceFeeInr: 0,
+          requiresDataWipeAck: false,
+          quotes: [
+            "Minimum Weight: At least 5 kg total scrap weight is required for home pickup.",
+            "Doorstep Pickup: 100% Free pickup across Kukatpally, Madhapur, and KPHB.",
+            "Newspaper (Raddi)",
+            "₹14 / kg",
+            "Corrugated Cardboard",
+            "₹9 / kg",
+          ],
+          status: "SUCCESS",
+          evidence: {
+            url: "http://localhost:3102/what-we-take",
+            screenshotRef: ".data/evidence/paperplus-policy.png",
+            extractedAt: new Date().toISOString(),
+            sessionId: "fake-session-paperplus",
+          },
+        });
+      }
+
+      if (lower.includes("quickscrap")) {
+        return JSON.stringify({
+          recyclerId: "quickscrap",
+          companyName: "QuickScrap Hyderabad",
+          acceptedCategories: ["laptop", "newspaper", "cardboard", "battery_household"],
+          rejectedCategories: ["hazardous"],
+          rates: [
+            { item: "Dead Laptop / Notebook", payout: "₹180 / unit", fee: "₹199 Flat Pickup Fee" },
+            { item: "Dead Mobile Phone", payout: "₹40 / unit", fee: "₹199 Flat Pickup Fee" },
+          ],
+          freeThresholdKg: null,
+          underWeightFeeInr: null,
+          minWeightKg: 0,
+          convenienceFeeInr: 199,
+          requiresDataWipeAck: false,
+          registrationNotice: "Registration: application in process",
+          quotes: [
+            "₹199 Flat Pickup Fee",
+            "Charged on all doorstep collections regardless of load size or material combination.",
+            "Dead Laptop / Notebook",
+            "₹180 / unit",
+            "Dead Mobile Phone",
+            "₹40 / unit",
+            "Registration: application in process",
+          ],
+          status: "SUCCESS",
+          evidence: {
+            url: "http://localhost:3103/rates",
+            screenshotRef: ".data/evidence/quickscrap-policy.png",
+            extractedAt: new Date().toISOString(),
+            sessionId: "fake-session-quickscrap",
+          },
+        });
+      }
+    }
+
     // Check for simulated non-json retry failure
     if (lower.includes("test_always_non_json")) {
       return "I am an AI and here is your result: { invalid json";

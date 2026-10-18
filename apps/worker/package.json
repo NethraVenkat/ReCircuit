@@ -2,6 +2,15 @@
   "name": "@reroute/worker",
   "version": "0.0.1",
   "private": true,
-  "description": "ReRoute background job worker (placeholder)"
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@reroute/core": "workspace:*",
+    "@reroute/llm": "workspace:*",
+    "@reroute/db": "workspace:*",
+    "zod": "^3.23.8"
+  }
 }
-

@@ -8,12 +8,13 @@
   ],
   "scripts": {
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
-    "typecheck": "tsc -p packages/llm/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/db/tsconfig.json --noEmit && tsc -p apps/portals/tsconfig.json --noEmit",
+    "typecheck": "tsc -p packages/llm/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/db/tsconfig.json --noEmit && tsc -p apps/portals/tsconfig.json --noEmit && tsc -p apps/worker/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:portals": "vitest run apps/portals",
     "test:e2e": "playwright test",
     "build": "tsc --build",
     "intake": "node scripts/intake-cli.mjs",
+    "policies": "node scripts/policies-cli.mjs",
     "portals:dev": "node scripts/start-portals.cjs"
   },
   "devDependencies": {

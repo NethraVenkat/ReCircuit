@@ -49,6 +49,7 @@ export interface FailureSwitches {
   failNextSubmit: boolean;
   omitNextReference: boolean;
   changedPolicyLayout: boolean;
+  hideFeeInfo: boolean;
 }
 
 export const SERVICEABLE_PINCODES = [
