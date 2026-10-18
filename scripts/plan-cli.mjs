@@ -9,6 +9,8 @@
  *   npm run plan -- "<user recycling request sentence>"
  */
 
+import fs from "fs";
+import path from "path";
 import {
   parseIntake,
   buildEligibilityMatrix,
@@ -19,6 +21,9 @@ import {
   transitionState,
   createDomainRequestFromIntake,
   explainWhyPlanBeats,
+  requestApproval,
+  formatApprovalCard,
+  DEFAULT_SLOT_PREFERENCE,
 } from "@reroute/core";
 
 async function main() {
@@ -254,6 +259,69 @@ async function main() {
   });
   const step2 = res2.newRequest;
   console.log(`  Transition: ELIGIBILITY_CHECKED -> PLAN_CREATED: [${step2.state}] ✅`);
+
+  // PLAN_CREATED -> AWAITING_APPROVAL (Stage 6 Approval Gate)
+  const approvalReasons = bestScored.approvalReasons.includes("BOOKING_SUBMISSION")
+    ? bestScored.approvalReasons
+    : ["BOOKING_SUBMISSION", ...bestScored.approvalReasons];
+
+  const alternativesSummary = topAlternatives.map((alt, idx) => ({
+    rank: idx + 2,
+    planId: alt.plan.id,
+    legsCount: alt.legsCount,
+    fee: alt.totalFee,
+    payout: alt.totalKnownPayout,
+    net: alt.netPayout,
+    recyclers: alt.plan.legs.map((l) => l.recyclerId),
+  }));
+
+  const unrouted = bestScored.unroutedItemIds.map((unId) => {
+    const itm = intakeResult.items.find((i) => i.id === unId);
+    const desc = itm ? `${itm.rawText} (${itm.category})` : unId;
+    const reasons = matrix.cells
+      .filter((c) => c.itemId === unId)
+      .map((c) => `${c.recyclerName}: ${c.status}${c.reason ? ` (${c.reason})` : ""}`)
+      .join("; ");
+    return { description: desc, reasons };
+  });
+
+  const { request: awaitingReq, plan: readyPlan, card: approvalCard } = requestApproval({
+    request: step2,
+    plan: bestPlan,
+    slotPreference: DEFAULT_SLOT_PREFERENCE,
+    approvalReasons,
+    isPartial: bestScored.isPartial,
+    unroutedItems: unrouted,
+    alternatives: alternativesSummary,
+  });
+  console.log(`  Transition: PLAN_CREATED -> AWAITING_APPROVAL: [${awaitingReq.state}] ✅`);
+
+  // Persist request to .data/requests/<requestId>.json
+  const requestsDir = path.resolve(process.cwd(), ".data/requests");
+  if (!fs.existsSync(requestsDir)) {
+    fs.mkdirSync(requestsDir, { recursive: true });
+  }
+  const requestPath = path.join(requestsDir, `${awaitingReq.id}.json`);
+  fs.writeFileSync(
+    requestPath,
+    JSON.stringify(
+      {
+        request: awaitingReq,
+        plan: readyPlan,
+        approvalCard,
+        scoredPlans: routing.scoredPlans,
+        intakeResult,
+        updatedAt: new Date().toISOString(),
+      },
+      null,
+      2
+    ),
+    "utf-8"
+  );
+  console.log(`  Persisted request state to: .data/requests/${awaitingReq.id}.json ✅`);
+
+  // Stage 6 Approval Card Presentation
+  console.log(`\n${formatApprovalCard(approvalCard)}`);
 
   console.log(`\n================================================================`);
   console.log(`  Planning completed successfully.`);

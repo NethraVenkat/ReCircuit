@@ -568,7 +568,7 @@ export function hashPlan(plan: Plan): string {
       .map((leg) => ({
         id: leg.id,
         recyclerId: leg.recyclerId,
-        itemIds: leg.itemIds.slice().sort(),
+        itemIds: (leg.itemIds ?? (leg.items ? leg.items.map((i) => i.id) : [])).slice().sort(),
         items: leg.items
           ? leg.items
               .slice()
@@ -584,6 +584,12 @@ export function hashPlan(plan: Plan): string {
         estimatedPayout: leg.estimatedPayout,
         slot: leg.slot ?? null,
       })),
+    slotPreference: plan.slotPreference
+      ? {
+          day: plan.slotPreference.day,
+          window: plan.slotPreference.window,
+        }
+      : null,
     totalEstimatedFee: plan.totalEstimatedFee,
     totalEstimatedPayout: plan.totalEstimatedPayout,
   });

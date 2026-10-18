@@ -11,11 +11,11 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 | O-1 | Collect item type, quantity, location; stable IDs; validate before agent runs | Intake parser + validation | `packages/core` intake, `packages/llm` schema, `items` table | `intake.test.ts` (14 cases) | Parsed items JSON stored per request with stable RFC4122 v4 UUIDs | PASS |
 | O-2 | Retrieve from recycler sites and pickup forms; store source URLs and retrieval times | Policy discovery | PolicyReader (Playwright/Stagehand) | `policy-reader.test.ts`, `policies.spec.ts` | `recycler_policies.source_url`, `extracted_at`, screenshot | PARTIAL (Local Playwright discovery verified; Browserbase cloud pending keys) |
 | O-3 | Match accepted materials and fees; save evidence and reason; uncertain state when evidence missing | Eligibility + pricing | `core/eligibility`, `core/pricing` | `routing.test.ts` (13 tests) | Matrix cell reason quotes extracted rule; `UNKNOWN` state | PASS |
-| O-4 | Book pickup after approval; show destination and change first; store approved version; no duplicate on retry | Approval gate + Booker + idempotency | `core/approval`, Booker, `approvals`, `browser_actions` | `approval.test.ts`, `booker.test.ts` | Approval record with `plan_hash`; one portal booking per key | NOT STARTED |
+| O-4 | Book pickup after approval; show destination and change first; store approved version; no duplicate on retry | Approval gate + Booker + idempotency | `core/approval`, Booker, `approvals`, `browser_actions` | `approval.test.ts`, `booker.test.ts` | Approval record with `plan_hash`; one portal booking per key | PARTIAL (Approval gate complete; browser booking execution is Stage 7) |
 | O-5 | Verify separately from the action; capture observed vs intended; keep failed/pending visible | Independent verifier | Verifier (new session) | `verifier.test.ts` | `status_events` with tracking screenshot and different session id | NOT STARTED |
 | O-6 | Result view: pickup plan traceable to input record; unresolved items shown | Dashboard + Proof Ledger | `apps/web` `/r/[id]` | E2E dashboard test | Screenshot of dashboard | NOT STARTED |
 | O-7 | Four labelled runs with input, expected, actual, evidence; explain differences | Test-case page | `apps/web` `/test-cases`, `test_runs` | Stage 10 suite | `test_runs` rows | NOT STARTED |
-| O-8 | Human approval before hard-to-undo actions | Approval gate | `core/approval` | `approval.test.ts` | Booker refuses without matching approval | NOT STARTED |
+| O-8 | Human approval before hard-to-undo actions | Approval gate | `core/approval` | `approval.test.ts` | Booker refuses without matching approval | PASS |
 | O-9 | Synthetic data for personal info | Demo data | Seed + forms | Review | Seed file | NOT STARTED |
 | O-10 | Do not bypass OTP or CAPTCHA; safe manual step | Human handoff | Booker detection, PaperPlus verification step | `booker.captcha.test.ts` | `NEEDS_HUMAN` event with screenshot and live view link | NOT STARTED |
 | O-11 | Deployed working agent, source evidence, presentation, test cases (mandatory submission) | Deployment, README, deck | All | Stage 13–14 smoke | Public URLs, repo, deck | NOT STARTED |
@@ -44,7 +44,7 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 | P0-9 | Cost/payout calculations | core/pricing | `routing.test.ts` | pricing engine totals, fees, and 15% proximity threshold warnings | PASS |
 | P0-10 | Multi-recycler split routing | core/routing | `routing.test.ts` | split plan chosen in demo (Deccan + PaperPlus) | PASS |
 | P0-11 | Plan comparison | core/routing + UI | `routing.test.ts` | 7-tier lexicographic ranking across alternative candidate plans | PASS |
-| P0-12 | Explicit approval gate | core/approval + UI | approval tests | approvals rows | NOT STARTED |
+| P0-12 | Explicit approval gate | core/approval + UI | `approval.test.ts` | `ApprovalCard`, `assertActionAllowed`, `npm run approve` CLI | PASS |
 | P0-13 | Browser form filling | Booker | booker tests | session replay | NOT STARTED |
 | P0-14 | Browser submission | Booker | booker tests | confirmation screenshot | NOT STARTED |
 | P0-15 | Human CAPTCHA/OTP handoff | Booker | captcha test | NEEDS_HUMAN event | NOT STARTED |

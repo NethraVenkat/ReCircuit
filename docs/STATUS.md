@@ -87,8 +87,26 @@
 | SHA-256 Plan Hashing (`hashPlan`) | ✅ Done | Canonical hash for approval gate locking |
 | State Machine Transitions | ✅ Done | Transitions `POLICIES_READ` -> `ELIGIBILITY_CHECKED` -> `PLAN_CREATED` |
 | CLI Runner (`npm run plan`) | ✅ Done | Generates full plan, eligibility matrix, alternatives, and transitions from demo text |
-| Vitest tests (`routing.test.ts` - 13 tests) | ✅ Done | TC1, TC2, TC3 building blocks, boundaries, and 500 property tests |
-| Total Vitest tests: 184 passing across 8 files | ✅ Done | 0 warnings, 0 failures |
+| Vitest tests (`routing.test.ts` - 21 tests) | ✅ Done | TC1, TC2, TC3 building blocks, boundaries, and 500 property tests |
+| Total Vitest tests: 201 passing across 8 files | ✅ Done | 0 warnings, 0 failures |
+| Total Playwright E2E tests: 15 passing across 2 files | ✅ Done | 100% passing |
+
+## Stage 6 — Approval Gate + Safe Action System (Completed)
+
+| Component / Requirement | Status | Notes |
+|---|---|---|
+| Request State Machine Transitions (`requestApproval`, `recordDecision`) | ✅ Done | `PLAN_CREATED` -> `AWAITING_APPROVAL` -> `APPROVED` / `REJECTED` |
+| Mandatory `BOOKING_SUBMISSION` Reason | ✅ Done | Every plan requires approval regardless of fee or cap |
+| Slot Preferences (`{ day, window }`) | ✅ Done | Stored on Request/Plan and included in `hashPlan` canonicalization |
+| Stale Approval Invalidation | ✅ Done | Plan or slot alterations change `planHash`, rendering prior approvals stale |
+| Comprehensive Approval Card | ✅ Done | Domain model (`ApprovalCard`) and formatted CLI presentation |
+| Deterministic Decision Recording | ✅ Done | `recordDecision` creates approved legs with idempotency keys; idempotent on duplicates |
+| Safe Action Entry Point (`assertActionAllowed`) | ✅ Done | Enforces valid leg state, approved user decision, `planHash` match, unused idempotency key, and price parity |
+| Fee Changed Guard (`FeeChangedReapprovalRequiredError`) | ✅ Done | Throws `FEE_CHANGED_REAPPROVAL_REQUIRED` if page fee differs from approved fee |
+| Append-Only Action Audit Log | ✅ Done | Writes all allowed and blocked attempts to `.data/action-log.jsonl` |
+| CLI Runners (`npm run plan`, `npm run approve`) | ✅ Done | `plan` persists to `.data/requests/<id>.json`; `approve` supports approve, reject, and `--choose-plan=<rank>` |
+| Vitest tests (`packages/core/src/approval/approval.test.ts` - 12 tests) | ✅ Done | 10 required scenarios + slotPreference & card format |
+| Total Vitest tests: 213 passing across 9 files | ✅ Done | 0 warnings, 0 failures |
 | Total Playwright E2E tests: 15 passing across 2 files | ✅ Done | 100% passing |
 
 ## Known Issues & Security Audit Findings

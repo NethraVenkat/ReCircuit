@@ -87,7 +87,7 @@ test.describe("Stage 4: Browser Policy Discovery & Portal Reading", () => {
       expect(policy.status).toBe("SUCCESS");
       expect(policy.recyclerId).toBe("paperplus");
       expect(policy.minWeightKg).toBe(5);
-      expect(policy.convenienceFeeInr).toBe(0);
+      expect(policy.convenienceFeeInr).toBeNull();
       expect(policy.acceptedCategories).toContain("newspaper");
       expect(policy.rejectedCategories).toContain("laptop");
       expect(policy.quotes.length).toBeGreaterThan(0);

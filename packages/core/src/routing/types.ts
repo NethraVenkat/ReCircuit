@@ -49,6 +49,7 @@ export interface LegPricingResult {
 }
 
 export type ApprovalReason =
+  | "BOOKING_SUBMISSION"
   | "FEE_CAP_EXCEEDED"
   | "FEE_CHARGED"
   | "REGISTRY_WARNING"

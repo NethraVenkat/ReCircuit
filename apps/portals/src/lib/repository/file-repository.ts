@@ -76,7 +76,7 @@ export class FileRepository implements BookingRepository {
     const filePath = this.getFilePath(recyclerId);
     const tmpPath = `${filePath}.${randomUUID()}.tmp`;
     fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
-    fs.renameSync(tmpPath, filePath);
+    this.safeRename(tmpPath, filePath);
   }
 
   private readNonces(): Record<string, number> {
@@ -93,7 +93,36 @@ export class FileRepository implements BookingRepository {
     const p = this.getNoncesPath();
     const tmp = `${p}.${randomUUID()}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(nonces, null, 2), "utf-8");
-    fs.renameSync(tmp, p);
+    this.safeRename(tmp, p);
+  }
+
+  private safeRename(src: string, dest: string): void {
+    for (let i = 0; i < 5; i++) {
+      try {
+        fs.renameSync(src, dest);
+        return;
+      } catch (err: unknown) {
+        const isLockError =
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          ((err as { code: string }).code === "EPERM" || (err as { code: string }).code === "EBUSY");
+        if (isLockError && i < 4) {
+          const start = Date.now();
+          while (Date.now() - start < 10) {
+            // Wait 10ms for Windows file release
+          }
+          continue;
+        }
+        try {
+          fs.copyFileSync(src, dest);
+          fs.unlinkSync(src);
+          return;
+        } catch {
+          throw err;
+        }
+      }
+    }
   }
 
   async isNonceUsed(nonce: string): Promise<boolean> {

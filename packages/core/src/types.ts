@@ -232,13 +232,19 @@ export interface PlanLeg {
   updatedAt: string;
 }
 
+export interface SlotPreference {
+  day: string; // 'earliest' | 'YYYY-MM-DD'
+  window: "morning" | "afternoon" | "any";
+}
+
 export interface Plan {
   id: string;
   requestId: string;
   legs: PlanLeg[];
   totalEstimatedFee: number;
   totalEstimatedPayout: number;
-  /** sha256 hex over canonical JSON of legs + fees */
+  slotPreference?: SlotPreference;
+  /** sha256 hex over canonical JSON of legs + fees + slotPreference */
   planHash: string;
   createdAt: string;
 }
@@ -248,8 +254,10 @@ export interface Approval {
   requestId: string;
   planId: string;
   planHash: string;
+  decision?: "approved" | "rejected";
   approvedBy: string; // user id or "system"
   approvedAt: string;
+  slotPreference?: SlotPreference;
 }
 
 export interface Request {
@@ -258,6 +266,7 @@ export interface Request {
   description: string;
   state: RequestState;
   feeCapInr?: number; // Integer rupees
+  slotPreference?: SlotPreference;
   items: Item[];
   createdAt: string;
   updatedAt: string;

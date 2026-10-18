@@ -21,6 +21,7 @@ export type {
   Plan,
   Approval,
   Request,
+  SlotPreference,
   BrowserAction,
   StatusEvent,
   TestRun,
@@ -81,5 +82,9 @@ export * from "./policy/index.js";
 
 // Stage 5: Routing & Pricing
 export * from "./routing/index.js";
+
+// Stage 6: Approval Gate & Safe Action System
+export type { ApprovalReason } from "./approval/types.js";
+export * from "./approval/index.js";
 
 
