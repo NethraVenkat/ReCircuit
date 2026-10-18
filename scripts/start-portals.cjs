@@ -32,7 +32,7 @@ PORTALS.forEach(({ id, name, port, color }) => {
     PORT: String(port),
     RECYCLER_ID: id,
     NEXT_DIST_DIR: `.next-${port}`,
-    ADMIN_TOKEN: process.env.ADMIN_TOKEN || "admin-secret-dev",
+    ADMIN_TOKEN: process.env.ADMIN_TOKEN || "test-admin-secret-token",
   };
 
   const cmd = `${npmCmd} run dev -- -p ${port}`;

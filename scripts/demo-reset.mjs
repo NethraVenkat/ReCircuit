@@ -14,7 +14,7 @@ import fs from "fs";
 import path from "path";
 
 const PORTAL_PORTS = [3101, 3102, 3103];
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "admin-secret-dev";
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret-token";
 
 async function resetPortals() {
   console.log("🔄 Resetting recycler portal instances...");
