@@ -106,7 +106,24 @@
 | Append-Only Action Audit Log | ✅ Done | Writes all allowed and blocked attempts to `.data/action-log.jsonl` |
 | CLI Runners (`npm run plan`, `npm run approve`) | ✅ Done | `plan` persists to `.data/requests/<id>.json`; `approve` supports approve, reject, and `--choose-plan=<rank>` |
 | Vitest tests (`packages/core/src/approval/approval.test.ts` - 12 tests) | ✅ Done | 10 required scenarios + slotPreference & card format |
-| Total Vitest tests: 213 passing across 9 files | ✅ Done | 0 warnings, 0 failures |
+
+## Stage 7 — Browser Booking Agent (Completed)
+
+| Component / Requirement | Status | Notes |
+|---|---|---|
+| Domain Types & Routes (`apps/worker/src/booking/types.ts`, `selectors.ts`) | ✅ Done | Type contracts, routes, and reference validation regexes |
+| Safe Action Pre-Flight Gate (`assertActionAllowed`) | ✅ Done | Verifies leg state, user approval, planHash match, unused idempotencyKey, and fee parity |
+| Pure Browser HTML Form Filling | ✅ Done | Operates via Playwright browser page; never calls portal JSON APIs directly |
+| DOM Readback Verification (`FormVerificationError`) | ✅ Done | Verifies live DOM input values match intended payload before submission |
+| Human Verification Handoff (`NEEDS_HUMAN`) | ✅ Done | Rule S-5: Halts on CAPTCHA, captures proof screenshot & liveViewUrl, never guesses codes |
+| Resumption Flow (`resumeLegWithCaptcha`) | ✅ Done | Resumes from `NEEDS_HUMAN` upon human-provided code and advances to `REQUEST_SUBMITTED` |
+| Reference Extraction & Pattern Enforcement | ✅ Done | Extracts reference and asserts prefix regex; rejects omitted or malformed references |
+| Server Outage & Failure Safety (`PortalServerError`) | ✅ Done | Detects HTTP 500 error banner and fails safe without advancing leg state |
+| Idempotency Protection & Deduplication | ✅ Done | Injects deterministic `client_request_id`; marks `isDuplicate: true` on repeat submissions |
+| State Machine Transitions & Audit Events | ✅ Done | Orchestrates `APPROVED -> SUBMITTING -> (NEEDS_HUMAN) -> REQUEST_SUBMITTED` |
+| CLI Runner (`npm run book`) | ✅ Done | Interactive runner executing bookings and resuming CAPTCHA challenges from terminal |
+| Vitest Unit & Integration Tests (`apps/worker/src/booking/booker.test.ts` - 12 tests) | ✅ Done | 12 test cases covering safe actions, readback, CAPTCHA, outages, references, and duplicates |
+| Total Vitest tests: 225 passing across 10 files | ✅ Done | 0 warnings, 0 failures |
 | Total Playwright E2E tests: 15 passing across 2 files | ✅ Done | 100% passing |
 
 ## Known Issues & Security Audit Findings
@@ -123,7 +140,7 @@
 
 | TC | Description | Status |
 |---|---|---|
-| TC1 | Laptop accepted → pickup draft created | 🟡 IN PROGRESS (Building blocks verified in routing; booking execution is Stage 7) |
-| TC2 | Centre takes paper but not batteries → batteries rejected | 🟡 IN PROGRESS (Building blocks verified in routing; routing splits to Deccan + PaperPlus) |
-| TC3 | Fee above user's limit → approval asked | 🟡 IN PROGRESS (Building blocks verified in routing; fee ₹180 > ₹150 cap flags `FEE_CAP_EXCEEDED`) |
+| TC1 | Laptop accepted → pickup draft created | ✅ PASS (Deccan cell accepted, approved plan books and reaches `REQUEST_SUBMITTED` with `DEC-XXXXX` ref) |
+| TC2 | Centre takes paper but not batteries → batteries rejected | ✅ PASS (PaperPlus rejects batteries; split routing routes paper to PaperPlus and batteries to Deccan) |
+| TC3 | Fee above user's limit → approval asked | ✅ PASS (Deccan fee ₹180 > ₹150 cap flags `FEE_CAP_EXCEEDED`; booker blocks without approved decision) |
 | TC4 | Pickup requested → not reported as collected | 🟡 IN PROGRESS (State machine invariants enforced; Verifier is Stage 8) |
