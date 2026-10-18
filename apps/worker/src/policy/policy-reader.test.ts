@@ -1,15 +1,25 @@
 /**
  * apps/worker/src/policy/policy-reader.test.ts
  *
- * Unit tests for policy reader error handling, retries, and failure states.
+ * Unit tests for policy reader:
+ * - Primary generic AI extraction path
+ * - Partial extraction when fee info is hidden (returns items + payouts, feesUnknown = true)
+ * - Anti-hallucination retry and recovery
+ * - Labeled DOM fallback (extractionPath: "dom-fallback")
+ * - Unseen recycler extraction on static HTML fixture (GreenLoop Secunderabad)
+ * - Strict ConfigurationError for Browserbase missing keys
+ * - Local session ID prefix "local-"
  */
 
+import fs from "fs";
+import path from "path";
 import { describe, it, expect, beforeEach } from "vitest";
-import { readRecyclerPolicy } from "./policy-reader.js";
-import type { BrowserSession } from "../browser/session.js";
+import { readRecyclerPolicy, extractPolicyViaDomFallback } from "./policy-reader.js";
+import { openSession, ConfigurationError, type BrowserSession } from "../browser/session.js";
 import { FakeLlmAdapter, clearFakeFixtures, registerFakeFixture } from "@reroute/llm";
+import { DECCAN_PAGE_TEXT } from "@reroute/core";
 
-describe("Stage 4: Worker Policy Reader Unit Tests", () => {
+describe("Stage 4 Fixes: Worker Policy Reader Unit Tests", () => {
   let fakeSession: BrowserSession;
   let mockPageText: string;
   let mockHiddenBanner: boolean;
@@ -17,19 +27,11 @@ describe("Stage 4: Worker Policy Reader Unit Tests", () => {
   beforeEach(() => {
     clearFakeFixtures();
     process.env.LLM_PROVIDER = "fake";
-    mockPageText = `
-      Deccan E-Cycle Solutions
-      Pickup Fee & Payout Schedule:
-      Under 5 kg total weight: ₹180 standard pickup charge
-      5 kg or more total weight: ₹0 (FREE Pickup)
-      Dead or Functional Laptop: ₹250 cash payout each
-      Dead or Functional Mobile Phone: ₹60 cash payout each
-    `;
+    mockPageText = DECCAN_PAGE_TEXT;
     mockHiddenBanner = false;
 
-    // Create lightweight mock session
     fakeSession = {
-      sessionId: "mock-session-001",
+      sessionId: "local-test-001",
       mode: "local",
       page: {
         goto: async (): Promise<null> => {
@@ -56,6 +58,10 @@ describe("Stage 4: Worker Policy Reader Unit Tests", () => {
           await Promise.resolve();
           return selector.includes("fee-info-hidden") && mockHiddenBanner ? {} : null;
         },
+        $$eval: async (_selector: string, fn: (els: unknown[]) => unknown): Promise<unknown> => {
+          await Promise.resolve();
+          return fn([{ innerText: "Under 5 kg total weight: ₹180 standard pickup charge" }]);
+        },
         close: async (): Promise<void> => {
           await Promise.resolve();
         },
@@ -74,57 +80,68 @@ describe("Stage 4: Worker Policy Reader Unit Tests", () => {
     };
   });
 
-  it("successfully reads and validates Deccan policy with FakeLlmAdapter", async () => {
+  it("extracts Deccan policy via primary generic-ai path with honest quotes and no defaults", async () => {
     const policy = await readRecyclerPolicy("deccan", fakeSession, "http://localhost:3101");
     expect(policy.status).toBe("SUCCESS");
     expect(policy.recyclerId).toBe("deccan");
     expect(policy.underWeightFeeInr).toBe(180);
     expect(policy.freeThresholdKg).toBe(5);
-    expect(policy.evidence.sessionId).toBe("mock-session-001");
-    expect(policy.quotes.length).toBeGreaterThan(0);
+    expect(policy.minWeightKg).toBeNull(); // Rule 3: NEVER default to 0!
+    expect(policy.evidence.extractionPath).toBe("generic-ai");
+    expect(policy.acceptedCategories).toContain("laptop");
+    expect(policy.rejectedCategories).toContain("newspaper");
+    expect(policy.feesUnknown).toBe(false);
   });
 
-  it("falls back to POLICY_UNREADABLE when fee information is hidden on portal", async () => {
+  it("returns partial extraction when fee information is hidden (preserves items/payouts, feesUnknown=true)", async () => {
     mockHiddenBanner = true;
-    mockPageText = "Deccan E-Cycle Solutions\nTariff revision in progress. Fee schedule unlisted.";
+    mockPageText = `
+      Deccan E-Cycle Solutions
+      Tariff revision in progress. Fee schedule is currently being revised.
+      Dead or Functional Laptop: ₹250 cash payout each
+      Permitted Electronic Items:
+      Laptops & Notebooks
+      Household Batteries
+      Strictly Prohibited & Rejected Materials:
+      Paper, newspapers, office shredded documents, and books
+    `;
 
     const policy = await readRecyclerPolicy("deccan", fakeSession, "http://localhost:3101");
-    expect(policy.status).toBe("POLICY_UNREADABLE");
-    expect(policy.failureReason).toContain("Fee schedule unlisted, hidden, or undergoing revision");
+    expect(policy.status).toBe("SUCCESS");
+    expect(policy.feesUnknown).toBe(true);
+    expect(policy.acceptedCategories).toContain("laptop");
+    expect(policy.feeRules).toHaveLength(0);
   });
 
-  it("retries on anti-hallucination error and falls back to POLICY_UNREADABLE if retry fails", async () => {
+  it("falls back to labeled dom-fallback when generic-ai fails anti-hallucination", async () => {
     const adapter = new FakeLlmAdapter();
-    // Return a policy with a hallucinated fee of ₹999 not on page
-    registerFakeFixture("hallucinated_policy", [
+    registerFakeFixture("always_hallucinated", [
       JSON.stringify({
-        recyclerId: "deccan",
-        companyName: "Deccan E-Cycle Solutions",
-        acceptedCategories: ["laptop"],
-        rejectedCategories: [],
-        rates: [],
-        underWeightFeeInr: 999, // Hallucinated!
-        quotes: ["Under 5 kg total weight: ₹180 standard pickup charge"], // 999 not in quotes
+        acceptedItems: [],
+        rejectedItems: [],
+        feeRules: [{ kind: "flat", amountInr: 9999, thresholdKg: null, quote: "Invented non-existent quote" }],
+        payoutRules: [],
+        minimumTotalKg: { value: null, quote: null },
+        serviceablePincodes: { values: [], quote: null },
+        registrationNotice: { text: null, quote: null },
       }),
       JSON.stringify({
-        recyclerId: "deccan",
-        companyName: "Deccan E-Cycle Solutions",
-        acceptedCategories: ["laptop"],
-        rejectedCategories: [],
-        rates: [],
-        underWeightFeeInr: 999, // Still hallucinated on retry
-        quotes: ["Under 5 kg total weight: ₹180 standard pickup charge"],
+        acceptedItems: [],
+        rejectedItems: [],
+        feeRules: [{ kind: "flat", amountInr: 9999, thresholdKg: null, quote: "Invented non-existent quote again" }],
+        payoutRules: [],
+        minimumTotalKg: { value: null, quote: null },
+        serviceablePincodes: { values: [], quote: null },
+        registrationNotice: { text: null, quote: null },
       }),
     ]);
 
-    // Override adapter generate with test fixture
     const originalGen = adapter.generate.bind(adapter);
-    adapter.generate = async (opts): Promise<string> => originalGen({ ...opts, testFixtureName: "hallucinated_policy" });
+    adapter.generate = async (opts): Promise<string> => originalGen({ ...opts, testFixtureName: "always_hallucinated" });
 
     const policy = await readRecyclerPolicy("deccan", fakeSession, "http://localhost:3101", adapter);
-    expect(policy.status).toBe("POLICY_UNREADABLE");
-    expect(policy.failureReason).toContain("Anti-hallucination check failed");
-    expect(policy.failureReason).toContain("999");
+    expect(policy.status).toBe("SUCCESS");
+    expect(policy.evidence.extractionPath).toBe("dom-fallback");
   });
 
   it("recovers on retry when second extraction attempt adheres strictly to quotes", async () => {
@@ -132,27 +149,23 @@ describe("Stage 4: Worker Policy Reader Unit Tests", () => {
     registerFakeFixture("recovery_policy", [
       // Attempt 1: hallucinated number
       JSON.stringify({
-        recyclerId: "deccan",
-        companyName: "Deccan E-Cycle Solutions",
-        acceptedCategories: ["laptop"],
-        rejectedCategories: [],
-        rates: [],
-        underWeightFeeInr: 999,
-        quotes: ["Under 5 kg total weight: ₹180 standard pickup charge"],
+        acceptedItems: [],
+        rejectedItems: [],
+        feeRules: [{ kind: "below_weight", amountInr: 999, thresholdKg: 5, quote: "Under 5 kg total weight: ₹180 standard pickup charge" }],
+        payoutRules: [],
+        minimumTotalKg: { value: null, quote: null },
+        serviceablePincodes: { values: [], quote: null },
+        registrationNotice: { text: null, quote: null },
       }),
       // Attempt 2: valid grounded extraction
       JSON.stringify({
-        recyclerId: "deccan",
-        companyName: "Deccan E-Cycle Solutions",
-        acceptedCategories: ["laptop"],
-        rejectedCategories: [],
-        rates: [],
-        underWeightFeeInr: 180,
-        freeThresholdKg: 5,
-        quotes: [
-          "Under 5 kg total weight: ₹180 standard pickup charge",
-          "5 kg or more total weight: ₹0 (FREE Pickup)",
-        ],
+        acceptedItems: [{ rawName: "Laptops & Notebooks", quote: "Laptops & Notebooks" }],
+        rejectedItems: [],
+        feeRules: [{ kind: "below_weight", amountInr: 180, thresholdKg: 5, quote: "Under 5 kg total weight: ₹180 standard pickup charge" }],
+        payoutRules: [{ rawName: "Dead or Functional Laptop", unit: "per_item", amountInr: 250, quote: "Dead or Functional Laptop: ₹250 cash payout each" }],
+        minimumTotalKg: { value: null, quote: null },
+        serviceablePincodes: { values: [], quote: null },
+        registrationNotice: { text: null, quote: null },
       }),
     ]);
 
@@ -162,7 +175,52 @@ describe("Stage 4: Worker Policy Reader Unit Tests", () => {
     const policy = await readRecyclerPolicy("deccan", fakeSession, "http://localhost:3101", adapter);
     expect(policy.status).toBe("SUCCESS");
     expect(policy.underWeightFeeInr).toBe(180);
-    expect(policy.freeThresholdKg).toBe(5);
+    expect(policy.evidence.extractionPath).toBe("generic-ai");
+  });
+
+  it("extracts unseen recycler GreenLoop Secunderabad correctly via generic-ai while dom-fallback fails", async () => {
+    const fixtureHtmlPath = path.resolve(process.cwd(), "apps", "worker", "fixtures", "greenloop.html");
+    const htmlContent = fs.readFileSync(fixtureHtmlPath, "utf-8");
+    // Strip HTML tags for visible text simulation
+    const visibleText = htmlContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
+    mockPageText = visibleText;
+
+    // 1. Generic AI path succeeds on unseen recycler
+    const policy = await readRecyclerPolicy("greenloop", fakeSession, "http://localhost:3104");
+    expect(policy.status).toBe("SUCCESS");
+    expect(policy.recyclerId).toBe("greenloop");
+    expect(policy.underWeightFeeInr).toBe(99);
+    expect(policy.freeThresholdKg).toBe(3);
+    expect(policy.minWeightKg).toBe(1);
+    expect(policy.evidence.extractionPath).toBe("generic-ai");
+
+    // 2. DOM fallback fails (returns null) on unseen recycler
+    const domRes = await extractPolicyViaDomFallback("greenloop", fakeSession, visibleText);
+    expect(domRes).toBeNull();
+  });
+
+  it("strictly throws ConfigurationError when BROWSER_MODE=browserbase and keys are missing", async () => {
+    const origKey = process.env.BROWSERBASE_API_KEY;
+    const origProject = process.env.BROWSERBASE_PROJECT_ID;
+    delete process.env.BROWSERBASE_API_KEY;
+    delete process.env.BROWSERBASE_PROJECT_ID;
+
+    try {
+      await expect(openSession({ mode: "browserbase" })).rejects.toThrow(ConfigurationError);
+    } finally {
+      if (origKey) process.env.BROWSERBASE_API_KEY = origKey;
+      if (origProject) process.env.BROWSERBASE_PROJECT_ID = origProject;
+    }
+  });
+
+  it("local browser sessions get deterministic synthetic session IDs prefixed with local-", async () => {
+    const session = await openSession({ mode: "local" });
+    try {
+      expect(session.sessionId.startsWith("local-")).toBe(true);
+      expect(session.mode).toBe("local");
+    } finally {
+      await session.close();
+    }
   });
 });
-

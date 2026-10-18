@@ -9,8 +9,8 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 | ID | Requirement (official) | Feature | Component | Test | Evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | O-1 | Collect item type, quantity, location; stable IDs; validate before agent runs | Intake parser + validation | `packages/core` intake, `packages/llm` schema, `items` table | `intake.test.ts` (14 cases) | Parsed items JSON stored per request with stable RFC4122 v4 UUIDs | PASS |
-| O-2 | Retrieve from recycler sites and pickup forms; store source URLs and retrieval times | Policy discovery | PolicyReader (Stagehand) | `policy-reader.test.ts`, live run | `recycler_policies.source_url`, `extracted_at`, screenshot | NOT STARTED |
-| O-3 | Match accepted materials and fees; save evidence and reason; uncertain state when evidence missing | Eligibility + pricing | `core/eligibility`, `core/pricing` | `eligibility.test.ts` | Matrix cell reason quotes extracted rule; `UNKNOWN` state | NOT STARTED |
+| O-2 | Retrieve from recycler sites and pickup forms; store source URLs and retrieval times | Policy discovery | PolicyReader (Playwright/Stagehand) | `policy-reader.test.ts`, `policies.spec.ts` | `recycler_policies.source_url`, `extracted_at`, screenshot | PARTIAL (Local Playwright discovery verified; Browserbase cloud pending keys) |
+| O-3 | Match accepted materials and fees; save evidence and reason; uncertain state when evidence missing | Eligibility + pricing | `core/eligibility`, `core/pricing` | `routing.test.ts` (13 tests) | Matrix cell reason quotes extracted rule; `UNKNOWN` state | PASS |
 | O-4 | Book pickup after approval; show destination and change first; store approved version; no duplicate on retry | Approval gate + Booker + idempotency | `core/approval`, Booker, `approvals`, `browser_actions` | `approval.test.ts`, `booker.test.ts` | Approval record with `plan_hash`; one portal booking per key | NOT STARTED |
 | O-5 | Verify separately from the action; capture observed vs intended; keep failed/pending visible | Independent verifier | Verifier (new session) | `verifier.test.ts` | `status_events` with tracking screenshot and different session id | NOT STARTED |
 | O-6 | Result view: pickup plan traceable to input record; unresolved items shown | Dashboard + Proof Ledger | `apps/web` `/r/[id]` | E2E dashboard test | Screenshot of dashboard | NOT STARTED |
@@ -24,10 +24,10 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 
 | ID | Scenario → expected | Input (canonical) | Pass condition (computed) | Component | Test | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| TC1 | Old laptop accepted → pickup draft created | "One dead Dell laptop, Kukatpally, Hyderabad, max fee ₹200" | Deccan cell = ACCEPTED with quoted rule; a plan leg exists in `AWAITING_APPROVAL` or later; on approval leg reaches `REQUEST_SUBMITTED` with reference; states DRAFT/SUBMITTED/CONFIRMED/COLLECTED distinct | core + Booker | `tc1.test.ts` + live | IN PROGRESS |
-| TC2 | Centre takes paper but not batteries → batteries rejected | "2 batteries and 8 kg newspaper" | PaperPlus×battery = REJECTED with reason; no leg assigns batteries to PaperPlus; batteries routed to an accepting recycler if one exists | core/eligibility, routing | `tc2.test.ts` | IN PROGRESS |
-| TC3 | Fee above user's limit → approval asked | Deccan leg fee ₹180, cap ₹150 | Plan `approval_required = true` with reason `FEE_CAP_EXCEEDED`; zero `browser_actions` of type `submit` before an approval with matching hash | core/approval, Booker | `tc3.test.ts` | IN PROGRESS |
-| TC4 | Pickup requested → not reported as collected | Any submitted booking | Leg state ∈ {REQUEST_SUBMITTED, REQUEST_CONFIRMED, PICKUP_SCHEDULED}; UI "Collected" disabled; `transitionState(→PICKED_UP)` without `pickup_confirmation` throws | core/state, Verifier, UI | `tc4.test.ts` | IN PROGRESS |
+| TC1 | Old laptop accepted → pickup draft created | "One dead Dell laptop, Kukatpally, Hyderabad, max fee ₹200" | Deccan cell = ACCEPTED with quoted rule; a plan leg exists in `AWAITING_APPROVAL` or later; on approval leg reaches `REQUEST_SUBMITTED` with reference; states DRAFT/SUBMITTED/CONFIRMED/COLLECTED distinct | core + Booker | `tc1.test.ts` + `routing.test.ts` | IN PROGRESS (Building blocks verified in routing; booking execution is Stage 7) |
+| TC2 | Centre takes paper but not batteries → batteries rejected | "2 batteries and 8 kg newspaper" | PaperPlus×battery = REJECTED with reason; no leg assigns batteries to PaperPlus; batteries routed to an accepting recycler if one exists | core/eligibility, routing | `tc2.test.ts` + `routing.test.ts` | IN PROGRESS (Building blocks verified in routing; split plan Deccan + PaperPlus generated) |
+| TC3 | Fee above user's limit → approval asked | Deccan leg fee ₹180, cap ₹150 | Plan `approval_required = true` with reason `FEE_CAP_EXCEEDED`; zero `browser_actions` of type `submit` before an approval with matching hash | core/approval, Booker | `tc3.test.ts` + `routing.test.ts` | IN PROGRESS (Building blocks verified in routing; fee ₹180 > ₹150 cap flags FEE_CAP_EXCEEDED) |
+| TC4 | Pickup requested → not reported as collected | Any submitted booking | Leg state ∈ {REQUEST_SUBMITTED, REQUEST_CONFIRMED, PICKUP_SCHEDULED}; UI "Collected" disabled; `transitionState(→PICKED_UP)` without `pickup_confirmation` throws | core/state, Verifier, UI | `tc4.test.ts` | IN PROGRESS (State machine invariants enforced; Verifier is Stage 8) |
 
 ## C. Product spec (P0)
 
@@ -40,10 +40,10 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 | P0-5 | Three recycler portals, different layouts | apps/portals | portal unit + Playwright E2E | 3 local ports (3101, 3102, 3103), verified | PASS |
 | P0-6 | Browser policy discovery & extraction | apps/worker + packages/core | `policy.test.ts`, `policy-reader.test.ts`, `policies.spec.ts` | local Playwright session discovery, verbatim quote validation, anti-hallucination checks, and `POLICY_UNREADABLE` fail closed | PARTIAL (Local mode complete; Browserbase cloud pending keys) |
 | P0-7 | Evidence capture (screenshots + sessions) | apps/worker session + `PolicyEvidence` | `policies.spec.ts` | screenshot written to `.data/evidence`, sessionId + url in PolicyEvidence | PARTIAL (Local evidence complete; Supabase storage pending keys) |
-| P0-8 | Eligibility matrix | core/eligibility + UI | eligibility tests | matrix view | NOT STARTED |
-| P0-9 | Cost/payout calculations | core/pricing | pricing tests | plan totals | NOT STARTED |
-| P0-10 | Multi-recycler split routing | core/routing | routing tests | split plan chosen in demo | NOT STARTED |
-| P0-11 | Plan comparison | core/routing + UI | routing tests | plan cards | NOT STARTED |
+| P0-8 | Eligibility matrix | core/eligibility + UI | `routing.test.ts` | matrix generated in CLI and routing tests with quoted rules | PASS |
+| P0-9 | Cost/payout calculations | core/pricing | `routing.test.ts` | pricing engine totals, fees, and 15% proximity threshold warnings | PASS |
+| P0-10 | Multi-recycler split routing | core/routing | `routing.test.ts` | split plan chosen in demo (Deccan + PaperPlus) | PASS |
+| P0-11 | Plan comparison | core/routing + UI | `routing.test.ts` | 7-tier lexicographic ranking across alternative candidate plans | PASS |
 | P0-12 | Explicit approval gate | core/approval + UI | approval tests | approvals rows | NOT STARTED |
 | P0-13 | Browser form filling | Booker | booker tests | session replay | NOT STARTED |
 | P0-14 | Browser submission | Booker | booker tests | confirmation screenshot | NOT STARTED |
@@ -64,7 +64,7 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 | ID | Rule | Enforcement point | Test | Status |
 | --- | --- | --- | --- | --- |
 | S-1 | LLM never decides money, eligibility or state | core is LLM-free; LLM output only through zod schemas | code review + unit tests | PASS |
-| S-2 | Never invent acceptance rules | Missing extract → `UNKNOWN` | eligibility unknown test | NOT STARTED |
+| S-2 | Never invent acceptance rules | Missing extract → `UNKNOWN` | `routing.test.ts` | PASS |
 | S-3 | No transition without evidence | `transitionState` | state tests | PASS |
 | S-4 | Retry never double-books | idempotency key + portal dedupe | retry test | IN PROGRESS |
 | S-5 | CAPTCHA/OTP → human handoff only | Booker detection | captcha test | NOT STARTED |

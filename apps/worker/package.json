@@ -8,9 +8,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@reroute/core": "workspace:*",
-    "@reroute/llm": "workspace:*",
-    "@reroute/db": "workspace:*",
+    "@browserbasehq/stagehand": "^4.2.1",
+    "@reroute/core": "*",
+    "@reroute/db": "*",
+    "@reroute/llm": "*",
     "zod": "^3.23.8"
   }
 }

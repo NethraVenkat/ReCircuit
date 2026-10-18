@@ -79,3 +79,7 @@ export * from "./intake/index.js";
 // Policy Discovery & Extraction
 export * from "./policy/index.js";
 
+// Stage 5: Routing & Pricing
+export * from "./routing/index.js";
+
+

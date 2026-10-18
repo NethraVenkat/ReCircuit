@@ -1,141 +1,121 @@
 /**
  * packages/core/src/policy/policy.test.ts
  *
- * Vitest tests for Policy Schema & Anti-Hallucination Validator:
- * - Policies for Deccan, PaperPlus, and QuickScrap conform to schema
- * - Verbatim quote matching in page visible text
- * - Extraction of numeric values (fees, minimum weights, rate numbers)
- * - Deterministic rejection of hallucinated quotes or unquoted numbers
- * - Graceful handling of unreadable / failed policies
+ * Vitest tests for Generic Policy Schema, Anti-Hallucination Validator,
+ * Pure TypeScript Category Mapper, and Honest Ground-Truth Fixtures.
  */
 
 import { describe, it, expect } from "vitest";
 import {
-  ExtractedPolicySchema,
   validatePolicyAgainstPageText,
   extractNumbersFromText,
-  type ExtractedPolicy,
+  mapRawNameToCanonicalCategory,
+  mapExtractionToCanonicalCategories,
+  DECCAN_PAGE_TEXT,
+  DECCAN_EXTRACTION,
+  PAPERPLUS_PAGE_TEXT,
+  PAPERPLUS_EXTRACTION,
+  QUICKSCRAP_PAGE_TEXT,
+  QUICKSCRAP_EXTRACTION,
+  GREENLOOP_PAGE_TEXT,
+  GREENLOOP_EXTRACTION,
+  type GenericPolicyExtraction,
 } from "./index.js";
 
-describe("Stage 4: Recycler Policy Schema & Anti-Hallucination Validator", () => {
-  const samplePageText = `
-    Welcome to Deccan E-Cycle Solutions.
-    Pickup Fee & Payout Schedule:
-    Under 5 kg total weight: ₹180 standard pickup charge.
-    5 kg or more total weight: ₹0 (FREE Pickup).
-    Item-Specific Payout Rates:
-    Dead or Functional Laptop: ₹250 cash payout each.
-    Dead or Functional Mobile Phone: ₹60 cash payout each.
-    Customer Data Privacy Guarantee: We require data wipe acknowledgement for laptops.
-  `;
+describe("Stage 4 Fixes: Generic Policy Schema & Anti-Hallucination Validator", () => {
+  it("validates that all honest portal fixtures pass anti-hallucination against their real page text", () => {
+    // 1. Deccan
+    const deccanRes = validatePolicyAgainstPageText(DECCAN_EXTRACTION, DECCAN_PAGE_TEXT);
+    expect(deccanRes.valid).toBe(true);
+    expect(deccanRes.errors).toEqual([]);
 
-  const validDeccanPolicy: ExtractedPolicy = {
-    recyclerId: "deccan",
-    companyName: "Deccan E-Cycle Solutions",
-    acceptedCategories: ["laptop", "mobile_phone", "charger_cable", "battery_household"],
-    rejectedCategories: ["newspaper", "cardboard"],
-    rates: [
-      { item: "Dead or Functional Laptop", payout: "₹250", fee: "₹0" },
-      { item: "Dead or Functional Mobile Phone", payout: "₹60", fee: "₹0" },
-    ],
-    freeThresholdKg: 5,
-    underWeightFeeInr: 180,
-    minWeightKg: 0,
-    convenienceFeeInr: null,
-    requiresDataWipeAck: true,
-    registrationNotice: null,
-    quotes: [
-      "Under 5 kg total weight: ₹180 standard pickup charge.",
-      "5 kg or more total weight: ₹0 (FREE Pickup).",
-      "Dead or Functional Laptop: ₹250 cash payout each.",
-      "Dead or Functional Mobile Phone: ₹60 cash payout each.",
-    ],
-    status: "SUCCESS",
-    evidence: {
-      url: "http://localhost:3101/pickup-charges",
-      screenshotRef: "evidence/deccan-policy.png",
-      extractedAt: new Date().toISOString(),
-      sessionId: "session-test-001",
-    },
-  };
+    // 2. PaperPlus
+    const paperplusRes = validatePolicyAgainstPageText(PAPERPLUS_EXTRACTION, PAPERPLUS_PAGE_TEXT);
+    expect(paperplusRes.valid).toBe(true);
+    expect(paperplusRes.errors).toEqual([]);
 
-  it("validates that sample policies parse cleanly through ExtractedPolicySchema", () => {
-    const parsed = ExtractedPolicySchema.parse(validDeccanPolicy);
-    expect(parsed.recyclerId).toBe("deccan");
-    expect(parsed.freeThresholdKg).toBe(5);
-    expect(parsed.underWeightFeeInr).toBe(180);
-    expect(parsed.requiresDataWipeAck).toBe(true);
+    // 3. QuickScrap
+    const quickscrapRes = validatePolicyAgainstPageText(QUICKSCRAP_EXTRACTION, QUICKSCRAP_PAGE_TEXT);
+    expect(quickscrapRes.valid).toBe(true);
+    expect(quickscrapRes.errors).toEqual([]);
+
+    // 4. GreenLoop Secunderabad (Unseen recycler)
+    const greenloopRes = validatePolicyAgainstPageText(GREENLOOP_EXTRACTION, GREENLOOP_PAGE_TEXT);
+    expect(greenloopRes.valid).toBe(true);
+    expect(greenloopRes.errors).toEqual([]);
   });
 
-  it("extracts integers and floats accurately with extractNumbersFromText", () => {
-    expect(extractNumbersFromText("Under 5 kg total weight: ₹180 fee")).toEqual([5, 180]);
-    expect(extractNumbersFromText("₹250 each and 4.5 kg minimum")).toEqual([250, 4.5]);
+  it("enforces Rule 3: NEVER DEFAULT unmentioned values to 0 (minimum weight is null for Deccan and QuickScrap)", () => {
+    expect(DECCAN_EXTRACTION.minimumTotalKg.value).toBeNull();
+    expect(QUICKSCRAP_EXTRACTION.minimumTotalKg.value).toBeNull();
+    expect(PAPERPLUS_EXTRACTION.minimumTotalKg.value).toBe(5);
+    expect(GREENLOOP_EXTRACTION.minimumTotalKg.value).toBe(1);
+  });
+
+  it("fails anti-hallucination if any numeric field lacks supporting quote", () => {
+    const alteredDeccan: GenericPolicyExtraction = {
+      ...DECCAN_EXTRACTION,
+      feeRules: [
+        {
+          kind: "below_weight",
+          amountInr: 999, // 999 does not appear in quote!
+          thresholdKg: 5,
+          quote: "Under 5 kg total weight: ₹180 standard pickup charge",
+        },
+      ],
+    };
+
+    const res = validatePolicyAgainstPageText(alteredDeccan, DECCAN_PAGE_TEXT);
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.includes("Hallucinated numeric value") && e.includes("999"))).toBe(true);
+  });
+
+  it("fails anti-hallucination if any quote is not found verbatim in page text", () => {
+    const alteredPaperplus: GenericPolicyExtraction = {
+      ...PAPERPLUS_EXTRACTION,
+      feeRules: [
+        {
+          kind: "free",
+          amountInr: 0,
+          thresholdKg: null,
+          quote: "Completely invented pickup quote that does not appear in text",
+        },
+      ],
+    };
+
+    const res = validatePolicyAgainstPageText(alteredPaperplus, PAPERPLUS_PAGE_TEXT);
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.includes("Quote not found in page visible text"))).toBe(true);
+  });
+
+  it("pure TypeScript category mapper deterministically classifies raw material names into canonical taxonomy", () => {
+    expect(mapRawNameToCanonicalCategory("Laptops & Notebooks")).toBe("laptop");
+    expect(mapRawNameToCanonicalCategory("Dead or Functional Laptop")).toBe("laptop");
+    expect(mapRawNameToCanonicalCategory("Desktops & Monitors")).toBe("desktop");
+    expect(mapRawNameToCanonicalCategory("Dead or Functional Mobile Phone")).toBe("mobile_phone");
+    expect(mapRawNameToCanonicalCategory("Chargers, Adapters & Wires")).toBe("charger_cable");
+    expect(mapRawNameToCanonicalCategory("Household Batteries")).toBe("battery_household");
+    expect(mapRawNameToCanonicalCategory("Newspaper (Raddi)")).toBe("newspaper");
+    expect(mapRawNameToCanonicalCategory("Corrugated Cardboard")).toBe("cardboard");
+    expect(mapRawNameToCanonicalCategory("Old Books & Office Paper")).toBe("books_magazines");
+    expect(mapRawNameToCanonicalCategory("Household plastics")).toBe("plastic");
+    expect(mapRawNameToCanonicalCategory("Hazardous chemicals")).toBe("hazardous");
+    expect(mapRawNameToCanonicalCategory("Unrecognized alien artefact")).toBeNull();
+  });
+
+  it("maps extracted accepted and rejected items to canonical category lists", () => {
+    const { acceptedCategories, rejectedCategories } = mapExtractionToCanonicalCategories(DECCAN_EXTRACTION);
+    expect(acceptedCategories).toContain("laptop");
+    expect(acceptedCategories).toContain("desktop");
+    expect(acceptedCategories).toContain("mobile_phone");
+    expect(acceptedCategories).toContain("battery_household");
+    expect(rejectedCategories).toContain("newspaper");
+    expect(rejectedCategories).toContain("cardboard");
+  });
+
+  it("extracts numbers accurately from complex text strings", () => {
+    expect(extractNumbersFromText("Under 5 kg total weight: ₹180 charge")).toEqual([5, 180]);
+    expect(extractNumbersFromText("Payout Rs. 200 per unit, 1.5 kg min")).toEqual([200, 1.5]);
     expect(extractNumbersFromText("No numbers here")).toEqual([]);
   });
-
-  it("passes anti-hallucination check when all quotes match page text and all numbers match quotes", () => {
-    const result = validatePolicyAgainstPageText(validDeccanPolicy, samplePageText);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toHaveLength(0);
-  });
-
-  it("rejects policy when a cited quote does not appear in the page text", () => {
-    const hallucinatedPolicy: ExtractedPolicy = {
-      ...validDeccanPolicy,
-      quotes: [
-        "Under 5 kg total weight: ₹180 standard pickup charge.",
-        "We also accept hazardous radioactive medical waste for ₹999.", // hallucinated!
-      ],
-    };
-
-    const result = validatePolicyAgainstPageText(hallucinatedPolicy, samplePageText);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.includes("Quote not found in page visible text"))).toBe(true);
-  });
-
-  it("rejects policy when an extracted numeric fee is not backed by any cited quote", () => {
-    const hallucinatedNumberPolicy: ExtractedPolicy = {
-      ...validDeccanPolicy,
-      underWeightFeeInr: 350, // invented number not in quotes
-      quotes: [
-        "Under 5 kg total weight: ₹180 standard pickup charge.",
-        "5 kg or more total weight: ₹0 (FREE Pickup).",
-        "Dead or Functional Laptop: ₹250 cash payout each.",
-        "Dead or Functional Mobile Phone: ₹60 cash payout each.",
-      ],
-    };
-
-    const result = validatePolicyAgainstPageText(hallucinatedNumberPolicy, samplePageText);
-    expect(result.valid).toBe(false);
-    expect(
-      result.errors.some((e) =>
-        e.includes("Hallucinated numeric value: underWeightFeeInr = 350 does not appear in any cited quote")
-      )
-    ).toBe(true);
-  });
-
-  it("rejects policy when quotes array is empty", () => {
-    const noQuotesPolicy: ExtractedPolicy = {
-      ...validDeccanPolicy,
-      quotes: [],
-    };
-
-    const result = validatePolicyAgainstPageText(noQuotesPolicy, samplePageText);
-    expect(result.valid).toBe(false);
-    expect(result.errors).toContain("No evidence quotes provided for policy extraction.");
-  });
-
-  it("accepts POLICY_UNREADABLE or FAILED policies without quote errors", () => {
-    const unreadablePolicy: ExtractedPolicy = {
-      ...validDeccanPolicy,
-      status: "POLICY_UNREADABLE",
-      failureReason: "Fee schedule hidden or unavailable",
-      quotes: [],
-    };
-
-    const result = validatePolicyAgainstPageText(unreadablePolicy, samplePageText);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toHaveLength(0);
-  });
 });
-

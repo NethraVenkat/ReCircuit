@@ -60,34 +60,56 @@ export class FakeLlmAdapter implements LlmAdapter {
 
     if (isPolicyPrompt) {
       if (lower.includes("deccan")) {
+        const isHidden = lower.includes("hidden") || lower.includes("revision");
         return JSON.stringify({
           recyclerId: "deccan",
           companyName: "Deccan E-Cycle Solutions",
-          acceptedCategories: ["laptop", "desktop", "mobile_phone", "charger_cable", "battery_household"],
-          rejectedCategories: ["newspaper", "cardboard"],
-          rates: [
-            { item: "Dead or Functional Laptop", payout: "₹250", fee: "₹0" },
-            { item: "Dead or Functional Mobile Phone", payout: "₹60", fee: "₹0" },
+          acceptedItems: [
+            { rawName: "Laptops & Notebooks", quote: "Laptops & Notebooks" },
+            { rawName: "Household Batteries", quote: "Household Batteries" },
           ],
-          freeThresholdKg: 5,
-          underWeightFeeInr: 180,
-          minWeightKg: 0,
+          rejectedItems: [
+            { rawName: "Paper, newspapers, office shredded documents, and books", quote: "Paper, newspapers, office shredded documents, and books" },
+          ],
+          feeRules: isHidden ? [] : [
+            { kind: "below_weight", amountInr: 180, thresholdKg: 5, quote: "Under 5 kg total weight: ₹180 standard pickup charge" },
+            { kind: "free", amountInr: 0, thresholdKg: 5, quote: "5 kg or more total weight: ₹0 (FREE Pickup)" },
+          ],
+          payoutRules: isHidden ? [] : [
+            { rawName: "Dead or Functional Laptop", unit: "per_item", amountInr: 250, quote: "Dead or Functional Laptop: ₹250 cash payout each" },
+          ],
+          minimumTotalKg: { value: null, quote: null },
+          serviceablePincodes: { values: [], quote: null },
+          registrationNotice: isHidden ? { text: null, quote: null } : {
+            text: "Official guidelines under CPCB E-Waste Management Rules (Hyderabad Region)",
+            quote: "Official guidelines under CPCB E-Waste Management Rules (Hyderabad Region)",
+          },
+          freeThresholdKg: isHidden ? null : 5,
+          underWeightFeeInr: isHidden ? null : 180,
+          minWeightKg: null,
           convenienceFeeInr: null,
           requiresDataWipeAck: true,
-          quotes: [
-            "Under 5 kg total weight",
-            "₹180 standard pickup charge",
-            "5 kg or more total weight",
-            "₹0 (FREE Pickup)",
+          acceptedCategories: ["laptop", "battery_household"],
+          rejectedCategories: ["newspaper"],
+          quotes: isHidden ? [
+            "Laptops & Notebooks",
+            "Household Batteries",
+            "Paper, newspapers, office shredded documents, and books",
+          ] : [
+            "Under 5 kg total weight: ₹180 standard pickup charge",
+            "5 kg or more total weight: ₹0 (FREE Pickup)",
             "Dead or Functional Laptop: ₹250 cash payout each",
-            "Dead or Functional Mobile Phone: ₹60 cash payout each",
+            "Laptops & Notebooks",
+            "Household Batteries",
           ],
           status: "SUCCESS",
           evidence: {
             url: "http://localhost:3101/pickup-charges",
-            screenshotRef: ".data/evidence/deccan-policy.png",
+            textHash: "deccan-hash",
+            screenshotPath: ".data/evidence/deccan-policy.png",
             extractedAt: new Date().toISOString(),
             sessionId: "fake-session-deccan",
+            extractionPath: "generic-ai",
           },
         });
       }
@@ -96,31 +118,59 @@ export class FakeLlmAdapter implements LlmAdapter {
         return JSON.stringify({
           recyclerId: "paperplus",
           companyName: "PaperPlus Kabadi",
-          acceptedCategories: ["newspaper", "cardboard", "books_magazines"],
-          rejectedCategories: ["laptop", "battery_household"],
-          rates: [
-            { item: "Newspaper (Raddi)", payout: "₹14 / kg", fee: "₹0" },
-            { item: "Corrugated Cardboard", payout: "₹9 / kg", fee: "₹0" },
+          acceptedItems: [
+            { rawName: "Newspaper (Raddi)", quote: "Newspaper (Raddi)" },
+            { rawName: "Corrugated Cardboard", quote: "Corrugated Cardboard" },
+            { rawName: "Old Books & Office Paper", quote: "Old Books & Office Paper" },
+            { rawName: "Magazines", quote: "Magazines" },
           ],
+          rejectedItems: [
+            { rawName: "Batteries", quote: "Batteries" },
+            { rawName: "Electronics", quote: "Electronics" },
+            { rawName: "Plastics", quote: "Plastics" },
+            { rawName: "Hazardous chemicals", quote: "Hazardous chemicals" },
+          ],
+          feeRules: [
+            { kind: "free", amountInr: 0, thresholdKg: null, quote: "Doorstep Pickup: 100% Free pickup across Kukatpally, Madhapur, and KPHB." },
+          ],
+          payoutRules: [
+            { rawName: "Newspaper (Raddi)", unit: "per_kg", amountInr: 14, quote: "Newspaper (Raddi): ₹14 / kg" },
+            { rawName: "Corrugated Cardboard", unit: "per_kg", amountInr: 9, quote: "Corrugated Cardboard: ₹9 / kg" },
+            { rawName: "Old Books & Office Paper", unit: "per_kg", amountInr: 10, quote: "Old Books & Office Paper: ₹10 / kg" },
+            { rawName: "Magazines", unit: "per_kg", amountInr: 7, quote: "Magazines: ₹7 / kg" },
+          ],
+          minimumTotalKg: {
+            value: 5,
+            quote: "Minimum Weight: At least 5 kg total scrap weight is required for home pickup.",
+          },
+          serviceablePincodes: {
+            values: ["500072", "500081", "500085"],
+            quote: "Doorstep Pickup: 100% Free pickup across Kukatpally, Madhapur, and KPHB.",
+          },
+          registrationNotice: { text: null, quote: null },
           freeThresholdKg: null,
           underWeightFeeInr: null,
           minWeightKg: 5,
           convenienceFeeInr: 0,
           requiresDataWipeAck: false,
+          acceptedCategories: ["newspaper", "cardboard", "books_magazines"],
+          rejectedCategories: ["battery_household", "small_electronics", "plastic", "hazardous"],
           quotes: [
             "Minimum Weight: At least 5 kg total scrap weight is required for home pickup.",
             "Doorstep Pickup: 100% Free pickup across Kukatpally, Madhapur, and KPHB.",
-            "Newspaper (Raddi)",
-            "₹14 / kg",
-            "Corrugated Cardboard",
-            "₹9 / kg",
+            "Newspaper (Raddi): ₹14 / kg",
+            "Corrugated Cardboard: ₹9 / kg",
+            "Old Books & Office Paper: ₹10 / kg",
+            "Magazines: ₹7 / kg",
           ],
           status: "SUCCESS",
           evidence: {
             url: "http://localhost:3102/what-we-take",
-            screenshotRef: ".data/evidence/paperplus-policy.png",
+            textHash: "paperplus-hash",
+            screenshotPath: ".data/evidence/paperplus-policy.png",
             extractedAt: new Date().toISOString(),
             sessionId: "fake-session-paperplus",
+            extractionPath: "generic-ai",
           },
         });
       }
@@ -128,34 +178,114 @@ export class FakeLlmAdapter implements LlmAdapter {
       if (lower.includes("quickscrap")) {
         return JSON.stringify({
           recyclerId: "quickscrap",
-          companyName: "QuickScrap Hyderabad",
-          acceptedCategories: ["laptop", "newspaper", "cardboard", "battery_household"],
-          rejectedCategories: ["hazardous"],
-          rates: [
-            { item: "Dead Laptop / Notebook", payout: "₹180 / unit", fee: "₹199 Flat Pickup Fee" },
-            { item: "Dead Mobile Phone", payout: "₹40 / unit", fee: "₹199 Flat Pickup Fee" },
+          companyName: "QuickScrap Hyd",
+          acceptedItems: [
+            { rawName: "Dead Laptop / Notebook", quote: "Dead Laptop / Notebook" },
+            { rawName: "Dead Mobile Phone", quote: "Dead Mobile Phone" },
+            { rawName: "Old Newspaper", quote: "Old Newspaper" },
+            { rawName: "Corrugated Cardboard", quote: "Corrugated Cardboard" },
+            { rawName: "Batteries & Small Plastics", quote: "Batteries & Small Plastics" },
           ],
+          rejectedItems: [],
+          feeRules: [
+            { kind: "flat", amountInr: 199, thresholdKg: null, quote: "₹199 Flat Pickup Fee" },
+          ],
+          payoutRules: [
+            { rawName: "Dead Laptop / Notebook", unit: "per_item", amountInr: 180, quote: "Dead Laptop / Notebook: ₹180 / unit" },
+            { rawName: "Dead Mobile Phone", unit: "per_item", amountInr: 40, quote: "Dead Mobile Phone: ₹40 / unit" },
+            { rawName: "Old Newspaper", unit: "per_kg", amountInr: 9, quote: "Old Newspaper: ₹9 / kg" },
+            { rawName: "Corrugated Cardboard", unit: "per_kg", amountInr: 4, quote: "Corrugated Cardboard: ₹4 / kg" },
+            { rawName: "Batteries & Small Plastics", unit: "per_item", amountInr: 0, quote: "Batteries & Small Plastics: ₹0 (Disposal only)" },
+          ],
+          minimumTotalKg: { value: null, quote: null },
+          serviceablePincodes: { values: [], quote: null },
+          registrationNotice: {
+            text: "Registration: application in process",
+            quote: "Registration: application in process",
+          },
           freeThresholdKg: null,
           underWeightFeeInr: null,
-          minWeightKg: 0,
+          minWeightKg: null,
           convenienceFeeInr: 199,
           requiresDataWipeAck: false,
-          registrationNotice: "Registration: application in process",
+          acceptedCategories: ["laptop", "mobile_phone", "newspaper", "cardboard", "battery_household"],
+          rejectedCategories: [],
           quotes: [
             "₹199 Flat Pickup Fee",
-            "Charged on all doorstep collections regardless of load size or material combination.",
-            "Dead Laptop / Notebook",
-            "₹180 / unit",
-            "Dead Mobile Phone",
-            "₹40 / unit",
+            "Dead Laptop / Notebook: ₹180 / unit",
+            "Dead Mobile Phone: ₹40 / unit",
+            "Old Newspaper: ₹9 / kg",
+            "Corrugated Cardboard: ₹4 / kg",
+            "Batteries & Small Plastics: ₹0 (Disposal only)",
             "Registration: application in process",
           ],
           status: "SUCCESS",
           evidence: {
             url: "http://localhost:3103/rates",
-            screenshotRef: ".data/evidence/quickscrap-policy.png",
+            textHash: "quickscrap-hash",
+            screenshotPath: ".data/evidence/quickscrap-policy.png",
             extractedAt: new Date().toISOString(),
             sessionId: "fake-session-quickscrap",
+            extractionPath: "generic-ai",
+          },
+        });
+      }
+
+      if (lower.includes("greenloop")) {
+        return JSON.stringify({
+          recyclerId: "greenloop",
+          companyName: "GreenLoop Secunderabad",
+          acceptedItems: [
+            { rawName: "Dead laptops and notebooks", quote: "Dead laptops and notebooks - payout Rs. 200 per unit" },
+            { rawName: "Household batteries", quote: "Household batteries - safe disposal" },
+            { rawName: "Newspaper bundles", quote: "Newspaper bundles - payout Rs. 11 per kg" },
+          ],
+          rejectedItems: [
+            { rawName: "Bio-medical and hospital waste", quote: "Bio-medical and hospital waste" },
+            { rawName: "Industrial chemical drums", quote: "Industrial chemical drums" },
+          ],
+          feeRules: [
+            { kind: "below_weight", amountInr: 99, thresholdKg: 3, quote: "We charge Rs. 99 for pickups below 3 kg total scrap weight." },
+            { kind: "free", amountInr: 0, thresholdKg: 3, quote: "Pickups of 3 kg or more are completely free of charge (Rs. 0 pickup charge)." },
+          ],
+          payoutRules: [
+            { rawName: "Dead laptops and notebooks", unit: "per_item", amountInr: 200, quote: "Dead laptops and notebooks - payout Rs. 200 per unit" },
+            { rawName: "Newspaper bundles", unit: "per_kg", amountInr: 11, quote: "Newspaper bundles - payout Rs. 11 per kg" },
+          ],
+          minimumTotalKg: {
+            value: 1,
+            quote: "Minimum pickup requirement: 1 kg total weight.",
+          },
+          serviceablePincodes: {
+            values: ["500003", "500009", "500010"],
+            quote: "Doorstep recycling pickups across Secunderabad and Hyderabad pincodes: 500003, 500009, 500010.",
+          },
+          registrationNotice: {
+            text: "Registration status: Registered recycler with TSPCB under Secunderabad e-waste circular 2025.",
+            quote: "Registration status: Registered recycler with TSPCB under Secunderabad e-waste circular 2025.",
+          },
+          freeThresholdKg: 3,
+          underWeightFeeInr: 99,
+          minWeightKg: 1,
+          convenienceFeeInr: null,
+          requiresDataWipeAck: false,
+          acceptedCategories: ["laptop", "battery_household", "newspaper"],
+          rejectedCategories: ["hazardous"],
+          quotes: [
+            "We charge Rs. 99 for pickups below 3 kg total scrap weight.",
+            "Pickups of 3 kg or more are completely free of charge (Rs. 0 pickup charge).",
+            "Dead laptops and notebooks - payout Rs. 200 per unit",
+            "Newspaper bundles - payout Rs. 11 per kg",
+            "Minimum pickup requirement: 1 kg total weight.",
+          ],
+          status: "SUCCESS",
+          evidence: {
+            url: "http://localhost:3104",
+            textHash: "greenloop-hash",
+            screenshotPath: ".data/evidence/greenloop-policy.png",
+            extractedAt: new Date().toISOString(),
+            sessionId: "fake-session-greenloop",
+            extractionPath: "generic-ai",
           },
         });
       }

@@ -3,6 +3,10 @@
  *
  * Browser session manager supporting both local Playwright execution (offline dev & CI)
  * and cloud Browserbase sessions.
+ *
+ * Rules:
+ * - If BROWSER_MODE=browserbase and keys are missing, throw ConfigurationError; never silently fallback to local.
+ * - Local sessions get a deterministic synthetic session ID prefixed with "local-".
  */
 
 import { randomUUID } from "crypto";
@@ -11,6 +15,13 @@ import path from "path";
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 export type BrowserMode = "local" | "browserbase";
+
+export class ConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConfigurationError";
+  }
+}
 
 export interface BrowserSessionOptions {
   mode?: BrowserMode;
@@ -34,31 +45,36 @@ export interface BrowserSession {
 
 export async function openSession(options: BrowserSessionOptions = {}): Promise<BrowserSession> {
   const requestedMode = options.mode || (process.env.BROWSER_MODE as BrowserMode) || "local";
-  const sessionId = randomUUID();
+
   let mode: BrowserMode = "local";
+  let sessionId: string;
   let browser: Browser;
   let context: BrowserContext;
 
-  if (requestedMode === "browserbase" && process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID) {
+  if (requestedMode === "browserbase") {
+    const apiKey = process.env.BROWSERBASE_API_KEY;
+    const projectId = process.env.BROWSERBASE_PROJECT_ID;
+
+    if (!apiKey || !projectId) {
+      throw new ConfigurationError(
+        "Missing required Browserbase configuration: BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID must be set when BROWSER_MODE=browserbase. Never fallback silently to local."
+      );
+    }
+
     try {
       const cdpUrl = `wss://connect.browserbase.com?apiKey=${encodeURIComponent(
-        process.env.BROWSERBASE_API_KEY
-      )}&projectId=${encodeURIComponent(process.env.BROWSERBASE_PROJECT_ID)}`;
+        apiKey
+      )}&projectId=${encodeURIComponent(projectId)}`;
       browser = await chromium.connectOverCDP(cdpUrl);
       context = await browser.newContext({
         viewport: { width: 1280, height: 800 },
       });
       mode = "browserbase";
-    } catch {
-      // Graceful fallback to local browser if cloud connection fails
-      browser = await chromium.launch({
-        headless: options.headless ?? true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
-      context = await browser.newContext({
-        viewport: { width: 1280, height: 800 },
-      });
-      mode = "local";
+      sessionId = `bb-${randomUUID()}`;
+    } catch (err: unknown) {
+      throw new ConfigurationError(
+        `Failed to connect to Browserbase cloud session: ${err instanceof Error ? err.message : String(err)}. Refusing silent fallback to local.`
+      );
     }
   } else {
     // Local Playwright session
@@ -70,6 +86,7 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
       viewport: { width: 1280, height: 800 },
     });
     mode = "local";
+    sessionId = `local-${randomUUID()}`;
   }
 
   const page = await context.newPage();
@@ -116,4 +133,3 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
     captureScreenshot,
   };
 }
-
