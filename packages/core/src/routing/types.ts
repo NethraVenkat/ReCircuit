@@ -45,6 +45,7 @@ export interface LegPricingResult {
   itemPayouts: Record<string, number | null>;
   hasUnknownPayout: boolean;
   thresholdDistancePercent?: number | undefined;
+  thresholdDistanceKg?: number | undefined;
 }
 
 export type ApprovalReason =
@@ -55,6 +56,7 @@ export type ApprovalReason =
 
 export interface PlanScored {
   plan: Plan;
+  isPartial: boolean;
   unroutedItemIds: string[];
   unroutedItemsCount: number;
   registryWarningsCount: number;

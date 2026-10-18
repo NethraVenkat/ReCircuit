@@ -123,11 +123,11 @@ export function generateRoutingPlans(options: {
     // Must have at least one routed item
     if (groups.size === 0) continue;
 
-    // Signature to deduplicate equivalent leg assignments
-    const signature = Array.from(groups.entries())
-      .map(([r, its]) => `${r}:${its.map((it) => it.id).sort().join(",")}`)
+    // Signature to deduplicate equivalent item->recycler assignments
+    const signature = items
+      .map((it, idx) => `${it.id}->${assignment[idx] ?? "UNROUTED"}`)
       .sort()
-      .join("|");
+      .join(";");
 
     if (seenPlanSignatures.has(signature)) continue;
     seenPlanSignatures.add(signature);
@@ -224,7 +224,9 @@ export function generateRoutingPlans(options: {
     if (registryWarningsCount > 0) {
       approvalReasons.push("REGISTRY_WARNING");
     }
-    const hasNearThreshold = legResults.some((lr) => lr.pricing.thresholdDistancePercent != null);
+    const hasNearThreshold = legResults.some(
+      (lr) => lr.pricing.thresholdDistanceKg != null || lr.pricing.thresholdDistancePercent != null
+    );
     if (hasNearThreshold) {
       approvalReasons.push("ESTIMATED_WEIGHT_NEAR_THRESHOLD");
     }
@@ -236,6 +238,7 @@ export function generateRoutingPlans(options: {
 
     scoredPlans.push({
       plan: tempPlan,
+      isPartial: unroutedItemIds.length > 0,
       unroutedItemIds,
       unroutedItemsCount,
       registryWarningsCount,
@@ -275,12 +278,21 @@ export function generateRoutingPlans(options: {
     if (a.legsCount !== b.legsCount) {
       return a.legsCount - b.legsCount;
     }
-    // 7. Stable tiebreak on sorted recycler IDs
-    return a.recyclerIdsTiebreak.localeCompare(b.recyclerIdsTiebreak);
+    // 7. Stable tiebreak on sorted recycler IDs, then planHash
+    const cmpRec = a.recyclerIdsTiebreak.localeCompare(b.recyclerIdsTiebreak);
+    if (cmpRec !== 0) return cmpRec;
+    return a.plan.planHash.localeCompare(b.plan.planHash);
   });
 
   const bestPlan = scoredPlans[0]?.plan ?? null;
-  const alternatives = scoredPlans.slice(1).map((s) => s.plan);
+  const bestPlanHash = bestPlan?.planHash ?? null;
+
+  // Deduplicate alternatives so the best plan never appears again as an alternative
+  const alternatives = scoredPlans
+    .slice(1)
+    .filter((sp) => sp.plan.planHash !== bestPlanHash)
+    .map((s) => s.plan);
+
   const unroutedItems = items.filter((item) =>
     bestPlan ? !bestPlan.legs.some((l) => l.itemIds.includes(item.id)) : true
   );
@@ -292,4 +304,41 @@ export function generateRoutingPlans(options: {
     scoredPlans,
     unroutedItems,
   };
+}
+
+/**
+ * Deterministically explains why candidate Plan A ranks above candidate Plan B
+ * using the 7-tier lexicographic ranking rules.
+ */
+export function explainWhyPlanBeats(
+  a: PlanScored,
+  b: PlanScored,
+  totalItemsCount: number
+): string {
+  if (a.unroutedItemsCount !== b.unroutedItemsCount) {
+    return a.unroutedItemsCount < b.unroutedItemsCount
+      ? `Fuller item coverage: routes ${totalItemsCount - a.unroutedItemsCount}/${totalItemsCount} items vs ${totalItemsCount - b.unroutedItemsCount}/${totalItemsCount} items (${a.unroutedItemsCount} unrouted vs ${b.unroutedItemsCount} unrouted)`
+      : `Fewer unrouted items`;
+  }
+  if (a.registryWarningsCount !== b.registryWarningsCount) {
+    return `Better compliance: ${a.registryWarningsCount} registry warning(s) vs ${b.registryWarningsCount} warning(s)`;
+  }
+  if (a.withinCap !== b.withinCap) {
+    return a.withinCap
+      ? `Within fee cap: ₹${a.totalFee} within cap whereas alternative exceeds cap (₹${b.totalFee})`
+      : `Fee cap compliance differs`;
+  }
+  if (a.totalFee !== b.totalFee) {
+    return `Lower pickup fee: ₹${a.totalFee} vs ₹${b.totalFee} (saves ₹${b.totalFee - a.totalFee})`;
+  }
+  if (a.totalKnownPayout !== b.totalKnownPayout) {
+    return `Higher cash payout: ₹${a.totalKnownPayout} vs ₹${b.totalKnownPayout} (+₹${a.totalKnownPayout - b.totalKnownPayout})`;
+  }
+  if (a.legsCount !== b.legsCount) {
+    return `Fewer legs: ${a.legsCount} trip(s) vs ${b.legsCount} trip(s)`;
+  }
+  if (a.recyclerIdsTiebreak !== b.recyclerIdsTiebreak) {
+    return `Deterministic tiebreaker on sorted recycler IDs (${a.recyclerIdsTiebreak} vs ${b.recyclerIdsTiebreak})`;
+  }
+  return `Deterministic tiebreaker on plan hash (${a.plan.planHash.slice(0, 8)} vs ${b.plan.planHash.slice(0, 8)})`;
 }

@@ -18,6 +18,7 @@ import {
   QUICKSCRAP_EXTRACTION,
   transitionState,
   createDomainRequestFromIntake,
+  explainWhyPlanBeats,
 } from "@reroute/core";
 
 async function main() {
@@ -171,7 +172,7 @@ async function main() {
   const bestScored = routing.scoredPlans[0];
   const bestPlan = routing.bestPlan;
 
-  console.log(`\n🏆 BEST PROPOSED PLAN (Plan ID: ${bestPlan.id})`);
+  console.log(`\n🏆 BEST PROPOSED PLAN (Plan ID: ${bestPlan.id}) ${bestScored.isPartial ? "[PARTIAL]" : "[FULL]"}`);
   console.log(`   Plan Hash:         ${bestPlan.planHash}`);
   console.log(`   Total Pickup Fee:  ₹${bestPlan.totalEstimatedFee}`);
   console.log(`   Total Payout:      ₹${bestPlan.totalEstimatedPayout}`);
@@ -179,6 +180,18 @@ async function main() {
   console.log(`   Pickup Legs:       ${bestPlan.legs.length}`);
   console.log(`   Within Fee Cap:    ${bestScored.withinCap ? "YES" : "NO (Exceeds Cap)"}`);
   console.log(`   Approval Reasons:  ${bestScored.approvalReasons.length > 0 ? bestScored.approvalReasons.join(", ") : "(None - clean auto-approval candidate)"}`);
+  if (bestScored.isPartial) {
+    console.log(`   Unrouted Items (${bestScored.unroutedItemIds.length}):`);
+    for (const unId of bestScored.unroutedItemIds) {
+      const itm = intakeResult.items.find((i) => i.id === unId);
+      const itmDesc = itm ? `${itm.rawText} (${itm.category})` : unId;
+      const cellReasons = matrix.cells
+        .filter((c) => c.itemId === unId)
+        .map((c) => `${c.recyclerName}: ${c.status}${c.reason ? ` (${c.reason})` : ""}`)
+        .join("; ");
+      console.log(`     • ${itmDesc} -> ${cellReasons}`);
+    }
+  }
 
   console.log(`\n📋 PLAN LEGS BREAKDOWN:`);
   bestPlan.legs.forEach((leg, idx) => {
@@ -191,12 +204,32 @@ async function main() {
     });
   });
 
-  if (routing.alternatives.length > 0) {
+  const topAlternatives = routing.scoredPlans.slice(1, 6);
+  if (topAlternatives.length > 0) {
     console.log(`\n----------------------------------------------------------------`);
-    console.log(`  ALTERNATIVE PLANS (${routing.alternatives.length} candidate(s)):`);
+    console.log(`  TOP ALTERNATIVE PLANS (Showing ${topAlternatives.length} of ${routing.scoredPlans.length - 1} candidates):`);
     console.log(`----------------------------------------------------------------`);
-    routing.scoredPlans.slice(1).forEach((alt, idx) => {
-      console.log(`   [Alt ${idx + 1}] Legs: ${alt.legsCount} | Fee: ₹${alt.totalFee} | Payout: ₹${alt.totalKnownPayout} | Recyclers: ${alt.plan.legs.map((l) => l.recyclerId).join(", ")} | Flags: ${alt.approvalReasons.join(", ") || "none"}`);
+    topAlternatives.forEach((alt, idx) => {
+      const rank = idx + 2;
+      const prevRank = rank - 1;
+      const prevScored = idx === 0 ? bestScored : topAlternatives[idx - 1];
+      const comparison = explainWhyPlanBeats(prevScored, alt, intakeResult.items.length);
+      console.log(`\n   [Alt ${idx + 1}] (Rank #${rank}) ${alt.isPartial ? "[PARTIAL]" : "[FULL]"}`);
+      console.log(`       Legs: ${alt.legsCount} | Fee: ₹${alt.totalFee} | Payout: ₹${alt.totalKnownPayout} | Net: ₹${alt.netPayout} | Recyclers: ${alt.plan.legs.map((l) => l.recyclerId).join(", ")}`);
+      console.log(`       Flags: ${alt.approvalReasons.join(", ") || "(none)"}`);
+      if (alt.isPartial) {
+        console.log(`       Unrouted items (${alt.unroutedItemIds.length}):`);
+        for (const unId of alt.unroutedItemIds) {
+          const itm = intakeResult.items.find((i) => i.id === unId);
+          const itmDesc = itm ? `${itm.rawText} (${itm.category})` : unId;
+          const cellReasons = matrix.cells
+            .filter((c) => c.itemId === unId)
+            .map((c) => `${c.recyclerName}: ${c.status}${c.reason ? ` (${c.reason})` : ""}`)
+            .join("; ");
+          console.log(`         • ${itmDesc} -> ${cellReasons}`);
+        }
+      }
+      console.log(`       💡 Why #${prevRank} beats #${rank}: ${comparison}`);
     });
   }
 

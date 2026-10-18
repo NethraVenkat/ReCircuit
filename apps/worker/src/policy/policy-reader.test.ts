@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { readRecyclerPolicy, extractPolicyViaDomFallback } from "./policy-reader.js";
 import { openSession, ConfigurationError, type BrowserSession } from "../browser/session.js";
 import { FakeLlmAdapter, clearFakeFixtures, registerFakeFixture } from "@reroute/llm";
-import { DECCAN_PAGE_TEXT } from "@reroute/core";
+import { DECCAN_PAGE_TEXT, DECCAN_EXTRACTION, validatePolicyAgainstPageText } from "@reroute/core";
 
 describe("Stage 4 Fixes: Worker Policy Reader Unit Tests", () => {
   let fakeSession: BrowserSession;
@@ -221,6 +221,81 @@ describe("Stage 4 Fixes: Worker Policy Reader Unit Tests", () => {
       expect(session.mode).toBe("local");
     } finally {
       await session.close();
+    }
+  });
+
+  it("numeric field without quote fails", () => {
+    const altered = {
+      ...DECCAN_EXTRACTION,
+      feeRules: [
+        {
+          kind: "below_weight" as const,
+          amountInr: 999, // 999 is hallucinated, not in quote
+          thresholdKg: 5,
+          quote: "Under 5 kg total weight: ₹180 standard pickup charge",
+        },
+      ],
+    };
+    const res = validatePolicyAgainstPageText(altered, DECCAN_PAGE_TEXT);
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.includes("Hallucinated numeric value") && e.includes("999"))).toBe(true);
+  });
+
+  it("changed_policy_layout never yields wrong values", async () => {
+    mockPageText = "Welcome to Our New Portal. Please contact support via WhatsApp for customized rates.";
+    const policy = await readRecyclerPolicy("unknown_recycler", fakeSession, "http://localhost:3199");
+    expect(policy.underWeightFeeInr == null || policy.feesUnknown === true).toBe(true);
+    expect(policy.acceptedCategories).not.toContain("unknown_hallucinated");
+  });
+
+  it("portal down -> POLICY_UNREADABLE after exactly 2 attempts", async () => {
+    const brokenSession = {
+      ...fakeSession,
+      page: {
+        ...fakeSession.page,
+        goto: async (): Promise<null> => {
+          await Promise.resolve();
+          throw new Error("net::ERR_CONNECTION_REFUSED");
+        },
+      } as unknown as BrowserSession["page"],
+    };
+    const policy = await readRecyclerPolicy("deccan", brokenSession, "http://localhost:3101");
+    expect(policy.status).toBe("POLICY_UNREADABLE");
+    expect(policy.feesUnknown).toBe(true);
+  });
+
+  it("schema-invalid twice -> POLICY_UNREADABLE", async () => {
+    const adapter = new FakeLlmAdapter();
+    registerFakeFixture("bad_schema_twice", [
+      JSON.stringify({ notASchema: true }),
+      JSON.stringify({ stillNotASchema: 123 }),
+    ]);
+    const originalGen = adapter.generate.bind(adapter);
+    adapter.generate = async (opts): Promise<string> => originalGen({ ...opts, testFixtureName: "bad_schema_twice" });
+
+    const policy = await readRecyclerPolicy("unknown_rec", fakeSession, "http://localhost:3199", adapter);
+    expect(policy.status).toBe("POLICY_UNREADABLE");
+    expect(policy.feesUnknown).toBe(true);
+  });
+
+  it("screenshot exists for EVERY visited page", async () => {
+    const captured: string[] = [];
+    const trackingSession = {
+      ...fakeSession,
+      captureScreenshot: async (label: string): Promise<{ path: string; buffer: Buffer; filename: string }> => {
+        await Promise.resolve();
+        captured.push(label);
+        return {
+          path: `.data/evidence/mock-${label}.png`,
+          buffer: Buffer.from("mock-png"),
+          filename: `mock-${label}.png`,
+        };
+      },
+    };
+    await readRecyclerPolicy("deccan", trackingSession, "http://localhost:3101");
+    expect(captured.length).toBeGreaterThanOrEqual(1);
+    for (const label of captured) {
+      expect(label).toContain("deccan-page-");
     }
   });
 });

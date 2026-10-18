@@ -116,3 +116,4 @@ The approval gate enforces that the hash stored in the approval record strictly 
 - **TC1 (Laptop Accepted):** Deccan accepts laptop (payout ₹250), creates draft leg in plan.
 - **TC2 (Paper accepted, batteries rejected):** PaperPlus accepts newspaper (8 kg @ ₹14/kg = ₹112) but rejects household batteries. The router routes batteries to Deccan and newspaper to PaperPlus.
 - **TC3 (Fee above user cap):** Total fee ₹180 exceeds user limit ₹150; plan marks `approvalRequired = true` with reason `FEE_CAP_EXCEEDED`.
+

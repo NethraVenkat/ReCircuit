@@ -114,7 +114,7 @@ export const RECYCLER_CONFIGS: Record<RecyclerId, RecyclerMeta> = {
       rulesSummary:
         "Minimum 5 kg total scrap weight required. We pay instant cash. No electronics or batteries accepted. Human verification (CAPTCHA) required.",
       rateCard: [
-        { item: "Newspaper (Raddi)", payout: "₹14 / kg", fee: "₹0" },
+        { item: "Newspaper (Raddi)", payout: "₹12 / kg", fee: "₹0" },
         { item: "Corrugated Cardboard", payout: "₹9 / kg", fee: "₹0" },
         { item: "Old Books & Office Paper", payout: "₹10 / kg", fee: "₹0" },
         { item: "Magazines", payout: "₹7 / kg", fee: "₹0" },

@@ -134,7 +134,7 @@ export class FakeLlmAdapter implements LlmAdapter {
             { kind: "free", amountInr: 0, thresholdKg: null, quote: "Doorstep Pickup: 100% Free pickup across Kukatpally, Madhapur, and KPHB." },
           ],
           payoutRules: [
-            { rawName: "Newspaper (Raddi)", unit: "per_kg", amountInr: 14, quote: "Newspaper (Raddi): ₹14 / kg" },
+            { rawName: "Newspaper (Raddi)", unit: "per_kg", amountInr: 12, quote: "Newspaper (Raddi): ₹12 / kg" },
             { rawName: "Corrugated Cardboard", unit: "per_kg", amountInr: 9, quote: "Corrugated Cardboard: ₹9 / kg" },
             { rawName: "Old Books & Office Paper", unit: "per_kg", amountInr: 10, quote: "Old Books & Office Paper: ₹10 / kg" },
             { rawName: "Magazines", unit: "per_kg", amountInr: 7, quote: "Magazines: ₹7 / kg" },
@@ -158,7 +158,7 @@ export class FakeLlmAdapter implements LlmAdapter {
           quotes: [
             "Minimum Weight: At least 5 kg total scrap weight is required for home pickup.",
             "Doorstep Pickup: 100% Free pickup across Kukatpally, Madhapur, and KPHB.",
-            "Newspaper (Raddi): ₹14 / kg",
+            "Newspaper (Raddi): ₹12 / kg",
             "Corrugated Cardboard: ₹9 / kg",
             "Old Books & Office Paper: ₹10 / kg",
             "Magazines: ₹7 / kg",

@@ -23,9 +23,9 @@ import {
   type ExtractedPolicy,
 } from "../policy/index.js";
 import { canTransitionRequest, hashPlan } from "../state-machine.js";
-import { buildEligibilityMatrix } from "./eligibility.js";
+import { buildEligibilityMatrix, validateEligibilityMatrixCell } from "./eligibility.js";
 import { priceLeg } from "./pricing.js";
-import { generateRoutingPlans } from "./router.js";
+import { generateRoutingPlans, explainWhyPlanBeats } from "./router.js";
 
 // Helper to create fully typed mock policies from ground-truth fixtures
 function createTestPolicies(): ExtractedPolicy[] {
@@ -181,7 +181,7 @@ describe("Stage 5: Deterministic Reverse-Logistics Routing & Pricing", () => {
     const plan = result.bestPlan!;
 
     // Deccan handles laptop + batteries (2.26 kg -> fee 180, payout 250)
-    // PaperPlus handles newspaper (8 kg -> fee 0, payout 112)
+    // PaperPlus handles newspaper (8 kg -> fee 0, payout 96 at ₹12/kg)
     expect(plan.legs).toHaveLength(2);
 
     const deccanLeg = plan.legs.find((l) => l.recyclerId === "deccan");
@@ -190,18 +190,26 @@ describe("Stage 5: Deterministic Reverse-Logistics Routing & Pricing", () => {
     expect(deccanLeg).toBeDefined();
     expect(paperLeg).toBeDefined();
 
+    // Verify exact leg assignment: legs = [Deccan: laptop + battery_household, PaperPlus: newspaper]
+    expect(deccanLeg?.itemIds).toEqual(expect.arrayContaining([laptop.id, batteries.id]));
+    expect(deccanLeg?.itemIds).toHaveLength(2);
+    expect(paperLeg?.itemIds).toEqual([newspaper.id]);
+
     expect(deccanLeg?.estimatedFee).toBe(180);
     expect(deccanLeg?.estimatedPayout).toBe(250);
 
     expect(paperLeg?.estimatedFee).toBe(0);
-    expect(paperLeg?.estimatedPayout).toBe(112); // 8 kg * 14 = 112
+    expect(paperLeg?.estimatedPayout).toBe(96); // 8 kg * 12 = 96
 
+    // Assert EXACTLY: totalFee 180, knownPayout 346, knownNet 166, capBreached true, FEE_CAP_EXCEEDED present
     expect(plan.totalEstimatedFee).toBe(180);
-    expect(plan.totalEstimatedPayout).toBe(362);
+    expect(plan.totalEstimatedPayout).toBe(346);
 
-    // Verify approval reasons on best plan
     const scoredBest = result.scoredPlans[0]!;
-    expect(scoredBest.withinCap).toBe(false);
+    expect(scoredBest.totalFee).toBe(180);
+    expect(scoredBest.totalKnownPayout).toBe(346);
+    expect(scoredBest.netPayout).toBe(166);
+    expect(scoredBest.withinCap).toBe(false); // capBreached true
     expect(scoredBest.approvalReasons).toContain("FEE_CAP_EXCEEDED");
     expect(scoredBest.approvalReasons).toContain("FEE_CHARGED");
 
@@ -214,6 +222,156 @@ describe("Stage 5: Deterministic Reverse-Logistics Routing & Pricing", () => {
 
     // Plan hash verification
     expect(plan.planHash).toBe(hashPlan(plan));
+  });
+
+  describe("Matrix Evidence Quotes & Cell Validation", () => {
+    it("cites the specific rule rejecting PaperPlus x laptop (not a heading or fee line)", () => {
+      const laptop = makeItem({ category: "laptop", rawText: "Dell laptop" });
+      const matrix = buildEligibilityMatrix({
+        requestId: randomUUID(),
+        items: [laptop],
+        policies,
+        requestPincode: "500072",
+      });
+      const cell = matrix.cells.find((c) => c.recyclerId === "paperplus" && c.itemId === laptop.id)!;
+      expect(cell.status).toBe("REJECTED");
+      expect(cell.quote).toBe("Electronics");
+    });
+
+    it("cites the specific rule accepting Deccan x battery_household", () => {
+      const batt = makeItem({ category: "battery_household", rawText: "AAA battery" });
+      const matrix = buildEligibilityMatrix({
+        requestId: randomUUID(),
+        items: [batt],
+        policies,
+        requestPincode: "500072",
+      });
+      const cell = matrix.cells.find((c) => c.recyclerId === "deccan" && c.itemId === batt.id)!;
+      expect(cell.status).toBe("ACCEPTED");
+      expect(cell.quote).toBe("Household Batteries");
+    });
+
+    it("cites the specific rule accepting QuickScrap x battery_household", () => {
+      const batt = makeItem({ category: "battery_household", rawText: "AAA battery" });
+      const matrix = buildEligibilityMatrix({
+        requestId: randomUUID(),
+        items: [batt],
+        policies,
+        requestPincode: "500072",
+      });
+      const cell = matrix.cells.find((c) => c.recyclerId === "quickscrap" && c.itemId === batt.id)!;
+      expect(cell.status).toBe("ACCEPTED");
+      expect(cell.quote).toBe("Batteries & Small Plastics");
+    });
+
+    it("throws a validation error when a cell cites a quote from an unrelated rule", () => {
+      const laptop = makeItem({ category: "laptop", rawText: "Dell laptop" });
+      const deccanPolicy = policies.find((p) => p.recyclerId === "deccan")!;
+      const invalidCell = {
+        itemId: laptop.id,
+        itemDescription: laptop.rawText,
+        category: laptop.category,
+        recyclerId: "deccan",
+        recyclerName: "Deccan E-Cycle Solutions",
+        status: "ACCEPTED" as const,
+        quote: "Under 5 kg total weight: ₹180 standard pickup charge", // Unrelated fee rule quote!
+        url: "http://localhost:3101",
+      };
+      expect(() => validateEligibilityMatrixCell(invalidCell, deccanPolicy)).toThrow(
+        /no matching acceptedItem rule maps to laptop/
+      );
+    });
+  });
+
+  describe("Plan Hygiene & Lexicographic Ranking", () => {
+    it("ensures no duplicate plan assignments exist and best plan is never in alternatives", () => {
+      const laptop = makeItem({ category: "laptop", estimatedWeightKg: 2.2 });
+      const newspaper = makeItem({ category: "newspaper", declaredWeightKg: 8 });
+      const result = generateRoutingPlans({
+        request: { id: "req-hygiene", feeCapInr: 200, pincode: "500072" },
+        items: [laptop, newspaper],
+        policies,
+      });
+
+      expect(result.bestPlan).not.toBeNull();
+      // Best plan must never appear in alternatives
+      for (const alt of result.alternatives) {
+        expect(alt.planHash).not.toBe(result.bestPlan!.planHash);
+      }
+
+      // Check no two scoredPlans have identical assignment signatures
+      const signatures = new Set<string>();
+      for (const sp of result.scoredPlans) {
+        const sig = [laptop, newspaper]
+          .map((item) => {
+            const leg = sp.plan.legs.find((l) => l.itemIds.includes(item.id));
+            return `${item.id}->${leg ? leg.recyclerId : "UNROUTED"}`;
+          })
+          .sort()
+          .join("|");
+        expect(signatures.has(sig)).toBe(false);
+        signatures.add(sig);
+      }
+    });
+
+    it("labels partial plans clearly with isPartial: true and lists unrouted items with reasons", () => {
+      const hazardous = makeItem({ category: "hazardous", rawText: "car battery acid" });
+      const result = generateRoutingPlans({
+        request: { id: "req-partial", feeCapInr: 200, pincode: "500072" },
+        items: [hazardous],
+        policies,
+      });
+
+      expect(result.unroutedItems).toHaveLength(1);
+      expect(result.unroutedItems[0]!.id).toBe(hazardous.id);
+    });
+
+    it("evaluates threshold proximity on both sides of 1 kg window (3.9 kg vs 4.1 kg for 5.0 kg threshold)", () => {
+      const deccanPolicy = policies.find((p) => p.recyclerId === "deccan")!;
+
+      // 3.9 kg: diff = 1.1 kg > 1.0 kg -> no proximity warning
+      const underLoadFar = [makeItem({ category: "laptop", estimatedWeightKg: 3.9 })];
+      const pricingFar = priceLeg({ recyclerId: "deccan", policy: deccanPolicy, items: underLoadFar });
+      expect(pricingFar.estimatedFee).toBe(180);
+      expect(pricingFar.thresholdDistanceKg).toBeUndefined();
+
+      // 4.1 kg: diff = 0.9 kg <= 1.0 kg -> proximity warning triggered
+      const underLoadNear = [makeItem({ category: "laptop", estimatedWeightKg: 4.1 })];
+      const pricingNear = priceLeg({ recyclerId: "deccan", policy: deccanPolicy, items: underLoadNear });
+      expect(pricingNear.estimatedFee).toBe(180);
+      expect(pricingNear.thresholdDistanceKg).toBe(0.9);
+
+      // In routing, 4.1 kg triggers ESTIMATED_WEIGHT_NEAR_THRESHOLD
+      const routingNear = generateRoutingPlans({
+        request: { id: "req-near", feeCapInr: 250, pincode: "500072" },
+        items: underLoadNear,
+        policies,
+      });
+      expect(routingNear.scoredPlans[0]?.approvalReasons).toContain("ESTIMATED_WEIGHT_NEAR_THRESHOLD");
+
+      // 3.9 kg does NOT trigger ESTIMATED_WEIGHT_NEAR_THRESHOLD
+      const routingFar = generateRoutingPlans({
+        request: { id: "req-far", feeCapInr: 250, pincode: "500072" },
+        items: underLoadFar,
+        policies,
+      });
+      expect(routingFar.scoredPlans[0]?.approvalReasons).not.toContain("ESTIMATED_WEIGHT_NEAR_THRESHOLD");
+    });
+
+    it("explainWhyPlanBeats deterministically explains why #1 beats #2 in ranking", () => {
+      const laptop = makeItem({ category: "laptop", estimatedWeightKg: 2.2 });
+      const newspaper = makeItem({ category: "newspaper", declaredWeightKg: 8 });
+      const result = generateRoutingPlans({
+        request: { id: "req-ranking", feeCapInr: 150, pincode: "500072" },
+        items: [laptop, newspaper],
+        policies,
+      });
+
+      expect(result.scoredPlans.length).toBeGreaterThan(1);
+      const explanation = explainWhyPlanBeats(result.scoredPlans[0]!, result.scoredPlans[1]!, 2);
+      expect(typeof explanation).toBe("string");
+      expect(explanation.length).toBeGreaterThan(5);
+    });
   });
 
   describe("Pricing & Boundary Checks", () => {

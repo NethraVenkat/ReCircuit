@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { CANONICAL_CATEGORIES, type CanonicalCategory } from "../intake/schema.js";
+export type { CanonicalCategory };
 
 // ---------------------------------------------------------------------------
 // 1. Generic Extraction Schema (No per-site fields)

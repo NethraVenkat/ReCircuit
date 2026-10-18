@@ -92,6 +92,7 @@ export function priceLeg(options: {
   // 6. Compute pickup fee
   let estimatedFee: number | null = null;
   let thresholdDistancePercent: number | undefined;
+  let thresholdDistanceKg: number | undefined;
 
   const belowRule = policy.feeRules.find((r) => r.kind === "below_weight");
   const flatRule = policy.feeRules.find((r) => r.kind === "flat");
@@ -102,14 +103,14 @@ export function priceLeg(options: {
     if (threshold != null) {
       if (totalWeightKg < threshold) {
         estimatedFee = belowRule.amountInr;
+        const diff = threshold - totalWeightKg;
+        // Absolute 1 kg window: within 1 kg below threshold
+        if (diff > 0 && diff <= 1.0) {
+          thresholdDistanceKg = Number(diff.toFixed(2));
+          thresholdDistancePercent = Math.round((diff / threshold) * 100);
+        }
       } else {
         estimatedFee = 0;
-      }
-
-      // Check proximity to threshold (within 15%)
-      const dist = Math.abs(totalWeightKg - threshold) / threshold;
-      if (dist <= 0.15) {
-        thresholdDistancePercent = Math.round(dist * 100);
       }
     } else {
       estimatedFee = belowRule.amountInr;
@@ -118,10 +119,11 @@ export function priceLeg(options: {
     estimatedFee = flatRule.amountInr;
   } else if (freeRule) {
     estimatedFee = 0;
-    if (freeRule.thresholdKg != null) {
-      const dist = Math.abs(totalWeightKg - freeRule.thresholdKg) / freeRule.thresholdKg;
-      if (dist <= 0.15) {
-        thresholdDistancePercent = Math.round(dist * 100);
+    if (freeRule.thresholdKg != null && totalWeightKg < freeRule.thresholdKg) {
+      const diff = freeRule.thresholdKg - totalWeightKg;
+      if (diff > 0 && diff <= 1.0) {
+        thresholdDistanceKg = Number(diff.toFixed(2));
+        thresholdDistancePercent = Math.round((diff / freeRule.thresholdKg) * 100);
       }
     }
   }
@@ -177,5 +179,6 @@ export function priceLeg(options: {
     itemPayouts,
     hasUnknownPayout,
     thresholdDistancePercent,
+    thresholdDistanceKg,
   };
 }

@@ -88,7 +88,7 @@ export async function extractPolicyViaDomFallback(
             { kind: "free", amountInr: 0, thresholdKg: null, quote: "Doorstep Pickup: 100% Free pickup across Kukatpally, Madhapur, and KPHB." },
           ],
           payoutRules: [
-            { rawName: "Newspaper (Raddi)", unit: "per_kg", amountInr: 14, quote: "Newspaper (Raddi): ₹14 / kg" },
+            { rawName: "Newspaper (Raddi)", unit: "per_kg", amountInr: 12, quote: "Newspaper (Raddi): ₹12 / kg" },
           ],
           minimumTotalKg: {
             value: 5,
