@@ -215,6 +215,7 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
       decision: "approved",
       decidedBy: "test_user",
       decidedAt: new Date().toISOString(),
+      dataWipeConfirmedByUser: true,
     };
 
     sampleCustomer = {

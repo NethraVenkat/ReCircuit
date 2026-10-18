@@ -18,6 +18,7 @@
     "plan": "node scripts/plan-cli.mjs",
     "approve": "node scripts/approve-cli.mjs",
     "book": "node scripts/book-cli.mjs",
+    "demo:reset": "node scripts/demo-reset.mjs",
     "portals:dev": "node scripts/start-portals.cjs"
   },
   "devDependencies": {

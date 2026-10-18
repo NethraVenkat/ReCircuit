@@ -64,6 +64,7 @@ export interface DecisionRecord {
   decidedBy: string; // user id or "cli_user"
   decidedAt: string; // ISO 8601
   reason?: string | undefined;
+  dataWipeConfirmedByUser?: boolean | undefined;
 }
 
 export interface SafeActionParams {
@@ -72,7 +73,7 @@ export interface SafeActionParams {
   approval: DecisionRecord | null;
   action: "submit_booking";
   observedFeeInr: number;
-  usedIdempotencyKeys?: Set<string> | string[] | undefined;
+  usedIdempotencyKeys: Set<string> | string[];
 }
 
 export interface ActionAttemptLog {

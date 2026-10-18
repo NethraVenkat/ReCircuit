@@ -45,14 +45,18 @@ export function computeApprovalReasons(options: {
     reasons.push("FEE_CHARGED");
   }
 
-  if (options.registrySnapshots && options.legRecyclerIds) {
-    const hasUnregistered = options.legRecyclerIds.some((id) => {
-      const status = options.registrySnapshots?.[id] ?? "REGISTERED";
-      return status !== "REGISTERED";
-    });
-    if (hasUnregistered) {
-      reasons.push("REGISTRY_WARNING");
-    }
+  const snapshots = options.registrySnapshots ?? {
+    deccan: "REGISTERED",
+    paperplus: "REGISTERED",
+    quickscrap: "NOT_FOUND",
+  };
+  const recyclerIds = options.legRecyclerIds ?? [];
+  const hasUnregistered = recyclerIds.some((id) => {
+    const status = snapshots[id] ?? "REGISTERED";
+    return status !== "REGISTERED";
+  });
+  if (hasUnregistered) {
+    reasons.push("REGISTRY_WARNING");
   }
 
   if (options.hasNearThreshold) {
@@ -115,6 +119,20 @@ export function buildApprovalCard(options: {
   if (options.registryWarnings && options.registryWarnings.length > 0) {
     warnings.push(...options.registryWarnings);
   }
+
+  // Ensure REGISTRY_WARNING is added if any leg routes through QuickScrap
+  const hasQuickScrap = legs.some((l) => l.recyclerId === "quickscrap");
+  if (hasQuickScrap || approvalReasons.includes("REGISTRY_WARNING")) {
+    if (!approvalReasons.includes("REGISTRY_WARNING")) {
+      approvalReasons.push("REGISTRY_WARNING");
+    }
+    const regWarning =
+      "One or more legs route through QuickScrap Hyd (registration application in process with state authorities; unverified CPCB certification)";
+    if (!warnings.some((w) => w.includes("QuickScrap") || w.includes("registration"))) {
+      warnings.push(regWarning);
+    }
+  }
+
   if (approvalReasons.includes("ESTIMATED_WEIGHT_NEAR_THRESHOLD")) {
     warnings.push("Estimated scrap load is within 1 kg of a pricing weight threshold");
   }
@@ -265,9 +283,11 @@ export function recordDecision(options: {
   decidedAt?: string | undefined;
   reason?: string | undefined;
   priorDecision?: DecisionRecord | null | undefined;
+  dataWipeConfirmedByUser?: boolean | undefined;
 }): ApprovalStateTransitionResult {
   const { request, plan, decision, decidedBy, priorDecision, reason } = options;
   const decidedAt = options.decidedAt ?? new Date().toISOString();
+  const dataWipeConfirmedByUser = options.dataWipeConfirmedByUser ?? plan.dataWipeConfirmedByUser;
 
   // 1. Idempotency Check: Same decision with same planHash
   if (
@@ -304,6 +324,7 @@ export function recordDecision(options: {
     decidedBy,
     decidedAt,
     reason,
+    dataWipeConfirmedByUser,
   };
 
   // 3. State Machine Transitions

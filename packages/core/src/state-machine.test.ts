@@ -147,6 +147,7 @@ describe("State Machine Transition Tables", () => {
       "PLAN_CREATED->AWAITING_APPROVAL",
       "AWAITING_APPROVAL->APPROVED",
       "AWAITING_APPROVAL->REJECTED",
+      "APPROVED->AWAITING_APPROVAL",
     ];
     for (const t of expected) {
       expect(REQUEST_TRANSITIONS.has(t), `Missing request transition: ${t}`).toBe(true);
@@ -1030,6 +1031,25 @@ describe("hashPlan and makeIdempotencyKey", () => {
     expect(hashPlan(p1)).not.toBe(hashPlan(p2));
   });
 
+  it("hashPlan changes when dataWipeConfirmedByUser changes", () => {
+    const now = new Date().toISOString();
+    const baseLeg: PlanLeg = {
+      id: "leg-1",
+      planId: "p-1",
+      recyclerId: "recycler-deccan",
+      recyclerName: "Deccan",
+      itemIds: ["i-1"],
+      estimatedFee: 0,
+      estimatedPayout: 250,
+      state: "APPROVED",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const p1: Plan = { id: "p-1", requestId: "r-1", legs: [baseLeg], totalEstimatedFee: 0, totalEstimatedPayout: 250, planHash: "", dataWipeConfirmedByUser: false, createdAt: now };
+    const p2: Plan = { ...p1, dataWipeConfirmedByUser: true };
+    expect(hashPlan(p1)).not.toBe(hashPlan(p2));
+  });
+
   it("makeIdempotencyKey generates deterministic sha256 hex", () => {
     const k1 = makeIdempotencyKey(PLAN_HASH_A, "leg-1", "r-1");
     const k2 = makeIdempotencyKey(PLAN_HASH_A, "leg-1", "r-1");
@@ -1113,6 +1133,11 @@ describe("Exhaustive Request Pipeline Pairs", () => {
         from: "AWAITING_APPROVAL",
         to: "REJECTED",
         ev: { decision: "User declined fee", decidedAt: new Date().toISOString() },
+      },
+      {
+        from: "APPROVED",
+        to: "AWAITING_APPROVAL",
+        ev: { planId: randomUUID(), planHash: PLAN_HASH_A, approvalReason: "Stale reapproval required" },
       },
     ];
 

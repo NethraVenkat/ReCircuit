@@ -244,7 +244,8 @@ export interface Plan {
   totalEstimatedFee: number;
   totalEstimatedPayout: number;
   slotPreference?: SlotPreference;
-  /** sha256 hex over canonical JSON of legs + fees + slotPreference */
+  dataWipeConfirmedByUser?: boolean;
+  /** sha256 hex over canonical JSON of legs + fees + slotPreference + dataWipeConfirmedByUser */
   planHash: string;
   createdAt: string;
 }

@@ -62,5 +62,6 @@ export interface LegBookingContext {
   items: BookingItemInput[];
   dataWipeAck?: boolean;
   portalBaseUrl?: string;
+  usedIdempotencyKeys?: Set<string> | string[];
 }
 

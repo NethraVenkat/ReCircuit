@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { randomUUID } from "crypto";
 import type { Plan, PlanLeg, Request } from "../types.js";
-import { hashPlan } from "../state-machine.js";
+import { hashPlan, transitionState } from "../state-machine.js";
 import {
   computeApprovalReasons,
   buildApprovalCard,
@@ -217,6 +217,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: null,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
+        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -227,6 +228,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: null,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
+        usedIdempotencyKeys: new Set(),
       });
     } catch (err: unknown) {
       expect(err).toBeInstanceOf(SafeActionBlockedError);
@@ -255,6 +257,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       plan: originalPlan,
       decision: "approved",
       decidedBy: "user_alice",
+      dataWipeConfirmedByUser: true,
     });
 
     // Modified plan (different fee changes planHash)
@@ -271,6 +274,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
+        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -281,6 +285,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
+        usedIdempotencyKeys: new Set(),
       });
     } catch (err: unknown) {
       expect(err).toBeInstanceOf(SafeActionBlockedError);
@@ -302,6 +307,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       plan,
       decision: "approved",
       decidedBy: "user_alice",
+      dataWipeConfirmedByUser: true,
     });
 
     // Portal unexpectedly demands ₹220 instead of approved ₹180
@@ -312,6 +318,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: 220,
+        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(FeeChangedReapprovalRequiredError);
 
@@ -322,6 +329,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: 220,
+        usedIdempotencyKeys: new Set(),
       });
     } catch (err: unknown) {
       expect(err).toBeInstanceOf(FeeChangedReapprovalRequiredError);
@@ -393,6 +401,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       plan: planA,
       decision: "approved",
       decidedBy: "user_alice",
+      dataWipeConfirmedByUser: true,
     });
 
     // User then decides to choose Plan B
@@ -410,6 +419,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: approvalA.decisionRecord, // Stale approval from Plan A!
         action: "submit_booking",
         observedFeeInr: 199,
+        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -419,6 +429,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       plan: planB,
       decision: "approved",
       decidedBy: "user_alice",
+      dataWipeConfirmedByUser: true,
     });
 
     const allowedAction = assertActionAllowed({
@@ -427,6 +438,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       approval: approvalB.decisionRecord,
       action: "submit_booking",
       observedFeeInr: 199,
+      usedIdempotencyKeys: new Set(),
     });
 
     expect(allowedAction.allowed).toBe(true);
@@ -448,6 +460,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: null,
         action: "submit_booking",
         observedFeeInr: 180,
+        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -461,6 +474,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       decision: "approved" as const,
       decidedBy: "user",
       decidedAt: new Date().toISOString(),
+      dataWipeConfirmedByUser: true,
     };
     const legWithKey: PlanLeg = { ...leg, idempotencyKey: usedKey };
     expect(() => {
@@ -504,6 +518,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       plan: { ...plan, planHash: hash1 },
       decision: "approved",
       decidedBy: "user",
+      dataWipeConfirmedByUser: true,
     });
 
     const afternoonLeg = planAfternoon.legs[0]!;
@@ -514,6 +529,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: approvalMorning.decisionRecord,
         action: "submit_booking",
         observedFeeInr: afternoonLeg.estimatedFee,
+        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
   });
@@ -549,5 +565,166 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
     expect(formatted).toContain("Deccan E-Cycle Solutions (DECCAN)");
     expect(formatted).toContain("Option 2");
     expect(formatted).toContain("npm run approve -- --request=");
+  });
+
+  // Stage 6 Fix Test 1: Mandatory Idempotency parameter
+  it("mandatory idempotency: assertActionAllowed throws if usedIdempotencyKeys is omitted", () => {
+    const request = createMockRequest();
+    const plan = createMockPlan(request.id);
+    const leg = plan.legs[0]!;
+
+    const approval = {
+      id: "appr-1",
+      requestId: request.id,
+      planId: plan.id,
+      planHash: plan.planHash,
+      decision: "approved" as const,
+      decidedBy: "user",
+      decidedAt: new Date().toISOString(),
+      dataWipeConfirmedByUser: true,
+    };
+
+    expect(() => {
+      assertActionAllowed({
+        leg,
+        plan,
+        approval,
+        action: "submit_booking",
+        observedFeeInr: 180,
+      } as unknown as Parameters<typeof assertActionAllowed>[0]);
+    }).toThrow(/usedIdempotencyKeys is mandatory/i);
+  });
+
+  // Stage 6 Fix Test 2: Data wipe unconfirmed blocks laptop booking
+  it("data wipe unconfirmed: user did not confirm data wipe -> plan has laptop -> blocked with DATA_WIPE_NOT_CONFIRMED", () => {
+    const request = createMockRequest();
+    const plan = createMockPlan(request.id);
+    const leg = plan.legs[0]!; // Contains "Dell Laptop"
+
+    // Approval without data wipe confirmation
+    const unconfirmedApproval = {
+      id: "appr-no-wipe",
+      requestId: request.id,
+      planId: plan.id,
+      planHash: plan.planHash,
+      decision: "approved" as const,
+      decidedBy: "user",
+      decidedAt: new Date().toISOString(),
+      dataWipeConfirmedByUser: false,
+    };
+
+    expect(() => {
+      assertActionAllowed({
+        leg,
+        plan,
+        approval: unconfirmedApproval,
+        action: "submit_booking",
+        observedFeeInr: 180,
+        usedIdempotencyKeys: new Set(),
+      });
+    }).toThrow(SafeActionBlockedError);
+
+    try {
+      assertActionAllowed({
+        leg,
+        plan,
+        approval: unconfirmedApproval,
+        action: "submit_booking",
+        observedFeeInr: 180,
+        usedIdempotencyKeys: new Set(),
+      });
+    } catch (err) {
+      expect(err).toBeInstanceOf(SafeActionBlockedError);
+      if (err instanceof SafeActionBlockedError) {
+        expect(err.code).toBe("DATA_WIPE_NOT_CONFIRMED");
+        expect(err.attemptLog.blockReason).toContain("Data-wipe destruction declaration required");
+      }
+    }
+  });
+
+  // Stage 6 Fix Test 3: Data wipe confirmed allows laptop booking
+  it("data wipe confirmed: user confirms data wipe -> plan has laptop -> allowed", () => {
+    const request = createMockRequest();
+    const plan = createMockPlan(request.id);
+    const leg = plan.legs[0]!;
+
+    const confirmedApproval = {
+      id: "appr-wipe-ok",
+      requestId: request.id,
+      planId: plan.id,
+      planHash: plan.planHash,
+      decision: "approved" as const,
+      decidedBy: "user",
+      decidedAt: new Date().toISOString(),
+      dataWipeConfirmedByUser: true,
+    };
+
+    const res = assertActionAllowed({
+      leg,
+      plan,
+      approval: confirmedApproval,
+      action: "submit_booking",
+      observedFeeInr: 180,
+      usedIdempotencyKeys: new Set(),
+    });
+    expect(res.allowed).toBe(true);
+    expect(res.idempotencyKey).toBeTruthy();
+  });
+
+  // Stage 6 Fix Test 4: Approval card shows REGISTRY_WARNING for QuickScrap plans
+  it("approval card shows REGISTRY_WARNING for QuickScrap plans", () => {
+    const request = createMockRequest();
+    const quickScrapLeg: PlanLeg = {
+      id: "leg-qs",
+      planId: "p-qs",
+      recyclerId: "quickscrap",
+      recyclerName: "QuickScrap Hyd",
+      estimatedFee: 199,
+      estimatedPayout: 200,
+      state: "APPROVED",
+      itemIds: ["item-1"],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const qsPlan = createMockPlan(request.id, {
+      legs: [quickScrapLeg],
+      totalEstimatedFee: 199,
+    });
+
+    const reasons = computeApprovalReasons({
+      request,
+      plan: qsPlan,
+      legRecyclerIds: ["quickscrap"],
+    });
+    expect(reasons).toContain("REGISTRY_WARNING");
+
+    const card = buildApprovalCard({
+      request,
+      plan: qsPlan,
+      approvalReasons: reasons,
+    });
+    expect(card.approvalReasons).toContain("REGISTRY_WARNING");
+    expect(card.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("QuickScrap Hyd"),
+      ])
+    );
+  });
+
+  // Stage 6 Fix Test 5: Stale approval returns request to AWAITING_APPROVAL
+  it("stale approval returns request to AWAITING_APPROVAL via state machine", () => {
+    const request = createMockRequest({ state: "APPROVED" });
+    const plan = createMockPlan(request.id);
+
+    // Transition from APPROVED back to AWAITING_APPROVAL
+    const result = transitionState(request, "AWAITING_APPROVAL", {
+      planId: plan.id,
+      planHash: plan.planHash,
+      approvalReason: "FEE_CHANGED_REAPPROVAL_REQUIRED: Observed fee drift on portal",
+    });
+
+    expect(result.newRequest.state).toBe("AWAITING_APPROVAL");
+    expect(result.auditEvent.previousState).toBe("APPROVED");
+    expect(result.auditEvent.newState).toBe("AWAITING_APPROVAL");
   });
 });

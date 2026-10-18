@@ -159,6 +159,12 @@ async function main() {
   }
 
   // 3. Record Decision using Deterministic State Machine
+  const dataWipeConfirmed = Boolean(options["data-wipe-confirmed"] || options["data-wipe"]);
+  if (dataWipeConfirmed) {
+    persisted.plan.dataWipeConfirmedByUser = true;
+    persisted.plan.planHash = hashPlan(persisted.plan);
+  }
+
   const transitionResult = recordDecision({
     request: persisted.request,
     plan: persisted.plan,
@@ -166,6 +172,7 @@ async function main() {
     decidedBy: options.user || "cli_user",
     reason: options.reason,
     priorDecision: persisted.priorDecision,
+    dataWipeConfirmedByUser: dataWipeConfirmed,
   });
 
   persisted.request = transitionResult.request;

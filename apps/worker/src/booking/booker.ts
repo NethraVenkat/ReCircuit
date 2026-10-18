@@ -50,6 +50,7 @@ export class Booker {
       approval,
       action: "submit_booking",
       observedFeeInr: leg.estimatedFee,
+      usedIdempotencyKeys: context.usedIdempotencyKeys ?? new Set(),
     });
 
     const session =

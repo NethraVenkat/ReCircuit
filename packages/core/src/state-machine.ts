@@ -50,6 +50,7 @@ export const REQUEST_TRANSITIONS: ReadonlySet<string> = new Set([
   "PLAN_CREATED->AWAITING_APPROVAL",
   "AWAITING_APPROVAL->APPROVED",
   "AWAITING_APPROVAL->REJECTED",
+  "APPROVED->AWAITING_APPROVAL",
 ]);
 
 /**
@@ -562,6 +563,7 @@ export function isCollected(state: LegState): boolean {
  */
 export function hashPlan(plan: Plan): string {
   const canonical = canonicalize({
+    dataWipeConfirmedByUser: plan.dataWipeConfirmedByUser ?? null,
     legs: plan.legs
       .slice()
       .sort((a, b) => a.id.localeCompare(b.id))

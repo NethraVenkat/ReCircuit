@@ -165,8 +165,42 @@ export function assertActionAllowed(params: SafeActionParams): {
     );
   }
 
-  // 4. Check Idempotency Key Reuse
-  const keysSet = new Set(usedIdempotencyKeys ?? []);
+  // 4. Check Data-Wipe Acknowledgement for Data-Bearing Devices
+  const dataKeywords = ["laptop", "phone", "desktop", "computer", "notebook", "tablet", "hard drive", "ssd", "disk"];
+  const hasDataBearingDevice = (leg.items || []).some((item) => {
+    const desc = (item.description || "").toLowerCase();
+    const cat = (item.category || "").toLowerCase();
+    return dataKeywords.some((k) => desc.includes(k) || cat.includes(k));
+  });
+
+  if (hasDataBearingDevice && approval.dataWipeConfirmedByUser !== true) {
+    const attemptLog: ActionAttemptLog = {
+      id: attemptId,
+      timestamp,
+      requestId: plan.requestId,
+      legId: leg.id,
+      recyclerId: leg.recyclerId,
+      planHash: currentPlanHash,
+      action,
+      allowed: false,
+      blockReason: "Data-wipe destruction declaration required for data-bearing electronic devices but was not confirmed by user",
+      approvedFeeInr,
+      observedFeeInr,
+      idempotencyKey,
+    };
+    recordActionAttempt(attemptLog);
+    throw new SafeActionBlockedError(
+      `Action "${action}" blocked: User has not confirmed data wipe for data-bearing devices`,
+      "DATA_WIPE_NOT_CONFIRMED",
+      attemptLog
+    );
+  }
+
+  // 5. Check Idempotency Key Reuse (mandatory parameter)
+  if (usedIdempotencyKeys === undefined || usedIdempotencyKeys === null) {
+    throw new Error("usedIdempotencyKeys is mandatory for assertActionAllowed");
+  }
+  const keysSet = new Set(usedIdempotencyKeys);
   if (keysSet.has(idempotencyKey)) {
     const attemptLog: ActionAttemptLog = {
       id: attemptId,
