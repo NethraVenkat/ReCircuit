@@ -88,15 +88,42 @@ async function main() {
 
         console.log(`\n✅ Extraction Status: ${policy.status}`);
         console.log(`   Company:          ${policy.companyName}`);
-        console.log(`   Accepted:         ${policy.acceptedCategories.join(", ") || "(none)"}`);
-        console.log(`   Rejected:         ${policy.rejectedCategories.join(", ") || "(none)"}`);
-        if (policy.freeThresholdKg != null) console.log(`   Free Threshold:   ${policy.freeThresholdKg} kg`);
-        if (policy.underWeightFeeInr != null) console.log(`   Underweight Fee:  ₹${policy.underWeightFeeInr}`);
-        if (policy.minWeightKg != null) console.log(`   Minimum Weight:   ${policy.minWeightKg} kg`);
-        if (policy.convenienceFeeInr != null) console.log(`   Convenience Fee:  ₹${policy.convenienceFeeInr}`);
-        if (policy.requiresDataWipeAck) console.log(`   Data Wipe Ack:    REQUIRED`);
-        if (policy.registrationNotice) console.log(`   Notice:           ${policy.registrationNotice}`);
-        if (policy.failureReason) console.log(`   Failure Reason:   ${policy.failureReason}`);
+        console.log(`   Accepted Categories: ${policy.acceptedCategories.join(", ") || "(none)"}`);
+        console.log(`   Rejected Categories: ${policy.rejectedCategories.join(", ") || "(none)"}`);
+
+        console.log(`   Fee Rules (${policy.feeRules.length}):`);
+        if (policy.feeRules.length === 0) {
+          console.log(`     (none stated)`);
+        } else {
+          for (const fr of policy.feeRules) {
+            console.log(`     • [${fr.kind}] amount: ₹${fr.amountInr}${fr.thresholdKg != null ? `, threshold: ${fr.thresholdKg} kg` : ""} | Quote: "${fr.quote}"`);
+          }
+        }
+
+        console.log(`   Payout Rules (${policy.payoutRules.length}):`);
+        if (policy.payoutRules.length === 0) {
+          console.log(`     (none stated)`);
+        } else {
+          for (const pr of policy.payoutRules) {
+            console.log(`     • ${pr.rawName} -> ₹${pr.amountInr} (${pr.unit}) | Quote: "${pr.quote}"`);
+          }
+        }
+
+        if (policy.minimumTotalKg?.value != null) {
+          console.log(`   Minimum Total Weight: ${policy.minimumTotalKg.value} kg | Quote: "${policy.minimumTotalKg.quote}"`);
+        }
+        if (policy.serviceablePincodes?.values?.length > 0) {
+          console.log(`   Serviceable Pincodes: ${policy.serviceablePincodes.values.join(", ")} | Quote: "${policy.serviceablePincodes.quote}"`);
+        }
+        if (policy.registrationNotice?.text) {
+          console.log(`   Registration Notice: "${policy.registrationNotice.text}" | Quote: "${policy.registrationNotice.quote}"`);
+        }
+        if (policy.requiresDataWipeAck) {
+          console.log(`   Data Wipe Ack:    REQUIRED`);
+        }
+        if (policy.failureReason) {
+          console.log(`   Failure Reason:   ${policy.failureReason}`);
+        }
 
         console.log(`   Cited Quotes:     ${policy.quotes.length} verbatim quotes verified`);
         for (const q of policy.quotes.slice(0, 3)) {
@@ -105,7 +132,15 @@ async function main() {
         if (policy.quotes.length > 3) {
           console.log(`     ... (${policy.quotes.length - 3} more quotes)`);
         }
-        console.log(`   Evidence:         ${policy.evidence.screenshotRef}`);
+
+        const pages = policy.evidence.visitedPages?.length > 0
+          ? policy.evidence.visitedPages
+          : [{ url: portal.url, screenshotPath: policy.evidence.screenshotPath }];
+        console.log(`   Visited Pages (${pages.length} page(s) visited):`);
+        for (let i = 0; i < pages.length; i++) {
+          console.log(`     [Page ${i + 1}] URL: ${pages[i].url}`);
+          console.log(`            Screenshot: ${pages[i].screenshotPath}`);
+        }
         console.log(`   Session ID:       ${policy.evidence.sessionId}`);
       } catch (err) {
         console.error(`❌ Error reading policy for ${portal.id}:`, err);

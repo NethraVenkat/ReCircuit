@@ -91,11 +91,15 @@
 | Total Vitest tests: 184 passing across 8 files | ✅ Done | 0 warnings, 0 failures |
 | Total Playwright E2E tests: 15 passing across 2 files | ✅ Done | 100% passing |
 
-## Known Issues
+## Known Issues & Security Audit Findings
 
 - `FileRepository` writes to local filesystem and does not persist on Vercel serverless; production deployment needs Supabase (`SUPABASE_URL` not yet configured).
 - Vercel CLI is unauthenticated; portals run locally on ports 3101, 3102, 3103.
 - Cloud Browserbase requires deployed public portal URLs and `BROWSERBASE_API_KEY`; local Playwright mode (`BROWSER_MODE=local`) runs offline.
+- **Next.js & PostCSS Security Audit Notice**:
+  - `npm audit --omit=dev` flags 2 package vulnerabilities in `apps/portals`: `next` (9.3.4-canary.0 to 16.3.0-preview.10; advisories GHSA-9g9p-9gw9-jx7f, GHSA-h25m-26qc-wcjf, GHSA-ggv3-7p47-pfv8, GHSA-3x4c-7xq6-9pq8, GHSA-q4gf-8mx6-v5v3, GHSA-8h8q-6873-q5fj, GHSA-3g8h-86w9-wvmq, GHSA-ffhc-5mcf-pf4q, GHSA-vfv6-92ff-j949, GHSA-gx5p-jg67-6x7h, GHSA-h64f-5h5j-jqjh, GHSA-c4j6-fc7j-m34r, GHSA-wfc6-r584-vfw7, GHSA-36qx-fr4f-26g5, GHSA-m99w-x7hq-7vfj, GHSA-89xv-2m56-2m9x, GHSA-68g3-v927-f742, GHSA-4633-3j49-mh5q, GHSA-4c39-4ccg-62r3, GHSA-p9j2-gv94-2wf4, GHSA-955p-x3mx-jcvp, GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4) and `postcss` (<=8.5.22; advisories GHSA-qx2v-qp2m-jg93, GHSA-6g55-p6wh-862q, GHSA-fxqj-rqcc-2cmp, GHSA-r28c-9q8g-f849).
+  - Next 14.2.x and 15.x do not provide backported patches for these advisories without upgrading to Next 16 (`next@16.4.2`), which requires React 19 and introduces breaking architectural changes. Because `apps/portals` does not use `next/image` remote patterns, rewrites, or server actions, the exploit surface in the mock portals is non-applicable.
+  - **Monorepo Rule**: Any NEW Next.js app created in this monorepo (specifically the Stage 9 user-facing web dashboard in `apps/web`) MUST start on a patched version.
 
 ## Hackathon Test Cases
 

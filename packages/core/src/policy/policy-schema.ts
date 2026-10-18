@@ -83,14 +83,32 @@ export function mapRawNameToCanonicalCategories(rawName: string): CanonicalCateg
   const normalized = rawName.toLowerCase().replace(/[/_\-(),.]/g, " ").replace(/\s+/g, " ").trim();
   const matched = new Set<CanonicalCategory>();
 
+  // Multi-word phrase checks first
+  const isNotebook = /\bnotebooks?\b/i.test(normalized);
+  const isLaptop = /\blaptops?\b/i.test(normalized) || isNotebook;
+
   // 1. Electronics / Computers
-  if (normalized.includes("laptop") || normalized.includes("notebook")) matched.add("laptop");
-  if (normalized.includes("desktop") || normalized.includes("cpu") || normalized.includes("monitor") || normalized.includes("motherboard")) matched.add("desktop");
-  if (normalized.includes("phone") || normalized.includes("mobile") || normalized.includes("smartphone") || normalized.includes("tablet")) matched.add("mobile_phone");
-  if (normalized.includes("charger") || normalized.includes("adapter") || normalized.includes("cable") || normalized.includes("cord") || normalized.includes("wire")) matched.add("charger_cable");
-  if (normalized.includes("batter") || normalized.includes("cell") || normalized.includes("alkaline") || normalized.includes("li ion")) matched.add("battery_household");
-  if (normalized.includes("small consumer electronic") || normalized.includes("small electronic") || normalized.includes("keyboard") || normalized.includes("mouse") || normalized.includes("router") || normalized.includes("calculator") || normalized.includes("set top")) matched.add("small_electronics");
-  if (normalized.includes("appliance") || normalized.includes("refrigerator") || normalized.includes("washing") || normalized.includes("microwave") || normalized.includes("ac ") || normalized.includes("air conditioner")) matched.add("large_appliance");
+  if (isLaptop) matched.add("laptop");
+  if (/\b(desktops?|cpus?|monitors?|motherboards?)\b/i.test(normalized)) matched.add("desktop");
+  if (/\b(phones?|mobiles?|smartphones?|tablets?)\b/i.test(normalized)) matched.add("mobile_phone");
+  if (/\b(chargers?|adapters?|cables?|cords?|wires?)\b/i.test(normalized)) matched.add("charger_cable");
+  if (/\b(batter(y|ies)|cells?|alkaline|li[- ]?ion)\b/i.test(normalized)) matched.add("battery_household");
+  if (
+    normalized.includes("small consumer electronic") ||
+    normalized.includes("small electronic") ||
+    /\b(keyboards?|mouse|routers?|calculators?|set[- ]?top)\b/i.test(normalized)
+  ) {
+    matched.add("small_electronics");
+  }
+  if (
+    normalized.includes("appliance") ||
+    normalized.includes("refrigerator") ||
+    normalized.includes("washing") ||
+    normalized.includes("microwave") ||
+    normalized.includes("air conditioner")
+  ) {
+    matched.add("large_appliance");
+  }
   if (
     normalized === "electronics" ||
     normalized.includes("electronic waste") ||
@@ -104,18 +122,38 @@ export function mapRawNameToCanonicalCategories(rawName: string): CanonicalCateg
   }
 
   // 2. Paper & Fibre
-  if (normalized.includes("newspaper") || normalized.includes("raddi") || normalized.includes("shredded document") || (normalized.includes("paper") && !normalized.includes("office paper"))) matched.add("newspaper");
-  if (normalized.includes("cardboard") || normalized.includes("carton") || normalized.includes("packaging box") || normalized.includes("corrugated")) matched.add("cardboard");
-  if (normalized.includes("book") || normalized.includes("magazine") || normalized.includes("office paper")) matched.add("books_magazines");
+  if (
+    normalized.includes("newspaper") ||
+    normalized.includes("raddi") ||
+    normalized.includes("shredded document") ||
+    (/\bpaper\b/i.test(normalized) && !normalized.includes("office paper"))
+  ) {
+    matched.add("newspaper");
+  }
+  if (
+    normalized.includes("cardboard") ||
+    normalized.includes("carton") ||
+    normalized.includes("packaging box") ||
+    normalized.includes("corrugated")
+  ) {
+    matched.add("cardboard");
+  }
+  // "notebook" is a laptop computer, never a book/magazine!
+  const hasBook = /\bbooks?\b/i.test(normalized) && !isNotebook;
+  if (hasBook || normalized.includes("magazine") || normalized.includes("office paper")) {
+    matched.add("books_magazines");
+  }
 
   // 3. Other Domestic Recyclables
-  if (normalized.includes("plastic") || normalized.includes("pet bottle") || normalized.includes("container")) matched.add("plastic");
-  if (normalized.includes("metal") || normalized.includes("iron") || normalized.includes("steel") || normalized.includes("copper") || normalized.includes("aluminium") || normalized.includes("brass")) matched.add("metal");
-  if (normalized.includes("glass") || normalized.includes("window")) matched.add("glass");
-  if (normalized.includes("textile") || normalized.includes("cloth") || normalized.includes("fabric")) matched.add("textiles");
+  if (/\b(plastics?|pet bottles?|containers?)\b/i.test(normalized)) matched.add("plastic");
+  if (/\b(metals?|iron|steel|copper|alumin(i)?um|brass)\b/i.test(normalized)) matched.add("metal");
+  if (/\b(glass(es)?|window panes?)\b/i.test(normalized)) matched.add("glass");
+  if (/\b(textiles?|cloth(es|ing)?|fabrics?)\b/i.test(normalized)) matched.add("textiles");
 
   // 4. Hazardous Materials
-  if (normalized.includes("radioactive") || normalized.includes("chemical") || normalized.includes("explosive") || normalized.includes("toxic") || normalized.includes("hospital") || normalized.includes("bio medical") || normalized.includes("hazard")) matched.add("hazardous");
+  if (/\b(radioactive|chemicals?|explosives?|toxic|hospital|bio[- ]?medical|hazards?|hazardous)\b/i.test(normalized)) {
+    matched.add("hazardous");
+  }
 
   // Fallback for generic e-waste
   if (matched.size === 0 && (normalized.includes("electronic") || normalized.includes("e waste"))) {
@@ -172,11 +210,18 @@ export const PolicyStatusSchema = z.enum([
 ]);
 export type PolicyStatus = z.infer<typeof PolicyStatusSchema>;
 
+export const PolicyVisitedPageSchema = z.object({
+  url: z.string(),
+  screenshotPath: z.string(),
+});
+export type PolicyVisitedPage = z.infer<typeof PolicyVisitedPageSchema>;
+
 export const PolicyEvidenceSchema = z.object({
   url: z.string(),
   textHash: z.string(),
   screenshotPath: z.string(),
   screenshotRef: z.string().optional(), // for backwards-compatibility with state-machine
+  visitedPages: z.array(PolicyVisitedPageSchema).optional(),
   extractedAt: z.string(),
   sessionId: z.string(),
   replayUrl: z.string().nullable().optional(),

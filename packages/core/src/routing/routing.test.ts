@@ -281,6 +281,65 @@ describe("Stage 5: Deterministic Reverse-Logistics Routing & Pricing", () => {
         /no matching acceptedItem rule maps to laptop/
       );
     });
+
+    it("cites the specific rule accepting Deccan x mobile_phone with its verbatim quote", () => {
+      const phone = makeItem({ category: "mobile_phone", rawText: "old phone" });
+      const matrix = buildEligibilityMatrix({
+        requestId: randomUUID(),
+        items: [phone],
+        policies,
+        requestPincode: "500072",
+      });
+      const cell = matrix.cells.find((c) => c.recyclerId === "deccan" && c.itemId === phone.id)!;
+      expect(cell.status).toBe("ACCEPTED");
+      expect(cell.quote).toBe("Mobile Phones & Tablets");
+    });
+
+    it("conflict detection: category listed in both accepted and rejected policy yields UNKNOWN with conflicting policy statements reason, never ACCEPTED", () => {
+      const book = makeItem({ category: "books_magazines", rawText: "old books" });
+      const conflictingPolicy: ExtractedPolicy = {
+        ...policies[0]!,
+        recyclerId: "conflict_rec",
+        companyName: "Conflict Recycler",
+        acceptedItems: [{ rawName: "Old Books & Office Paper", quote: "Old Books & Office Paper" }],
+        rejectedItems: [{ rawName: "Paper, books and cartons", quote: "Paper, books and cartons" }],
+      };
+      const matrix = buildEligibilityMatrix({
+        requestId: randomUUID(),
+        items: [book],
+        policies: [conflictingPolicy],
+        requestPincode: "500072",
+      });
+      const cell = matrix.cells.find((c) => c.recyclerId === "conflict_rec" && c.itemId === book.id)!;
+      expect(cell.status).toBe("UNKNOWN");
+      expect(cell.status).not.toBe("ACCEPTED");
+      expect(cell.quote).toBeNull();
+      expect(cell.reason).toContain("conflicting policy statements");
+    });
+
+    it("routes 'old phone and a charger' in Kukatpally (500072) to Deccan", () => {
+      const phone = makeItem({ category: "mobile_phone", rawText: "old phone", quantity: 1, estimatedWeightKg: 0.2 });
+      const charger = makeItem({ category: "charger_cable", rawText: "a charger", quantity: 1, estimatedWeightKg: 0.15 });
+
+      const result = generateRoutingPlans({
+        request: {
+          id: randomUUID(),
+          feeCapInr: null,
+          pincode: "500072",
+        },
+        items: [phone, charger],
+        policies,
+      });
+
+      expect(result.bestPlan).not.toBeNull();
+      const plan = result.bestPlan!;
+      expect(plan.legs).toHaveLength(1);
+      const leg = plan.legs[0]!;
+      expect(leg.recyclerId).toBe("deccan");
+      expect(leg.itemIds).toEqual(expect.arrayContaining([phone.id, charger.id]));
+      expect(leg.estimatedFee).toBe(180); // Under 5 kg threshold fee
+      expect(leg.estimatedPayout).toBe(60); // 60 for mobile phone, 0 for charger
+    });
   });
 
   describe("Plan Hygiene & Lexicographic Ranking", () => {

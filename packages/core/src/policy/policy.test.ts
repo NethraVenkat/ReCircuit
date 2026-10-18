@@ -10,6 +10,7 @@ import {
   validatePolicyAgainstPageText,
   extractNumbersFromText,
   mapRawNameToCanonicalCategory,
+  mapRawNameToCanonicalCategories,
   mapExtractionToCanonicalCategories,
   DECCAN_PAGE_TEXT,
   DECCAN_EXTRACTION,
@@ -101,6 +102,16 @@ describe("Stage 4 Fixes: Generic Policy Schema & Anti-Hallucination Validator", 
     expect(mapRawNameToCanonicalCategory("Household plastics")).toBe("plastic");
     expect(mapRawNameToCanonicalCategory("Hazardous chemicals")).toBe("hazardous");
     expect(mapRawNameToCanonicalCategory("Unrecognized alien artefact")).toBeNull();
+  });
+
+  it("maps 'Laptops & Notebooks' -> [laptop] only (never books_magazines)", () => {
+    const cats = mapRawNameToCanonicalCategories("Laptops & Notebooks");
+    expect(cats).toEqual(["laptop"]);
+    expect(cats).not.toContain("books_magazines");
+
+    const qsCats = mapRawNameToCanonicalCategories("Dead Laptop / Notebook");
+    expect(qsCats).toEqual(["laptop"]);
+    expect(qsCats).not.toContain("books_magazines");
   });
 
   it("maps extracted accepted and rejected items to canonical category lists", () => {

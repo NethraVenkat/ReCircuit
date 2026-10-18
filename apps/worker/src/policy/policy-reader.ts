@@ -148,12 +148,14 @@ export async function readRecyclerPolicy(
   let combinedVisibleText = "";
   let primaryScreenshotRef = "";
   let feeInfoHidden = false;
+  const visitedPages: Array<{ url: string; screenshotPath: string }> = [];
 
   for (let idx = 0; idx < discoveredUrls.length; idx++) {
     const url = discoveredUrls[idx]!;
     try {
       await session.page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
       const screenshot = await session.captureScreenshot(`${recyclerId}-page-${idx}`);
+      visitedPages.push({ url, screenshotPath: screenshot.path });
       if (!primaryScreenshotRef) {
         primaryScreenshotRef = screenshot.path;
       }
@@ -186,6 +188,7 @@ export async function readRecyclerPolicy(
     textHash,
     screenshotPath: primaryScreenshotRef || `.data/evidence/${session.sessionId}-${recyclerId}.png`,
     screenshotRef: primaryScreenshotRef || `.data/evidence/${session.sessionId}-${recyclerId}.png`,
+    visitedPages,
     extractedAt: new Date().toISOString(),
     sessionId: session.sessionId,
     replayUrl: null,
@@ -226,7 +229,7 @@ export async function readRecyclerPolicy(
 
     const freeThresholdKg = belowRule ? belowRule.thresholdKg : freeRule ? freeRule.thresholdKg : null;
     const underWeightFeeInr = belowRule ? belowRule.amountInr : null;
-    const convenienceFeeInr = flatRule ? flatRule.amountInr : freeRule ? freeRule.amountInr : null;
+    const convenienceFeeInr = flatRule ? flatRule.amountInr : null;
     const minWeightKg = extraction.minimumTotalKg.value;
 
     return ExtractedPolicySchema.parse({

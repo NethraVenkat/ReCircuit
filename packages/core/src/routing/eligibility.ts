@@ -123,7 +123,11 @@ export function buildEligibilityMatrix(options: {
         return mappedCats.includes(item.category);
       });
 
-      if (matchingAccepted) {
+      if (matchingAccepted && matchingRejected) {
+        status = "UNKNOWN";
+        citedQuote = null;
+        reason = `conflicting policy statements: category ${item.category} is listed in both accepted and rejected policy items`;
+      } else if (matchingAccepted) {
         status = "ACCEPTED";
         citedQuote = matchingAccepted.quote;
       } else if (matchingRejected) {
