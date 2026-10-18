@@ -4,7 +4,19 @@ import { getRepository } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
-function checkAuth(request: Request): { status: 200 } | { status: 503 | 401; response: NextResponse } {
+import { timingSafeEqual } from "crypto";
+
+function safeTokenMatch(provided: string, expected: string): boolean {
+  const bufA = Buffer.from(provided);
+  const bufB = Buffer.from(expected);
+  if (bufA.length !== bufB.length) {
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
+function checkAuth(request: Request): { status: 200; setCookieToken?: string } | { status: 503 | 401; response: NextResponse } {
   const adminToken = process.env.ADMIN_TOKEN;
   if (!adminToken || !adminToken.trim()) {
     return {
@@ -12,15 +24,24 @@ function checkAuth(request: Request): { status: 200 } | { status: 503 | 401; res
       response: new NextResponse("Admin disabled", { status: 503, headers: { "Content-Type": "text/plain" } }),
     };
   }
+
+  const cookieHeader = request.headers.get("cookie") || "";
+  const cookieMatch = cookieHeader.match(/admin_token=([^;]+)/);
+  const cookieToken = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
+
   const url = new URL(request.url);
-  const token = url.searchParams.get("token") || request.headers.get("x-admin-token");
-  if (!token || token !== adminToken) {
+  const queryToken = url.searchParams.get("token");
+  const headerToken = request.headers.get("x-admin-token");
+
+  const candidate = cookieToken || queryToken || headerToken;
+  if (!candidate || !safeTokenMatch(candidate, adminToken)) {
     return {
       status: 401,
       response: NextResponse.json({ ok: false, error: "Unauthorized: Invalid or missing admin token" }, { status: 401 }),
     };
   }
-  return { status: 200 };
+
+  return { status: 200, setCookieToken: queryToken ? adminToken : undefined };
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
@@ -38,12 +59,21 @@ export async function GET(request: Request): Promise<NextResponse> {
     repo.getFailureSwitches(recyclerId),
   ]);
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
     recyclerId,
     bookings,
     switches,
   });
+
+  if (auth.setCookieToken) {
+    response.headers.set(
+      "Set-Cookie",
+      `admin_token=${encodeURIComponent(auth.setCookieToken)}; Path=/; HttpOnly; SameSite=Lax`
+    );
+  }
+
+  return response;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

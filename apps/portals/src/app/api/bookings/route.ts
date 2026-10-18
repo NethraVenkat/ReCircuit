@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveRecyclerId } from "@/lib/config";
 import { getRepository } from "@/lib/repository";
 import { validateBookingSubmission, type BookingSubmissionPayload } from "@/lib/validation";
-import { getStoredCaptchaCode } from "@/lib/captcha";
+import { verifyCaptchaToken } from "@/lib/captcha";
 
 
 export const dynamic = "force-dynamic";
@@ -46,11 +46,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "Invalid JSON request payload" }, { status: 400 });
   }
 
-  // 2. Validate CAPTCHA if PaperPlus
+  // 2. Validate CAPTCHA if PaperPlus with stateless token & nonce replay check
   let activeCaptchaCode: string | undefined;
   const captchaSid = request.headers.get("x-captcha-session") || (body as { captcha_session_id?: string }).captcha_session_id;
-  if (recyclerId === "paperplus" && captchaSid) {
-    activeCaptchaCode = getStoredCaptchaCode(captchaSid);
+  if (recyclerId === "paperplus") {
+    if (captchaSid && body.human_verification_code) {
+      const isOk = await verifyCaptchaToken(captchaSid, body.human_verification_code, repo);
+      if (isOk) {
+        activeCaptchaCode = body.human_verification_code;
+      }
+    }
   }
 
   // 3. Server-side validation

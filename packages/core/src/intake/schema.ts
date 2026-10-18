@@ -64,6 +64,8 @@ export const IntakeItemSchema = z.object({
     "plastic",
     "metal",
     "glass",
+    "textiles",
+    "hazardous",
     "other",
   ]),
   subcategory: z.string().optional(),

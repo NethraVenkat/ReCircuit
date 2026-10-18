@@ -62,6 +62,8 @@ export {
   TERMINAL_STATES,
   EVIDENCE_REQUIRED,
   canTransition,
+  canTransitionRequest,
+  canTransitionLeg,
   transitionState,
   isCollected,
   hashPlan,

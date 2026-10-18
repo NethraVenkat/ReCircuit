@@ -24,6 +24,14 @@ export class LlmOutputError extends Error {
   }
 }
 
+export class LlmConfigurationError extends Error {
+  readonly isLlmConfigurationError = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "LlmConfigurationError";
+  }
+}
+
 export interface LlmAdapter {
   generate(options: {
     system: string;

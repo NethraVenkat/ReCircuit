@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 const TEST_ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret-token";
 
@@ -292,6 +293,60 @@ test.describe("ReRoute Mock Recycler Portals E2E Suite", () => {
     // /rates belongs to QuickScrap, not PaperPlus (3102)
     const ppCross = await request.get("http://localhost:3102/rates");
     expect(ppCross.status()).toBe(404);
+  });
+
+  // -------------------------------------------------------------------------
+  // 9. Automated Axe Accessibility Verification
+  // -------------------------------------------------------------------------
+  test("Deccan, PaperPlus, and QuickScrap pass automated axe accessibility checks on home and booking pages", async ({
+    page,
+  }) => {
+    // Deccan Home
+    await page.goto("http://localhost:3101");
+    const deccanHomeAxe = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(deccanHomeAxe.violations).toEqual([]);
+
+    // Deccan Booking
+    await page.goto("http://localhost:3101/book-pickup");
+    const deccanBookAxe = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(deccanBookAxe.violations).toEqual([]);
+
+    // PaperPlus Booking
+    await page.goto("http://localhost:3102/schedule");
+    const paperPlusBookAxe = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(paperPlusBookAxe.violations).toEqual([]);
+
+    // QuickScrap Booking
+    await page.goto("http://localhost:3103/pickup");
+    const quickScrapBookAxe = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(quickScrapBookAxe.violations).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
+  // 10. XSS Input Escaping & Safety
+  // -------------------------------------------------------------------------
+  test("Malicious script tags in customer name or address are safely rendered and not executed", async ({
+    page,
+  }) => {
+    const xssPayload = '<img src="x" onerror="window.__xss_attack_executed=true">';
+    await page.goto("http://localhost:3101/book-pickup");
+
+    await page.fill('[data-testid="input-fullname"]', xssPayload);
+    await page.fill('[data-testid="input-phone"]', "9876543210");
+    await page.fill('[data-testid="input-address"]', "Plot 10, Road No 2");
+    await page.fill('[data-testid="input-locality"]', "Kukatpally");
+    await page.selectOption('[data-testid="input-pincode"]', "500072");
+    await page.check('[data-testid="data-wipe-ack"]');
+    await page.click('[data-testid="submit-booking"]');
+
+    await page.waitForURL("**/book-pickup/confirmation?**");
+    const ref = (await page.locator('[data-testid="booking-reference"]').textContent())?.trim() || "";
+
+    await page.goto(`http://localhost:3101/track?ref=${encodeURIComponent(ref)}`);
+    await expect(page.locator('[data-testid="tracking-result"]')).toBeVisible();
+
+    const isExecuted = await page.evaluate(() => (window as any).__xss_attack_executed);
+    expect(isExecuted).toBeUndefined();
   });
 });
 

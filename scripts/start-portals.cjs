@@ -34,7 +34,8 @@ PORTALS.forEach(({ id, name, port, color }) => {
     NEXT_DIST_DIR: `.next-${port}`,
   };
 
-  const child = spawn(npmCmd, ["run", "dev", "--", "-p", String(port)], {
+  const cmd = `${npmCmd} run dev -- -p ${port}`;
+  const child = spawn(cmd, {
     cwd: portalsDir,
     env,
     shell: true,
@@ -68,16 +69,34 @@ PORTALS.forEach(({ id, name, port, color }) => {
 
 console.log("\nPress Ctrl+C to stop all portals.\n");
 
+let isShuttingDown = false;
 function shutdown() {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
   console.log("\n🛑 Stopping all portals...");
   children.forEach((child) => {
-    if (isWin) {
-      spawn("taskkill", ["/pid", String(child.pid), "/f", "/t"]);
-    } else {
-      child.kill("SIGTERM");
+    if (isWin && child.pid) {
+      try {
+        spawn("taskkill", ["/pid", String(child.pid), "/f", "/t"]);
+      } catch {}
+    } else if (child.pid) {
+      try {
+        child.kill("SIGTERM");
+      } catch {}
     }
   });
-  process.exit(0);
+  setTimeout(() => process.exit(0), 800);
+}
+
+// Windows TTY Ctrl+C raw mode listener
+if (process.stdin.isTTY) {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.on("data", (chunk) => {
+    if (chunk[0] === 3) {
+      shutdown();
+    }
+  });
 }
 
 process.on("SIGINT", shutdown);

@@ -1,4 +1,5 @@
 import type { LlmAdapter, ModelTier } from "../types.js";
+import { LlmConfigurationError } from "../types.js";
 
 export class AnthropicAdapter implements LlmAdapter {
   private apiKey: string;
@@ -6,7 +7,7 @@ export class AnthropicAdapter implements LlmAdapter {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.LLM_API_KEY || "";
     if (!this.apiKey) {
-      throw new Error("Missing Anthropic API Key (LLM_API_KEY)");
+      throw new LlmConfigurationError("Missing Anthropic API Key (LLM_API_KEY)");
     }
   }
 
@@ -24,22 +25,38 @@ export class AnthropicAdapter implements LlmAdapter {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": this.apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model,
-          system,
-          messages: [{ role: "user", content: user }],
-          max_tokens: 1500,
-          temperature: 0,
-        }),
-        signal: controller.signal,
-      });
+      let attempt = 0;
+      const maxRetries = 2;
+      let response!: Response;
+
+      while (attempt <= maxRetries) {
+        response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": this.apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model,
+            system,
+            messages: [{ role: "user", content: user }],
+            max_tokens: 1500,
+            temperature: 0,
+          }),
+          signal: controller.signal,
+        });
+
+        if (response.status === 429 && attempt < maxRetries) {
+          attempt++;
+          const baseDelay = 1000 * Math.pow(2, attempt);
+          const jitter = Math.floor(Math.random() * 500);
+          await new Promise((res) => setTimeout(res, baseDelay + jitter));
+          continue;
+        }
+
+        break;
+      }
 
       if (!response.ok) {
         const status = response.status;

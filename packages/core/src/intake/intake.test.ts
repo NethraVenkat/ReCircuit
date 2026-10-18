@@ -15,8 +15,25 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { parseIntake } from "./parser.js";
-import { applyClarification, createDomainRequestFromIntake } from "./post-processor.js";
+import {
+  applyClarification,
+  createDomainRequestFromIntake,
+  feeAppearsInCurrencyContext,
+  weightAppearsInWeightContext,
+  quantityAppearsInQuantityContext,
+  postProcessIntake,
+} from "./post-processor.js";
 import type { IntakeItem, IntakeClarification } from "./schema.js";
+import {
+  CANONICAL_TAXONOMY,
+  ITEM_CATEGORY_TO_GROUP,
+  GROUP_TO_ITEM_CATEGORY,
+  itemCategoryToGroup,
+  groupToItemCategory,
+  taxonomyCategoryToItemCategory,
+  itemCategoryToTaxonomyCategories,
+} from "./taxonomy.js";
+import type { ItemCategory } from "../types.js";
 import { clearFakeFixtures, LlmOutputError } from "@reroute/llm";
 
 describe("Stage 3: User Intake + Item Classification Test Suite", () => {
@@ -204,5 +221,174 @@ describe("Stage 3: User Intake + Item Classification Test Suite", () => {
     expect(item1?.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // 10. Cross-domain Anti-hallucination Unit Context Checks
+  // -------------------------------------------------------------------------
+  it("strictly enforces unit-context separation preventing cross-domain hallucinations", () => {
+    const text = "8 kg newspaper and 150 cap in Kukatpally 500072";
+
+    // 1. Fee checks: 8 is in weight context, NOT currency; 150 is next to cap
+    expect(feeAppearsInCurrencyContext(8, text)).toBe(false);
+    expect(feeAppearsInCurrencyContext(150, text)).toBe(true);
+
+    // 2. Weight checks: 150 is next to cap, NOT weight; 8 is next to kg
+    expect(weightAppearsInWeightContext(150, text)).toBe(false);
+    expect(weightAppearsInWeightContext(8, text)).toBe(true);
+
+    // 3. Quantity checks: 500072 is a pincode, 150 is fee cap, 8 is weight kg
+    expect(quantityAppearsInQuantityContext(500072, text)).toBe(false);
+    expect(quantityAppearsInQuantityContext(150, text)).toBe(false);
+    expect(quantityAppearsInQuantityContext(8, text)).toBe(false);
+
+    // Legitimate quantity in item text
+    expect(quantityAppearsInQuantityContext(3, "3 dead AA batteries", "3 dead AA batteries")).toBe(true);
+    expect(quantityAppearsInQuantityContext(2, "two laptops", "two laptops")).toBe(true);
+
+    // Post-processor integration test
+    const hallucinatedProposal = {
+      location: { rawText: text, locality: "Kukatpally", pincode: "500072", city: "Hyderabad", confidence: 1 },
+      feeCapInr: 8, // Hallucinated fee cap from 8 kg!
+      items: [
+        {
+          rawText: "laptop",
+          category: "laptop",
+          quantity: 500072, // Hallucinated quantity from pincode!
+          declaredWeightKg: 150, // Hallucinated weight from 150 cap!
+          confidence: 1,
+        },
+      ],
+      clarifications: [],
+    };
+
+    const validated = postProcessIntake(text, hallucinatedProposal);
+    expect(validated.feeCapInr).toBeNull(); // 8 discarded
+    expect(validated.items[0]?.quantity).toBe(1); // 500072 reset to 1
+    expect(validated.items[0]?.declaredWeightKg).toBeNull(); // 150 discarded
+  });
+
+  // -------------------------------------------------------------------------
+  // 11. Official Demo Sentence with 3 Items End-to-End
+  // -------------------------------------------------------------------------
+  it("parses the official 3-item demo sentence with correct weights, fee cap, and domain mapping", async () => {
+    const demoSentence =
+      "I have an old Dell laptop that doesn't turn on, plus about 8 kg of old newspapers and 3 dead AA batteries. My budget for pickup fees is ₹150 max. I'm in Kukatpally, Hyderabad 500072.";
+
+    const result = await parseIntake(demoSentence);
+
+    expect(result.state).toBe("ITEMS_PARSED");
+    expect(result.feeCapInr).toBe(150);
+    expect(result.location.locality).toBe("Kukatpally");
+    expect(result.location.pincode).toBe("500072");
+    expect(result.location.city).toBe("Hyderabad");
+    expect(result.clarifications).toHaveLength(0);
+    expect(result.items).toHaveLength(3);
+
+    // Item 1: Laptop
+    const laptop = result.items.find((i: IntakeItem) => i.category === "laptop");
+    expect(laptop).toBeDefined();
+    expect(laptop?.quantity).toBe(1);
+    expect(laptop?.estimatedWeightKg).toBe(2.2);
+    expect(laptop?.weightSource).toBe("estimated");
+    expect(laptop?.hazardClass).toBe("battery_li_ion");
+
+    // Item 2: Newspaper
+    const newspaper = result.items.find((i: IntakeItem) => i.category === "newspaper");
+    expect(newspaper).toBeDefined();
+    expect(newspaper?.quantity).toBe(1);
+    expect(newspaper?.declaredWeightKg).toBe(8);
+    expect(newspaper?.estimatedWeightKg).toBe(8);
+    expect(newspaper?.weightSource).toBe("user_declared");
+    expect(newspaper?.hazardClass).toBe("none");
+
+    // Item 3: AA Batteries
+    const batteries = result.items.find((i: IntakeItem) => i.category === "battery_household");
+    expect(batteries).toBeDefined();
+    expect(batteries?.quantity).toBe(3);
+    expect(batteries?.estimatedWeightKg).toBeCloseTo(0.09, 2);
+    expect(batteries?.weightSource).toBe("estimated");
+    expect(batteries?.hazardClass).toBe("battery_alkaline");
+
+    // Verify domain request mapping
+    const domainReq = createDomainRequestFromIntake(result);
+    expect(domainReq.state).toBe("ITEMS_PARSED");
+    expect(domainReq.feeCapInr).toBe(150);
+    expect(domainReq.items).toHaveLength(3);
+
+    const dLaptop = domainReq.items.find((it) => it.description.includes("laptop"));
+    expect(dLaptop?.category).toBe("ELECTRONICS");
+    expect(dLaptop?.hazardClass).toBe("BATTERY");
+
+    const dPaper = domainReq.items.find((it) => it.description.includes("newspaper"));
+    expect(dPaper?.category).toBe("PAPER");
+    expect(dPaper?.hazardClass).toBe("NON_HAZARDOUS");
+
+    const dBatteries = domainReq.items.find((it) => it.description.includes("batteries"));
+    expect(dBatteries?.category).toBe("BATTERIES");
+    expect(dBatteries?.hazardClass).toBe("BATTERY");
+  });
+
+  // -------------------------------------------------------------------------
+  // 12. Fee Cap Variants & Unspecified Handling
+  // -------------------------------------------------------------------------
+  it("handles fee cap variants: max, under, cap of, not more than, free only, and unspecified", () => {
+    expect(feeAppearsInCurrencyContext(200, "I can pay max 200 for pickup")).toBe(true);
+    expect(feeAppearsInCurrencyContext(200, "please keep under ₹200")).toBe(true);
+    expect(feeAppearsInCurrencyContext(200, "I have a cap of 200 rupees")).toBe(true);
+    expect(feeAppearsInCurrencyContext(200, "not more than 200 please")).toBe(true);
+    expect(feeAppearsInCurrencyContext(0, "free only please")).toBe(true);
+    expect(feeAppearsInCurrencyContext(0, "I want free pickup")).toBe(true);
+
+    // Unspecified fee cap
+    const unspecifiedText = "I have 5 kg old books in Begumpet";
+    expect(feeAppearsInCurrencyContext(100, unspecifiedText)).toBe(false);
+    expect(feeAppearsInCurrencyContext(0, unspecifiedText)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // 13. Bidirectional Taxonomy Integrity
+  // -------------------------------------------------------------------------
+  it("verifies bidirectional 1-to-1 bijection between all 9 ItemCategory values and TaxonomyGroup", () => {
+    const allItemCategories: ItemCategory[] = [
+      "ELECTRONICS",
+      "BATTERIES",
+      "PAPER",
+      "PLASTIC",
+      "METAL",
+      "GLASS",
+      "TEXTILES",
+      "HAZARDOUS",
+      "OTHER",
+    ];
+
+    expect(allItemCategories).toHaveLength(9);
+
+    for (const cat of allItemCategories) {
+      // 1. Every ItemCategory maps to a valid TaxonomyGroup
+      const group = itemCategoryToGroup(cat);
+      expect(group).toBeDefined();
+      expect(ITEM_CATEGORY_TO_GROUP[cat]).toBe(group);
+
+      // 2. Bidirectional inverse holds: group -> itemCategory
+      const invertedCat = groupToItemCategory(group);
+      expect(invertedCat).toBe(cat);
+      expect(GROUP_TO_ITEM_CATEGORY[group]).toBe(cat);
+
+      // 3. Every ItemCategory has at least one associated TaxonomyCategory
+      const taxCategories = itemCategoryToTaxonomyCategories(cat);
+      expect(taxCategories.length).toBeGreaterThanOrEqual(1);
+
+      // 4. Reverse mapping from each taxonomy category returns the domain category
+      for (const taxCat of taxCategories) {
+        expect(taxonomyCategoryToItemCategory(taxCat)).toBe(cat);
+      }
+    }
+
+    // Verify all CANONICAL_TAXONOMY entries have valid hazardClass and group
+    for (const [taxName, entry] of Object.entries(CANONICAL_TAXONOMY)) {
+      expect(entry.category).toBe(taxName);
+      expect(allItemCategories).toContain(groupToItemCategory(entry.group));
+    }
   });
 });

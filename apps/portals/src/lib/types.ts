@@ -75,6 +75,8 @@ export interface BookingRepository {
   getFailureSwitches(recyclerId: RecyclerId): Promise<FailureSwitches>;
   updateFailureSwitches(recyclerId: RecyclerId, switches: Partial<FailureSwitches>): Promise<FailureSwitches>;
   consumeFailureSwitch(recyclerId: RecyclerId, switchName: keyof FailureSwitches): Promise<boolean>;
+  isNonceUsed(nonce: string): Promise<boolean>;
+  recordUsedNonce(nonce: string, expiresAt: number): Promise<void>;
   reset(recyclerId?: RecyclerId): Promise<void>;
 }
 

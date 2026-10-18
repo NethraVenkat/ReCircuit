@@ -8,7 +8,7 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 
 | ID | Requirement (official) | Feature | Component | Test | Evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| O-1 | Collect item type, quantity, location; stable IDs; validate before agent runs | Intake parser + validation | `packages/core` intake, `packages/llm` schema, `items` table | `intake.test.ts` (10 cases) | Parsed items JSON stored per request with stable RFC4122 v4 UUIDs | PASS |
+| O-1 | Collect item type, quantity, location; stable IDs; validate before agent runs | Intake parser + validation | `packages/core` intake, `packages/llm` schema, `items` table | `intake.test.ts` (14 cases) | Parsed items JSON stored per request with stable RFC4122 v4 UUIDs | PASS |
 | O-2 | Retrieve from recycler sites and pickup forms; store source URLs and retrieval times | Policy discovery | PolicyReader (Stagehand) | `policy-reader.test.ts`, live run | `recycler_policies.source_url`, `extracted_at`, screenshot | NOT STARTED |
 | O-3 | Match accepted materials and fees; save evidence and reason; uncertain state when evidence missing | Eligibility + pricing | `core/eligibility`, `core/pricing` | `eligibility.test.ts` | Matrix cell reason quotes extracted rule; `UNKNOWN` state | NOT STARTED |
 | O-4 | Book pickup after approval; show destination and change first; store approved version; no duplicate on retry | Approval gate + Booker + idempotency | `core/approval`, Booker, `approvals`, `browser_actions` | `approval.test.ts`, `booker.test.ts` | Approval record with `plan_hash`; one portal booking per key | NOT STARTED |
@@ -33,7 +33,7 @@ Status legend: `NOT STARTED` · `IN PROGRESS` · `PASS` · `PARTIAL` · `FAIL`
 
 | ID | P0 requirement | Component | Test | Evidence | Status |
 | --- | --- | --- | --- | --- | --- |
-| P0-1 | Natural-language intake | `packages/core` intake + `packages/llm` | `intake.test.ts` (10 cases) | parsed request + items JSON | PASS |
+| P0-1 | Natural-language intake | `packages/core` intake + `packages/llm` | `intake.test.ts` (14 cases) | parsed request + items JSON | PASS |
 | P0-2 | Structured item extraction | `packages/core/src/intake` | `intake.test.ts` | canonical items JSON with taxonomy and weights | PASS |
 | P0-3 | City/location input | `packages/core/src/intake/localities` | `intake.test.ts` | locality + Hyderabad pincode resolution | PASS |
 | P0-4 | Fee-cap input | `packages/core/src/intake/post-processor` | `intake.test.ts` | `feeCapInr` anti-hallucination validation | PASS |

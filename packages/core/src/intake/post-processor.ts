@@ -17,10 +17,10 @@ import type {
   IntakeClarification,
   ValidatedIntakeResult,
 } from "./schema.js";
-import { getTaxonomyEntry, type TaxonomyCategory } from "./taxonomy.js";
+import { getTaxonomyEntry, GROUP_TO_ITEM_CATEGORY, type TaxonomyCategory } from "./taxonomy.js";
 import { lookupLocality } from "./localities.js";
 import { transitionState } from "../state-machine.js";
-import type { Request as DomainRequest } from "../types.js";
+import type { Request as DomainRequest, HazardClass } from "../types.js";
 
 const NUMBER_WORDS: Record<string, number> = {
   zero: 0,
@@ -40,18 +40,151 @@ const NUMBER_WORDS: Record<string, number> = {
 };
 
 /**
+ * Checks if a fee appears in a valid currency / budget context in user text.
+ * Prevents cross-domain hallucination (e.g. "8 kg newspaper and 150 cap" -> 8 is not a fee).
+ */
+export function feeAppearsInCurrencyContext(fee: number, text: string): boolean {
+  const lower = text.toLowerCase();
+
+  if (fee === 0) {
+    const freeRegex = /\b(?:free(?:\s+only|\s+pickup|\s+of\s+cost)?|no\s+fee|zero\s+(?:fee|cost)|₹\s*0|rs\.?\s*0|0\s*(?:rs|rupees|inr))\b/i;
+    return freeRegex.test(lower);
+  }
+
+  // 1. Direct currency symbols/abbreviations: ₹150, rs 150, 150 rupees, 150 inr
+  const directCurrency = new RegExp(
+    `(?:₹|rs\\.?|inr)\\s*${fee}\\b|\\b${fee}\\s*(?:₹|rs\\.?|inr|rupees|bucks)`,
+    "i"
+  );
+  if (directCurrency.test(lower)) {
+    return true;
+  }
+
+  // 2. Budget/cap/fee words before amount:
+  // "max 150", "max fee 150", "budget 150", "cap 150", "cap of 150", "limit 150",
+  // "under 150", "within 150", "not more than 150", "upto 150", "up to 150"
+  const prefixCap = new RegExp(
+    `\\b(?:max(?:imum)?(?:\\s+fee)?|budget(?:\\s+for\\s+pickup(?:\\s+fees?)?)?(?:\\s+is)?|cap(?:\\s+of)?|limit(?:\\s+of)?|under|within|not\\s+more\\s+than|up\\s*to|upto)\\s+(?:of\\s+)?(?:₹|rs\\.?|inr)?\\s*${fee}\\b`,
+    "i"
+  );
+  if (prefixCap.test(lower)) {
+    return true;
+  }
+
+  // 3. Suffix cap/budget words: "150 max", "150 cap", "150 budget", "150 limit"
+  const suffixCap = new RegExp(
+    `\\b${fee}\\s*(?:₹|rs\\.?|inr|rupees)?\\s*(?:max|maximum|cap|budget|limit)\\b`,
+    "i"
+  );
+  if (suffixCap.test(lower)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Checks if a weight value appears in a valid weight context (e.g. "8 kg", "about 8 kg").
+ * Prevents cross-domain hallucination (e.g. "8 kg newspaper and 150 cap" -> 150 is not a weight).
+ */
+export function weightAppearsInWeightContext(weight: number, text: string): boolean {
+  const lower = text.toLowerCase();
+  const weightUnits = "(?:kg|kgs|kilo|kilos|kilogram|kilograms|grams?|gms?)";
+
+  const regex = new RegExp(`\\b${weight}\\s*${weightUnits}\\b`, "i");
+  if (regex.test(lower)) {
+    return true;
+  }
+
+  const approxRegex = new RegExp(
+    `\\b(?:about|approx(?:imately)?|around)\\s*${weight}\\s*${weightUnits}\\b`,
+    "i"
+  );
+  if (approxRegex.test(lower)) {
+    return true;
+  }
+
+  const weightDesc = new RegExp(`\\b(?:weighs?|weight(?:\\s+of)?)\\s*${weight}\\b`, "i");
+  if (weightDesc.test(lower)) {
+    return true;
+  }
+
+  for (const [word, num] of Object.entries(NUMBER_WORDS)) {
+    if (num === weight) {
+      if (new RegExp(`\\b${word}\\s*${weightUnits}\\b`, "i").test(lower)) {
+        return true;
+      }
+    }
+  }
+
+  if (weight === 0.5 && /\bhalf\s*(?:a\s*)?(?:kg|kilo|kilogram)\b/i.test(lower)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Checks if a quantity value appears in a valid quantity context.
+ * Prevents 6-digit pincodes (e.g. 500072) or currency (e.g. 150 cap) from being extracted as quantities.
+ */
+export function quantityAppearsInQuantityContext(
+  qty: number,
+  text: string,
+  itemRawText?: string
+): boolean {
+  if (qty === 1) {
+    return true;
+  }
+
+  if (qty >= 1000) {
+    return false;
+  }
+
+  const lowerText = text.toLowerCase();
+  const lowerItem = (itemRawText || "").toLowerCase();
+
+  const notWeightOrMoney = (s: string, val: number | string): boolean => {
+    const afterMatch = new RegExp(`\\b${val}\\s*(?:kg|kgs|kilo|kilos|grams?|gms?|₹|rs|rupees|inr|cap|budget)\\b`, "i");
+    const beforeMatch = new RegExp(`(?:₹|rs\\.?|inr)\\s*${val}\\b`, "i");
+    return !afterMatch.test(s) && !beforeMatch.test(s);
+  };
+
+  for (const [word, num] of Object.entries(NUMBER_WORDS)) {
+    if (num === qty) {
+      if (lowerItem.includes(word) && notWeightOrMoney(lowerItem, word)) {
+        return true;
+      }
+      if (new RegExp(`\\b${word}\\b`, "i").test(lowerText) && notWeightOrMoney(lowerText, word)) {
+        return true;
+      }
+    }
+  }
+
+  if (new RegExp(`\\b${qty}\\b`, "i").test(lowerItem) && notWeightOrMoney(lowerItem, qty)) {
+    return true;
+  }
+
+  if (new RegExp(`\\b${qty}\\s*(?:nos|pcs|pieces|units|items|boxes|sets|pairs|pack|dead|old|used)?\\b`, "i").test(lowerText)) {
+    if (notWeightOrMoney(lowerText, qty)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Checks if a numeric value appears in the user text, either as digits or as number words.
  */
 export function numberAppearsInText(value: number, text: string): boolean {
   const lower = text.toLowerCase();
 
-  // 1. Direct digit match (e.g. "150", "150.0")
   const digitRegex = new RegExp(`\\b${value}\\b|₹\\s*${value}|rs\\.?\\s*${value}|inr\\s*${value}`, "i");
   if (digitRegex.test(lower)) {
     return true;
   }
 
-  // 2. Number word match for single digit / small values
   for (const [word, num] of Object.entries(NUMBER_WORDS)) {
     if (num === value && new RegExp(`\\b${word}\\b`, "i").test(lower)) {
       return true;
@@ -78,12 +211,14 @@ export function postProcessIntake(
   // -------------------------------------------------------------------------
   let feeCapInr: number | null = null;
   if (typeof proposed.feeCapInr === "number") {
-    if (numberAppearsInText(proposed.feeCapInr, rawUserText)) {
+    if (feeAppearsInCurrencyContext(proposed.feeCapInr, rawUserText)) {
       feeCapInr = Math.round(proposed.feeCapInr);
     } else {
       // Discard hallucinated fee cap! Never invent a limit.
       feeCapInr = null;
     }
+  } else if (feeAppearsInCurrencyContext(0, rawUserText)) {
+    feeCapInr = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -142,8 +277,11 @@ export function postProcessIntake(
 
     const taxonomy = getTaxonomyEntry(category);
 
-    // Quantity normalization
+    // Quantity normalization & anti-hallucination check
     let quantity = propItem.quantity || 1;
+    if (quantity > 1 && !quantityAppearsInQuantityContext(quantity, rawUserText, propItem.rawText)) {
+      quantity = 1;
+    }
     // Cross check number words if quantity was 1 but text has "two", "three", etc.
     for (const [word, val] of Object.entries(NUMBER_WORDS)) {
       if (propItem.rawText.toLowerCase().includes(word) && val > 1) {
@@ -151,10 +289,10 @@ export function postProcessIntake(
       }
     }
 
-    // Declared weight anti-hallucination check
+    // Declared weight anti-hallucination check: weight must appear in weight context
     let declaredWeightKg: number | null = null;
     if (typeof propItem.declaredWeightKg === "number" && propItem.declaredWeightKg > 0) {
-      if (numberAppearsInText(propItem.declaredWeightKg, rawUserText)) {
+      if (weightAppearsInWeightContext(propItem.declaredWeightKg, rawUserText)) {
         declaredWeightKg = propItem.declaredWeightKg;
       }
     }
@@ -343,17 +481,25 @@ export function createDomainRequestFromIntake(intake: ValidatedIntakeResult): Do
     description: intake.location.rawText,
     state: "DRAFT",
     ...(intake.feeCapInr !== null && intake.feeCapInr !== undefined ? { feeCapInr: intake.feeCapInr } : {}),
-    items: intake.items.map((it: IntakeItem) => ({
-      id: it.id,
-      requestId: intake.requestId,
-      category: "ELECTRONICS",
-      description: it.rawText,
-      quantity: it.quantity,
-      estimatedWeightKg: it.estimatedWeightKg ?? it.declaredWeightKg ?? 1.0,
-      confidence: it.confidence,
-      hazardClass: "NON_HAZARDOUS",
-      createdAt: new Date().toISOString(),
-    })),
+    items: intake.items.map((it: IntakeItem) => {
+      const tax = getTaxonomyEntry(it.category);
+      const domainCat = GROUP_TO_ITEM_CATEGORY[tax.group] ?? "OTHER";
+      let hazardClass: HazardClass = "NON_HAZARDOUS";
+      if (tax.hazardClass.startsWith("battery")) {
+        hazardClass = "BATTERY";
+      }
+      return {
+        id: it.id,
+        requestId: intake.requestId,
+        category: domainCat,
+        description: it.rawText,
+        quantity: it.quantity,
+        estimatedWeightKg: it.estimatedWeightKg ?? it.declaredWeightKg ?? 1.0,
+        confidence: it.confidence,
+        hazardClass,
+        createdAt: new Date().toISOString(),
+      };
+    }),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

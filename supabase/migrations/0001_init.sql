@@ -3,8 +3,7 @@
 -- ReRoute initial schema
 -- =============================================================================
 
--- Enable pgcrypto for uuid generation
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- In PostgreSQL 13+ and Supabase, gen_random_uuid() is built-in natively.
 
 -- ---------------------------------------------------------------------------
 -- Enum types (stored as text with CHECK constraints for flexibility)
@@ -243,15 +242,18 @@ CREATE INDEX browser_actions_leg_id_idx ON browser_actions(leg_id);
 
 CREATE TABLE status_events (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  leg_id              UUID        NOT NULL REFERENCES plan_legs(id) ON DELETE CASCADE,
-  previous_state      leg_state   NOT NULL,
-  new_state           leg_state   NOT NULL,
+  leg_id              UUID        REFERENCES plan_legs(id) ON DELETE CASCADE,
+  request_id          UUID        REFERENCES requests(id) ON DELETE CASCADE,
+  previous_state      TEXT        NOT NULL,
+  new_state           TEXT        NOT NULL,
   evidence_type       TEXT        NOT NULL,
   evidence_reference  TEXT        NOT NULL,
-  observed_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+  observed_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT status_events_target_check CHECK (leg_id IS NOT NULL OR request_id IS NOT NULL)
 );
 
 CREATE INDEX status_events_leg_id_idx ON status_events(leg_id);
+CREATE INDEX status_events_request_id_idx ON status_events(request_id);
 CREATE INDEX status_events_observed_at_idx ON status_events(observed_at);
 
 -- ---------------------------------------------------------------------------

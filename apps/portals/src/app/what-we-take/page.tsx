@@ -1,9 +1,12 @@
 import React from "react";
 import { PaperPlusLayout } from "@/components/PaperPlusLayout";
+import { RECYCLER_CONFIGS } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
 export default function WhatWeTakePage(): JSX.Element {
+  const config = RECYCLER_CONFIGS.paperplus;
+
   return (
     <PaperPlusLayout activePath="/what-we-take">
       <div className="space-y-8">
@@ -19,27 +22,15 @@ export default function WhatWeTakePage(): JSX.Element {
           <h3 className="text-lg font-bold text-amber-900 border-b border-amber-300 pb-2">
             Accepted Paper Scrap Materials
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-5 rounded-lg border-2 border-amber-300 shadow-sm">
-              <span className="text-3xl block mb-2">📰</span>
-              <h4 className="font-bold text-base text-amber-950">Daily Newspapers</h4>
-              <p className="text-3xl font-black text-amber-700 my-2">₹12 / kg</p>
-              <p className="text-xs text-slate-600">English, Telugu, Hindi newspapers, press supplements</p>
-            </div>
-
-            <div className="bg-white p-5 rounded-lg border-2 border-amber-300 shadow-sm">
-              <span className="text-3xl block mb-2">📦</span>
-              <h4 className="font-bold text-base text-amber-950">Cardboard & Cartons</h4>
-              <p className="text-3xl font-black text-amber-700 my-2">₹6 / kg</p>
-              <p className="text-xs text-slate-600">Corrugated packaging, brown boxes, e-commerce delivery boxes</p>
-            </div>
-
-            <div className="bg-white p-5 rounded-lg border-2 border-amber-300 shadow-sm">
-              <span className="text-3xl block mb-2">📚</span>
-              <h4 className="font-bold text-base text-amber-950">Old Books & Magazines</h4>
-              <p className="text-3xl font-black text-amber-700 my-2">₹10 / kg</p>
-              <p className="text-xs text-slate-600">College textbooks, school notebooks, glossy magazines</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {config.rates.rateCard.map((entry) => (
+              <div key={entry.item} className="bg-white p-5 rounded-lg border-2 border-amber-300 shadow-sm">
+                <span className="text-3xl block mb-2">📄</span>
+                <h4 className="font-bold text-base text-amber-950">{entry.item}</h4>
+                <p className="text-2xl font-black text-amber-700 my-2">{entry.payout}</p>
+                <p className="text-xs text-slate-600">Doorstep digital weighing with certified scales</p>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -48,7 +39,7 @@ export default function WhatWeTakePage(): JSX.Element {
           <h3 className="text-base font-bold text-amber-950">Buying & Collection Rules</h3>
           <ul className="space-y-1 list-disc list-inside text-amber-900 font-medium">
             <li>
-              <strong>Minimum Weight:</strong> At least 5 kg total scrap weight is required for home pickup.
+              <strong>Minimum Weight:</strong> At least {config.rates.minWeightKg} kg total scrap weight is required for home pickup.
             </li>
             <li>
               <strong>Doorstep Pickup:</strong> 100% Free pickup across Kukatpally, Madhapur, and KPHB.
@@ -63,12 +54,12 @@ export default function WhatWeTakePage(): JSX.Element {
         <div className="bg-red-50 p-6 rounded-lg border-2 border-red-300 text-red-950 space-y-2">
           <h3 className="text-base font-bold text-red-900">⛔ Materials Strictly Rejected by PaperPlus</h3>
           <p className="text-xs text-red-800">
-            We are dedicated paper buyers. We DO NOT accept or purchase:
+            {config.rates.rejectedSummary}
           </p>
           <ul className="list-disc list-inside text-xs font-semibold text-red-900 space-y-1">
-            <li>Batteries (car, inverter, AA/AAA, or lithium cells are prohibited)</li>
-            <li>Any electronics (laptops, phones, chargers, wires, appliances)</li>
-            <li>Plastic scrap, milk packets, or polythene</li>
+            {config.rates.rejectedCategories.map((cat) => (
+              <li key={cat}>{cat}</li>
+            ))}
           </ul>
         </div>
       </div>

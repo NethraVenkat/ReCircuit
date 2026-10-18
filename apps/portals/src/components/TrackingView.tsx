@@ -58,7 +58,9 @@ export function TrackingView({ recyclerId: _recyclerId, initialReference = "" }:
     <div className="space-y-6">
       {/* Search Input Box */}
       <form onSubmit={handleSearch} className="flex gap-2 max-w-xl">
+        <label htmlFor="search_reference" className="sr-only">Booking Reference</label>
         <input
+          id="search_reference"
           type="text"
           data-testid="input-reference"
           value={reference}

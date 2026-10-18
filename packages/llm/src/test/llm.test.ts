@@ -78,4 +78,43 @@ describe("packages/llm: generateStructured & Adapters", () => {
       })
     ).rejects.toThrow(LlmOutputError);
   });
+
+  it("throws typed LlmConfigurationError when Anthropic or OpenAI is instantiated without an API key", async () => {
+    const { AnthropicAdapter } = await import("../adapters/anthropic.js");
+    const { OpenAiAdapter } = await import("../adapters/openai.js");
+    const { LlmConfigurationError } = await import("../types.js");
+
+    const savedKey = process.env.LLM_API_KEY;
+    try {
+      delete process.env.LLM_API_KEY;
+
+      expect(() => new AnthropicAdapter("")).toThrow(LlmConfigurationError);
+      expect(() => new OpenAiAdapter("")).toThrow(LlmConfigurationError);
+    } finally {
+      if (savedKey) process.env.LLM_API_KEY = savedKey;
+    }
+  });
+
+  it("never falls back silently to fake when LLM_PROVIDER=anthropic is set without an API key", async () => {
+    const { LlmConfigurationError } = await import("../types.js");
+
+    const savedProvider = process.env.LLM_PROVIDER;
+    const savedKey = process.env.LLM_API_KEY;
+
+    try {
+      process.env.LLM_PROVIDER = "anthropic";
+      delete process.env.LLM_API_KEY;
+
+      await expect(
+        generateStructured({
+          schema: SimpleSchema,
+          system: "System",
+          user: "test prompt",
+        })
+      ).rejects.toThrow(LlmConfigurationError);
+    } finally {
+      process.env.LLM_PROVIDER = savedProvider || "fake";
+      if (savedKey) process.env.LLM_API_KEY = savedKey;
+    }
+  });
 });

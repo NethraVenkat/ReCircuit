@@ -207,8 +207,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <h3 className="text-base font-bold border-b pb-2">Customer & Contact Details</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold mb-1">Full Name *</label>
+            <label htmlFor="full_name" className="block text-xs font-semibold mb-1">Full Name *</label>
             <input
+              id="full_name"
               type="text"
               name="full_name"
               data-testid="input-fullname"
@@ -220,8 +221,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1">Mobile Phone (10 digits) *</label>
+            <label htmlFor="phone" className="block text-xs font-semibold mb-1">Mobile Phone (10 digits) *</label>
             <input
+              id="phone"
               type="tel"
               name="phone"
               data-testid="input-phone"
@@ -236,8 +238,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-1">
-            <label className="block text-xs font-semibold mb-1">Address Line *</label>
+            <label htmlFor="address_line" className="block text-xs font-semibold mb-1">Address Line *</label>
             <input
+              id="address_line"
               type="text"
               name="address_line"
               data-testid="input-address"
@@ -249,8 +252,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1">Locality *</label>
+            <label htmlFor="locality" className="block text-xs font-semibold mb-1">Locality *</label>
             <input
+              id="locality"
               type="text"
               name="locality"
               data-testid="input-locality"
@@ -262,8 +266,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1">Pincode (Hyderabad) *</label>
+            <label htmlFor="pincode" className="block text-xs font-semibold mb-1">Pincode (Hyderabad) *</label>
             <select
+              id="pincode"
               name="pincode"
               data-testid="input-pincode"
               value={pincode}
@@ -281,8 +286,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold mb-1">Preferred Pickup Slot (IST) *</label>
+          <label htmlFor="preferred_slot" className="block text-xs font-semibold mb-1">Preferred Pickup Slot (IST) *</label>
           <select
+            id="preferred_slot"
             name="preferred_slot"
             data-testid="select-slot"
             value={preferredSlot}
@@ -330,7 +336,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
         {/* Add Item Row */}
         <div className="flex flex-wrap items-center gap-2 pt-2">
+          <label htmlFor="input_item_name" className="sr-only">Item Description</label>
           <input
+            id="input_item_name"
             type="text"
             data-testid="input-item-name"
             value={itemName}
@@ -338,7 +346,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             placeholder="Add another item (e.g. Newspaper, Laptop)"
             className="flex-1 min-w-[200px] px-3 py-2 border rounded text-sm text-slate-900 bg-white"
           />
+          <label htmlFor="input_item_qty" className="sr-only">Item Quantity</label>
           <input
+            id="input_item_qty"
             type="number"
             data-testid="input-item-qty"
             value={itemQty}
@@ -347,7 +357,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             className="w-20 px-3 py-2 border rounded text-sm text-slate-900 bg-white"
             min="0"
           />
+          <label htmlFor="input_item_weight" className="sr-only">Item Weight (kg)</label>
           <input
+            id="input_item_weight"
             type="number"
             data-testid="input-item-weight"
             value={itemWeight}
@@ -374,20 +386,21 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
           data-testid="data-wipe-panel"
           className="p-4 rounded border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs space-y-2"
         >
-          <label className="flex items-start space-x-2 cursor-pointer">
+          <div className="flex items-start space-x-2">
             <input
+              id="data_wipe_ack"
               type="checkbox"
               name="data_wipe_ack"
               data-testid="data-wipe-ack"
               checked={dataWipeAck}
               onChange={(e) => setDataWipeAck(e.target.checked)}
-              className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+              className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
             />
-            <span className="font-semibold leading-relaxed">
+            <label htmlFor="data_wipe_ack" className="font-semibold leading-relaxed cursor-pointer">
               I acknowledge that any data stored on submitted laptops, hard drives, or mobile phones has been backed up
               or will be permanently destroyed in accordance with Deccan E-Cycle CPCB certified recycling procedures.
-            </span>
-          </label>
+            </label>
+          </div>
         </div>
       )}
 
@@ -430,8 +443,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               </div>
             )}
             <div className="flex-1 w-full">
-              <label className="block text-xs font-bold mb-1">Enter Verification Code *</label>
+              <label htmlFor="human_verification_code" className="block text-xs font-bold mb-1">Enter Verification Code *</label>
               <input
+                id="human_verification_code"
                 type="text"
                 name="human_verification_code"
                 data-testid="input-captcha-code"

@@ -123,6 +123,20 @@ export class FakeLlmAdapter implements LlmAdapter {
       });
     }
 
+    // 3 items demo sentence: laptop, newspapers, AA batteries
+    if (lower.includes("dell laptop") && lower.includes("newspaper") && lower.includes("batteries")) {
+      return JSON.stringify({
+        location: { rawText: "Kukatpally, Hyderabad 500072", locality: "Kukatpally", pincode: "500072", city: "Hyderabad", confidence: 0.98 },
+        feeCapInr: 150,
+        items: [
+          { rawText: "old Dell laptop that doesn't turn on", category: "laptop", quantity: 1, hazardClass: "battery_li_ion", confidence: 0.95 },
+          { rawText: "8 kg of old newspapers", category: "newspaper", quantity: 1, declaredWeightKg: 8, confidence: 0.95 },
+          { rawText: "3 dead AA batteries", category: "battery_household", quantity: 3, hazardClass: "battery_alkaline", confidence: 0.95 },
+        ],
+        clarifications: [],
+      });
+    }
+
     // Default canonical laptop fixture ("one dead Dell laptop, Kukatpally, max fee ₹150")
     return JSON.stringify({
       location: { rawText: "Kukatpally", locality: "Kukatpally", pincode: "500072", city: "Hyderabad", confidence: 0.95 },

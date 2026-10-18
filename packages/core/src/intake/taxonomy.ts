@@ -5,6 +5,8 @@
  * Determines group, hazardClass, and default per-unit estimated weights.
  */
 
+import type { ItemCategory } from "../types.js";
+
 export type TaxonomyCategory =
   | "laptop"
   | "desktop"
@@ -19,6 +21,8 @@ export type TaxonomyCategory =
   | "plastic"
   | "metal"
   | "glass"
+  | "textiles"
+  | "hazardous"
   | "other";
 
 export type TaxonomyGroup =
@@ -28,6 +32,8 @@ export type TaxonomyGroup =
   | "plastic"
   | "metal"
   | "glass"
+  | "textiles"
+  | "hazardous"
   | "other";
 
 export type TaxonomyHazardClass =
@@ -43,6 +49,34 @@ export interface TaxonomyEntry {
   estimatedWeightKg: number | null; // per unit in kg
   unitType: "piece" | "kg";
 }
+
+/**
+ * Bidirectional 1-to-1 mapping between domain ItemCategory and TaxonomyGroup.
+ * Every ItemCategory in packages/core/src/types.ts belongs to exactly one category group.
+ */
+export const ITEM_CATEGORY_TO_GROUP: Record<ItemCategory, TaxonomyGroup> = {
+  ELECTRONICS: "e_waste",
+  BATTERIES: "battery",
+  PAPER: "paper",
+  PLASTIC: "plastic",
+  METAL: "metal",
+  GLASS: "glass",
+  TEXTILES: "textiles",
+  HAZARDOUS: "hazardous",
+  OTHER: "other",
+};
+
+export const GROUP_TO_ITEM_CATEGORY: Record<TaxonomyGroup, ItemCategory> = {
+  e_waste: "ELECTRONICS",
+  battery: "BATTERIES",
+  paper: "PAPER",
+  plastic: "PLASTIC",
+  metal: "METAL",
+  glass: "GLASS",
+  textiles: "TEXTILES",
+  hazardous: "HAZARDOUS",
+  other: "OTHER",
+};
 
 export const CANONICAL_TAXONOMY: Record<TaxonomyCategory, TaxonomyEntry> = {
   laptop: {
@@ -136,6 +170,20 @@ export const CANONICAL_TAXONOMY: Record<TaxonomyCategory, TaxonomyEntry> = {
     estimatedWeightKg: null,
     unitType: "kg",
   },
+  textiles: {
+    category: "textiles",
+    group: "textiles",
+    hazardClass: "none",
+    estimatedWeightKg: null,
+    unitType: "kg",
+  },
+  hazardous: {
+    category: "hazardous",
+    group: "hazardous",
+    hazardClass: "battery_unknown",
+    estimatedWeightKg: null,
+    unitType: "piece",
+  },
   other: {
     category: "other",
     group: "other",
@@ -150,5 +198,25 @@ export function getTaxonomyEntry(category: string): TaxonomyEntry {
     return CANONICAL_TAXONOMY[category as TaxonomyCategory];
   }
   return CANONICAL_TAXONOMY.other;
+}
+
+export function itemCategoryToGroup(cat: ItemCategory): TaxonomyGroup {
+  return ITEM_CATEGORY_TO_GROUP[cat];
+}
+
+export function groupToItemCategory(grp: TaxonomyGroup): ItemCategory {
+  return GROUP_TO_ITEM_CATEGORY[grp];
+}
+
+export function taxonomyCategoryToItemCategory(cat: string): ItemCategory {
+  const entry = getTaxonomyEntry(cat);
+  return GROUP_TO_ITEM_CATEGORY[entry.group];
+}
+
+export function itemCategoryToTaxonomyCategories(cat: ItemCategory): TaxonomyCategory[] {
+  const group = ITEM_CATEGORY_TO_GROUP[cat];
+  return Object.values(CANONICAL_TAXONOMY)
+    .filter((entry) => entry.group === group)
+    .map((entry) => entry.category);
 }
 

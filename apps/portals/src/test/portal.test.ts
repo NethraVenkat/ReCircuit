@@ -20,7 +20,7 @@ import { FileRepository } from "../lib/repository/file-repository";
 import { setRepositoryInstance } from "../lib/repository";
 import { validateBookingSubmission } from "../lib/validation";
 import { createCaptchaSession, renderCaptchaSvg, verifyCaptchaCode } from "../lib/captcha";
-import { RECYCLER_CONFIGS, resolveRecyclerId, isRouteAllowedForRecycler } from "../lib/config";
+import { RECYCLER_CONFIGS, resolveRecyclerId, isRouteAllowedForRecycler, getAvailableSlots } from "../lib/config";
 import type { BookingSubmissionPayload } from "../lib/validation";
 import { POST as handlePostBooking } from "../app/api/bookings/route";
 import { GET as handleGetAdmin } from "../app/api/admin/route";
@@ -665,6 +665,107 @@ describe("ReRoute Mock Recycler Portals Test Suite", () => {
         } else {
           delete process.env.RECYCLER_ID;
         }
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 17. Single Source of Truth: Config & Rate Cards
+  // -------------------------------------------------------------------------
+  describe("17. Single Source of Truth: Config & Rate Cards", () => {
+    it("RECYCLER_CONFIGS provides centralized rates for Deccan, PaperPlus, and QuickScrap", () => {
+      const deccan = RECYCLER_CONFIGS.deccan;
+      expect(deccan.rates.acceptedCategories).toContain("Laptops");
+      expect(deccan.rates.rejectedCategories).toContain("Paper");
+      expect(deccan.rates.underWeightFeeInr).toBe(180);
+      expect(deccan.rates.freeThresholdKg).toBe(5);
+
+      const paperplus = RECYCLER_CONFIGS.paperplus;
+      expect(paperplus.rates.acceptedCategories).toContain("Newspaper (Raddi)");
+      expect(paperplus.rates.rejectedCategories).toContain("Batteries");
+      expect(paperplus.rates.minWeightKg).toBe(5);
+
+      const quickscrap = RECYCLER_CONFIGS.quickscrap;
+      expect(quickscrap.rates.rateCard.length).toBeGreaterThan(0);
+      expect(quickscrap.unregisteredNotice).toBe("Registration: application in process");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 18. Stateless HMAC CAPTCHA & Replay Protection
+  // -------------------------------------------------------------------------
+  describe("18. Stateless HMAC CAPTCHA & Nonce Replay Protection", () => {
+    it("token has format enc:hash:expiry:nonce:sig and verifies successfully once", async () => {
+      const session = createCaptchaSession();
+      const parts = session.sessionId.split(":");
+      expect(parts.length).toBe(5);
+
+      // Verify code recovers from token
+      const recovered = (await import("../lib/captcha")).getStoredCaptchaCode(session.sessionId);
+      expect(recovered).toBe(session.code);
+
+      // Verify using verifyCaptchaToken with repo
+      const { verifyCaptchaToken } = await import("../lib/captcha");
+      const ok1 = await verifyCaptchaToken(session.sessionId, session.code, repo);
+      expect(ok1).toBe(true);
+
+      // Replay attempt with same token must fail
+      const ok2 = await verifyCaptchaToken(session.sessionId, session.code, repo);
+      expect(ok2).toBe(false);
+    });
+
+    it("tampered token signature is rejected", async () => {
+      const session = createCaptchaSession();
+      const parts = session.sessionId.split(":");
+      const tampered = `${parts[0]}:${parts[1]}:${parts[2]}:${parts[3]}:0000000000000000000000000000000000000000000000000000000000000000`;
+
+      const { verifyCaptchaToken } = await import("../lib/captcha");
+      const ok = await verifyCaptchaToken(tampered, session.code, repo);
+      expect(ok).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 19. Asia/Kolkata Timezone Slots
+  // -------------------------------------------------------------------------
+  describe("19. Asia/Kolkata Timezone Slots", () => {
+    it("getAvailableSlots returns slots with IST windows", () => {
+      const slots = getAvailableSlots();
+      expect(slots).toHaveLength(6); // 3 days x 2 windows
+      for (const slot of slots) {
+        expect(slot).toMatch(/^\d{4}-\d{2}-\d{2} \((10:00–12:00|15:00–17:00) IST\)$/);
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 20. Admin Token Timing-Safe Equal & Cookie Setting
+  // -------------------------------------------------------------------------
+  describe("20. Admin Token Timing-Safe Equal & Cookie Setting", () => {
+    it("GET /api/admin sets HttpOnly admin_token cookie when queried with valid token", async () => {
+      const origToken = process.env.ADMIN_TOKEN;
+      process.env.ADMIN_TOKEN = "secret-admin-12345";
+      try {
+        const req = new Request("http://localhost:3101/api/admin?token=secret-admin-12345", {
+          headers: { host: "localhost:3101" },
+        });
+        const res = await handleGetAdmin(req);
+        expect(res.status).toBe(200);
+
+        const setCookie = res.headers.get("set-cookie");
+        expect(setCookie).toBeTruthy();
+        expect(setCookie).toContain("admin_token=secret-admin-12345");
+        expect(setCookie).toContain("HttpOnly");
+
+        // Subsequent call with Cookie header succeeds without query token
+        const req2 = new Request("http://localhost:3101/api/admin", {
+          headers: { host: "localhost:3101", cookie: `admin_token=secret-admin-12345` },
+        });
+        const res2 = await handleGetAdmin(req2);
+        expect(res2.status).toBe(200);
+      } finally {
+        if (origToken) process.env.ADMIN_TOKEN = origToken;
+        else delete process.env.ADMIN_TOKEN;
       }
     });
   });

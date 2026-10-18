@@ -208,6 +208,26 @@ export class SupabaseRepository implements BookingRepository {
     }
   }
 
+  private inMemoryNonces: Map<string, number> = new Map();
+
+  async isNonceUsed(nonce: string): Promise<boolean> {
+    const exp = this.inMemoryNonces.get(nonce);
+    if (!exp) return false;
+    if (Date.now() > exp) {
+      this.inMemoryNonces.delete(nonce);
+      return false;
+    }
+    return true;
+  }
+
+  async recordUsedNonce(nonce: string, expiresAt: number): Promise<void> {
+    const now = Date.now();
+    for (const [k, exp] of this.inMemoryNonces.entries()) {
+      if (now > exp) this.inMemoryNonces.delete(k);
+    }
+    this.inMemoryNonces.set(nonce, expiresAt);
+  }
+
   private mapRowToBooking(row: Record<string, unknown>): PortalBooking {
     const rawEvents = (row.events as Record<string, unknown>[]) || [];
     const events = rawEvents.map((e) => ({

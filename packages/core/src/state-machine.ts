@@ -149,13 +149,13 @@ export type TransitionCheck = TransitionCheckOk | TransitionCheckFail;
  */
 export interface TransitionDeps {
   /** The current plan hash (needed to validate -> APPROVED and prevent stale approval) */
-  currentPlanHash?: string;
+  currentPlanHash?: string | undefined;
   /** The booking reference submitted during SUBMITTING (needed for REQUEST_CONFIRMED) */
-  submittedBookingReference?: string;
+  submittedBookingReference?: string | undefined;
   /** The session ID used during SUBMITTING (needed for REQUEST_CONFIRMED independence check) */
-  submittingSessionId?: string;
+  submittingSessionId?: string | undefined;
   /** All idempotency keys that have been used successfully (to block duplicates) */
-  usedIdempotencyKeys?: ReadonlySet<string>;
+  usedIdempotencyKeys?: ReadonlySet<string> | undefined;
 }
 
 /**
@@ -168,11 +168,41 @@ export interface TransitionDeps {
  *  - -> APPROVED requires UserApprovalEvidence and planHash must match deps.currentPlanHash.
  *  - All transitions in REQUEST_TRANSITIONS and LEG_TRANSITIONS validate their respective evidence.
  */
+export function canTransitionRequest(
+  from: RequestState,
+  to: RequestState,
+  evidence: unknown,
+  deps: TransitionDeps = {}
+): TransitionCheck {
+  return canTransition(from, to, evidence, deps, "request");
+}
+
+export function canTransitionLeg(
+  from: LegState,
+  to: LegState,
+  evidence: unknown,
+  deps: TransitionDeps = {}
+): TransitionCheck {
+  return canTransition(from, to, evidence, deps, "leg");
+}
+
+/**
+ * Pure, deterministic check: can we move from `from` to `to` given this evidence?
+ *
+ * Enforces:
+ *  - Strict separation: request transitions cannot be applied to legs, and leg transitions cannot be applied to requests.
+ *  - No transitions out of terminal states (CERTIFICATE_ISSUED, REJECTED, FAILED).
+ *  - Self-transitions (including PLAN_CREATED -> PLAN_CREATED) are prohibited.
+ *  - -> FAILED is allowed only from non-terminal states and requires FailureEvidence (errorCode, message, observedAt).
+ *  - -> APPROVED requires UserApprovalEvidence and planHash must match deps.currentPlanHash.
+ *  - All transitions in REQUEST_TRANSITIONS and LEG_TRANSITIONS validate their respective evidence.
+ */
 export function canTransition(
   from: LegState | RequestState,
   to: LegState | RequestState,
   evidence: unknown,
-  deps: TransitionDeps = {}
+  deps: TransitionDeps = {},
+  entityType?: "request" | "leg"
 ): TransitionCheck {
   // 1. Refuse any exit from terminal states
   if (TERMINAL_STATES.has(from)) {
@@ -202,13 +232,29 @@ export function canTransition(
     return { ok: true };
   }
 
-  // 4. Must be an explicitly permitted transition
+  // 4. Must be an explicitly permitted transition for the entity type
   const key = `${from}->${to}`;
-  if (!TRANSITIONS.has(key)) {
-    return {
-      ok: false,
-      reason: `Transition ${from} -> ${to} is not in the allowed transitions table`,
-    };
+  if (entityType === "request") {
+    if (!REQUEST_TRANSITIONS.has(key)) {
+      return {
+        ok: false,
+        reason: `Transition ${from} -> ${to} is not an allowed request pipeline transition`,
+      };
+    }
+  } else if (entityType === "leg") {
+    if (!LEG_TRANSITIONS.has(key)) {
+      return {
+        ok: false,
+        reason: `Transition ${from} -> ${to} is not an allowed leg lifecycle transition`,
+      };
+    }
+  } else {
+    if (!TRANSITIONS.has(key)) {
+      return {
+        ok: false,
+        reason: `Transition ${from} -> ${to} is not in the allowed transitions table`,
+      };
+    }
   }
 
   // 5. Validate evidence requirements per target state
@@ -383,7 +429,15 @@ export function transitionState(
   deps: TransitionDeps = {}
 ): { newLeg?: PlanLeg; newRequest?: Request; auditEvent: StatusEvent } {
   const currentState = target.state;
-  const check = canTransition(currentState, to, evidence, deps);
+  const isReq = isRequest(target);
+  const check = isReq
+    ? canTransitionRequest(currentState as RequestState, to as RequestState, evidence, deps)
+    : canTransitionLeg(currentState as LegState, to as LegState, evidence, {
+        ...deps,
+        submittingSessionId: deps.submittingSessionId ?? target.submittingSessionId,
+        submittedBookingReference: deps.submittedBookingReference ?? target.bookingReference,
+      });
+
   if (!check.ok) {
     throw new TransitionError(currentState, to, check.reason);
   }
@@ -391,7 +445,7 @@ export function transitionState(
   const now = new Date().toISOString();
   const { evidenceType, evidenceReference } = describeEvidence(to, evidence);
 
-  if (isRequest(target)) {
+  if (isReq) {
     const newRequest: Request = { ...target, state: to as RequestState, updatedAt: now };
     const auditEvent: StatusEvent = {
       id: randomUUID(),
@@ -504,7 +558,7 @@ export function isCollected(state: LegState): boolean {
  * Stable sha256 hex over canonical JSON of a plan.
  *
  * Canonical = legs sorted by id, items per leg sorted, keys sorted within each object.
- * Changing any fee, payout, or item will change the hash.
+ * Changing any fee, payout, recycler, item, quantity, weight, or slot will change the hash.
  */
 export function hashPlan(plan: Plan): string {
   const canonical = canonicalize({
@@ -515,8 +569,20 @@ export function hashPlan(plan: Plan): string {
         id: leg.id,
         recyclerId: leg.recyclerId,
         itemIds: leg.itemIds.slice().sort(),
+        items: leg.items
+          ? leg.items
+              .slice()
+              .sort((a, b) => a.id.localeCompare(b.id))
+              .map((item) => ({
+                id: item.id,
+                category: item.category ?? null,
+                quantity: item.quantity ?? null,
+                estimatedWeightKg: item.estimatedWeightKg ?? null,
+              }))
+          : null,
         estimatedFee: leg.estimatedFee,
         estimatedPayout: leg.estimatedPayout,
+        slot: leg.slot ?? null,
       })),
     totalEstimatedFee: plan.totalEstimatedFee,
     totalEstimatedPayout: plan.totalEstimatedPayout,

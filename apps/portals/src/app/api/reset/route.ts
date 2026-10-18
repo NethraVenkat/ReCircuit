@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/repository";
 import { resolveRecyclerId } from "@/lib/config";
 
+import { timingSafeEqual } from "crypto";
+
+function safeTokenMatch(provided: string, expected: string): boolean {
+  const bufA = Buffer.from(provided);
+  const bufB = Buffer.from(expected);
+  if (bufA.length !== bufB.length) {
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -10,12 +22,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     return new NextResponse("Admin disabled", { status: 503, headers: { "Content-Type": "text/plain" } });
   }
 
+  const cookieHeader = request.headers.get("cookie") || "";
+  const cookieMatch = cookieHeader.match(/admin_token=([^;]+)/);
+  const cookieToken = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
+
   const adminHeader = request.headers.get("x-admin-token");
   const url = new URL(request.url);
   const tokenQuery = url.searchParams.get("token");
 
-  const token = adminHeader || tokenQuery;
-  if (!token || token !== adminToken) {
+  const candidate = cookieToken || adminHeader || tokenQuery;
+  if (!candidate || !safeTokenMatch(candidate, adminToken)) {
     return NextResponse.json({ ok: false, error: "Unauthorized: Invalid or missing admin token" }, { status: 401 });
   }
 

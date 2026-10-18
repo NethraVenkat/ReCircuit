@@ -20,16 +20,16 @@ export function PaperPlusLayout({ children, activePath = "/" }: PaperPlusLayoutP
 
   return (
     <div className="min-h-screen bg-amber-50/40 text-amber-950 flex flex-col">
-      {/* Top Banner */}
-      <div className="bg-amber-600 text-amber-50 px-6 py-2 text-xs flex justify-between items-center font-medium">
-        <span>Hyderabad Paper & Scrap Buyers · Kukatpally / KPHB / Madhapur</span>
-        <span data-testid="cpcb-badge" className="bg-amber-700/80 px-2.5 py-0.5 rounded text-[11px]">
-          {config.badge}
-        </span>
-      </div>
-
       {/* Header and Branding */}
       <header className="bg-white border-b border-amber-200 shadow-sm">
+        {/* Top Banner */}
+        <div className="bg-amber-600 text-amber-50 px-6 py-2 text-xs flex justify-between items-center font-medium">
+          <span>Hyderabad Paper & Scrap Buyers · Kukatpally / KPHB / Madhapur</span>
+          <span data-testid="cpcb-badge" className="bg-amber-700/80 px-2.5 py-0.5 rounded text-[11px]">
+            {config.badge}
+          </span>
+        </div>
+
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-amber-500 text-white font-black flex items-center justify-center text-xl shadow">

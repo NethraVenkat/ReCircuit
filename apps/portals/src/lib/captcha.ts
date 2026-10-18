@@ -1,36 +1,53 @@
-import { randomUUID } from "crypto";
+import {
+  randomUUID,
+  createHmac,
+  createHash,
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  timingSafeEqual,
+} from "crypto";
+import type { BookingRepository } from "./types";
 
-// Server-side in-memory captcha store attached to globalThis so all Next.js App Router routes share it
-interface CaptchaSessionData {
-  code: string;
-  createdAt: number;
+function getSecret(): string {
+  return process.env.CAPTCHA_SECRET || "dev-secret-do-not-use-in-prod";
 }
 
-const globalStore = globalThis as unknown as {
-  __rerouteCaptchaSessions?: Map<string, CaptchaSessionData>;
-};
-
-if (!globalStore.__rerouteCaptchaSessions) {
-  globalStore.__rerouteCaptchaSessions = new Map<string, CaptchaSessionData>();
+function deriveKey(secret: string): Buffer {
+  return createHash("sha256").update(secret).digest();
 }
 
-const captchaSessions = globalStore.__rerouteCaptchaSessions;
+function encryptCode(code: string, secret: string): string {
+  const iv = randomBytes(16);
+  const cipher = createCipheriv("aes-256-cbc", deriveKey(secret), iv);
+  let encrypted = cipher.update(code.toUpperCase(), "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return `${iv.toString("hex")}.${encrypted}`;
+}
 
-// Cleanup stale captchas older than 15 minutes
-function cleanupOldSessions(): void {
-  const now = Date.now();
-  for (const [sid, data] of captchaSessions.entries()) {
-    if (now - data.createdAt > 15 * 60 * 1000) {
-      captchaSessions.delete(sid);
-    }
+function decryptCode(enc: string, secret: string): string | null {
+  try {
+    const [ivHex, encHex] = enc.split(".");
+    if (!ivHex || !encHex) return null;
+    const iv = Buffer.from(ivHex, "hex");
+    const decipher = createDecipheriv("aes-256-cbc", deriveKey(secret), iv);
+    let decrypted = decipher.update(encHex, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted.trim().toUpperCase();
+  } catch {
+    return null;
   }
 }
 
-export function getStoredCaptchaCode(sessionId: string): string | undefined {
-  const session = captchaSessions.get(sessionId);
-  return session ? session.code : undefined;
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
 }
-
 
 /**
  * Basic character vector paths for 0-9 and A-Z so code is drawn purely with <path d="...">
@@ -71,32 +88,109 @@ const GLYPH_PATHS: Record<string, string> = {
 const CHAR_SET = "ABCDEFGHJKLMNPRSTWXYZ23456789"; // No ambiguous 0, O, 1, I
 
 /**
- * Creates a new CAPTCHA session and returns its ID.
+ * Creates a stateless HMAC-signed CAPTCHA session and returns its ID.
+ * Token format: encCode:codeHash:expiry:nonce:signature
  */
 export function createCaptchaSession(): { sessionId: string; code: string } {
-  cleanupOldSessions();
-  const sessionId = randomUUID();
+  const secret = getSecret();
   let code = "";
   for (let i = 0; i < 5; i++) {
     code += CHAR_SET.charAt(Math.floor(Math.random() * CHAR_SET.length));
   }
-  captchaSessions.set(sessionId, { code, createdAt: Date.now() });
+
+  const encCode = encryptCode(code, secret);
+  const codeHash = createHmac("sha256", secret).update(code).digest("hex");
+  const expiry = Date.now() + 15 * 60 * 1000; // 15 min TTL
+  const nonce = randomUUID();
+  const payload = `${encCode}:${codeHash}:${expiry}:${nonce}`;
+  const signature = createHmac("sha256", secret).update(payload).digest("hex");
+
+  const sessionId = `${payload}:${signature}`;
   return { sessionId, code };
 }
 
 /**
- * Validates the user's submitted CAPTCHA code against the session ID.
+ * Recovers the plaintext code from a stateless token to render the SVG.
  */
+export function getStoredCaptchaCode(sessionId: string): string | undefined {
+  if (!sessionId) return undefined;
+  const parts = sessionId.split(":");
+  if (parts.length !== 5) return undefined;
+  const [encCode, codeHash, expiryStr, nonce, sig] = parts;
+  if (!encCode || !codeHash || !expiryStr || !nonce || !sig) return undefined;
+
+  const secret = getSecret();
+  const payload = `${encCode}:${codeHash}:${expiryStr}:${nonce}`;
+  const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
+  if (!safeEqual(sig, expectedSig)) return undefined;
+
+  const expiry = Number(expiryStr);
+  if (Date.now() > expiry) return undefined;
+
+  const decrypted = decryptCode(encCode, secret);
+  return decrypted || undefined;
+}
+
+/**
+ * Validates the user's submitted CAPTCHA code against the session ID.
+ * Supports repository nonce tracking to prevent replay attacks.
+ */
+export async function verifyCaptchaToken(
+  sessionId: string,
+  code: string,
+  repo?: BookingRepository
+): Promise<boolean> {
+  if (!sessionId || !code) return false;
+  const parts = sessionId.split(":");
+  if (parts.length !== 5) return false;
+  const [encCode, codeHash, expiryStr, nonce, sig] = parts;
+  if (!encCode || !codeHash || !expiryStr || !nonce || !sig) return false;
+
+  const secret = getSecret();
+  const payload = `${encCode}:${codeHash}:${expiryStr}:${nonce}`;
+  const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
+  if (!safeEqual(sig, expectedSig)) return false;
+
+  const expiry = Number(expiryStr);
+  if (Date.now() > expiry) return false;
+
+  const submittedHash = createHmac("sha256", secret).update(code.trim().toUpperCase()).digest("hex");
+  if (!safeEqual(submittedHash, codeHash)) return false;
+
+  if (repo) {
+    const isUsed = await repo.isNonceUsed(nonce);
+    if (isUsed) return false;
+    await repo.recordUsedNonce(nonce, expiry);
+  }
+
+  return true;
+}
+
+// Global in-memory used nonces for synchronous verifyCaptchaCode
+const memoryUsedNonces = new Set<string>();
+
 export function verifyCaptchaCode(sessionId: string, code: string): boolean {
   if (!sessionId || !code) return false;
-  const session = captchaSessions.get(sessionId);
-  if (!session) return false;
+  const parts = sessionId.split(":");
+  if (parts.length !== 5) return false;
+  const [encCode, codeHash, expiryStr, nonce, sig] = parts;
+  if (!encCode || !codeHash || !expiryStr || !nonce || !sig) return false;
 
-  const isValid = session.code.toUpperCase() === code.trim().toUpperCase();
-  if (isValid) {
-    captchaSessions.delete(sessionId); // One-time use
-  }
-  return isValid;
+  const secret = getSecret();
+  const payload = `${encCode}:${codeHash}:${expiryStr}:${nonce}`;
+  const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
+  if (!safeEqual(sig, expectedSig)) return false;
+
+  const expiry = Number(expiryStr);
+  if (Date.now() > expiry) return false;
+
+  if (memoryUsedNonces.has(nonce)) return false;
+
+  const submittedHash = createHmac("sha256", secret).update(code.trim().toUpperCase()).digest("hex");
+  if (!safeEqual(submittedHash, codeHash)) return false;
+
+  memoryUsedNonces.add(nonce);
+  return true;
 }
 
 /**

@@ -200,12 +200,22 @@ export interface RecyclerPolicy {
   createdAt: string;
 }
 
+export interface PlanLegItem {
+  id: string;
+  category?: ItemCategory;
+  description?: string;
+  quantity?: number;
+  estimatedWeightKg?: number;
+}
+
 export interface PlanLeg {
   id: string;
   planId: string;
   recyclerId: string;
   recyclerName: string;
   itemIds: string[];
+  items?: PlanLegItem[];
+  slot?: string;
   estimatedFee: number;
   estimatedPayout: number;
   state: LegState;

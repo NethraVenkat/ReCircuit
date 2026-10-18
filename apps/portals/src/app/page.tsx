@@ -29,7 +29,7 @@ export default function HomePage(): JSX.Element {
             <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-sm">
               <h3 className="font-bold text-emerald-900 mb-2">Accepted Electronics</h3>
               <p className="text-xs text-slate-600 leading-relaxed mb-4">
-                We accept laptops, desktops, mobile phones, chargers, and household batteries with certified safe disposal.
+                {config.rates.acceptedSummary}
               </p>
               <Link
                 href={config.routes.items}
@@ -42,7 +42,7 @@ export default function HomePage(): JSX.Element {
             <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-sm">
               <h3 className="font-bold text-emerald-900 mb-2">Pickup Charges & Rates</h3>
               <p className="text-xs text-slate-600 leading-relaxed mb-4">
-                Free pickup for 5 kg or more. ₹180 fee for under 5 kg. Payouts up to ₹250 for dead laptops.
+                {config.rates.payoutDescription}
               </p>
               <Link
                 href={config.routes.fees}
@@ -75,8 +75,7 @@ export default function HomePage(): JSX.Element {
               component dismantling, and eco-friendly metal recovery.
             </p>
             <div className="text-xs bg-emerald-50 text-emerald-900 p-3 rounded border border-emerald-200 font-medium">
-              Notice: We strictly reject paper, cardboard, plastics, and domestic municipal waste. Bookings containing
-              rejected materials will be cancelled upon arrival.
+              {config.rates.rejectedSummary}
             </div>
           </div>
         </div>
@@ -92,7 +91,7 @@ export default function HomePage(): JSX.Element {
           <div className="bg-amber-100/60 p-6 rounded-lg border border-amber-300 text-center space-y-2">
             <h2 className="text-3xl font-black text-amber-950">Sell Old Paper & Cardboard at Highest Rates</h2>
             <p className="text-sm text-amber-800 font-semibold max-w-xl mx-auto">
-              Doorstep scrap collection across Hyderabad. We weigh with certified electronic scales and pay instant cash!
+              {config.rates.payoutDescription}
             </p>
             <div className="pt-2">
               <Link

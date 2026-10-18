@@ -26,30 +26,16 @@ function AdminPageContent(): JSX.Element {
   const slots = getAvailableSlots();
 
   const loadData = useCallback(async (): Promise<void> => {
-    if (!token) {
-      // Check if admin is disabled globally
-      try {
-        const res = await fetch("/api/admin");
-        if (res.status === 503) {
-          setAdminDisabled(true);
-          return;
-        }
-      } catch {
-        // network
-      }
-      setAuthenticated(false);
-      return;
-    }
-
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin?token=${encodeURIComponent(token)}`);
+      const url = token ? `/api/admin?token=${encodeURIComponent(token)}` : "/api/admin";
+      const res = await fetch(url);
       if (res.status === 503) {
         setAdminDisabled(true);
         setLoading(false);
         return;
       }
-      if (res.status === 401) {
+      if (res.status === 401 || !res.ok) {
         setAuthenticated(false);
         setLoading(false);
         return;
@@ -57,6 +43,9 @@ function AdminPageContent(): JSX.Element {
 
       const data = await res.json();
       setAuthenticated(true);
+      if (typeof window !== "undefined" && window.location.search.includes("token=")) {
+        window.history.replaceState({}, "", "/admin");
+      }
       setRecyclerId(data.recyclerId || "deccan");
       setBookings(data.bookings || []);
       setSwitches(data.switches || { failNextSubmit: false, omitNextReference: false, changedPolicyLayout: false });

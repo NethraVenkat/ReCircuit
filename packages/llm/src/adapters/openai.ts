@@ -1,4 +1,5 @@
 import type { LlmAdapter, ModelTier } from "../types.js";
+import { LlmConfigurationError } from "../types.js";
 
 export class OpenAiAdapter implements LlmAdapter {
   private apiKey: string;
@@ -6,7 +7,7 @@ export class OpenAiAdapter implements LlmAdapter {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.LLM_API_KEY || "";
     if (!this.apiKey) {
-      throw new Error("Missing OpenAI API Key (LLM_API_KEY)");
+      throw new LlmConfigurationError("Missing OpenAI API Key (LLM_API_KEY)");
     }
   }
 
@@ -24,23 +25,39 @@ export class OpenAiAdapter implements LlmAdapter {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0,
-        }),
-        signal: controller.signal,
-      });
+      let attempt = 0;
+      const maxRetries = 2;
+      let response!: Response;
+
+      while (attempt <= maxRetries) {
+        response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: user },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0,
+          }),
+          signal: controller.signal,
+        });
+
+        if (response.status === 429 && attempt < maxRetries) {
+          attempt++;
+          const baseDelay = 1000 * Math.pow(2, attempt);
+          const jitter = Math.floor(Math.random() * 500);
+          await new Promise((res) => setTimeout(res, baseDelay + jitter));
+          continue;
+        }
+
+        break;
+      }
 
       if (!response.ok) {
         const status = response.status;

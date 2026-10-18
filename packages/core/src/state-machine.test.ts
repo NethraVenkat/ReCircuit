@@ -907,6 +907,129 @@ describe("hashPlan and makeIdempotencyKey", () => {
     expect(hashPlan(p1)).not.toBe(hashPlan(p2));
   });
 
+  it("hashPlan changes when recycler changes", () => {
+    const now = new Date().toISOString();
+    const baseLeg: PlanLeg = {
+      id: "leg-1",
+      planId: "p-1",
+      recyclerId: "recycler-deccan",
+      recyclerName: "Deccan",
+      itemIds: ["i-1"],
+      estimatedFee: 0,
+      estimatedPayout: 250,
+      state: "APPROVED",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const p1: Plan = { id: "p-1", requestId: "r-1", legs: [baseLeg], totalEstimatedFee: 0, totalEstimatedPayout: 250, planHash: "", createdAt: now };
+    const p2: Plan = { ...p1, legs: [{ ...baseLeg, recyclerId: "recycler-paperplus" }] };
+    expect(hashPlan(p1)).not.toBe(hashPlan(p2));
+  });
+
+  it("hashPlan changes when items change", () => {
+    const now = new Date().toISOString();
+    const baseLeg: PlanLeg = {
+      id: "leg-1",
+      planId: "p-1",
+      recyclerId: "recycler-deccan",
+      recyclerName: "Deccan",
+      itemIds: ["i-1"],
+      estimatedFee: 0,
+      estimatedPayout: 250,
+      state: "APPROVED",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const p1: Plan = { id: "p-1", requestId: "r-1", legs: [baseLeg], totalEstimatedFee: 0, totalEstimatedPayout: 250, planHash: "", createdAt: now };
+    const p2: Plan = { ...p1, legs: [{ ...baseLeg, itemIds: ["i-1", "i-2"] }] };
+    expect(hashPlan(p1)).not.toBe(hashPlan(p2));
+  });
+
+  it("hashPlan changes when quantities change", () => {
+    const now = new Date().toISOString();
+    const baseLeg: PlanLeg = {
+      id: "leg-1",
+      planId: "p-1",
+      recyclerId: "recycler-deccan",
+      recyclerName: "Deccan",
+      itemIds: ["i-1"],
+      items: [{ id: "i-1", category: "ELECTRONICS", quantity: 1, estimatedWeightKg: 2.2 }],
+      estimatedFee: 0,
+      estimatedPayout: 250,
+      state: "APPROVED",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const p1: Plan = { id: "p-1", requestId: "r-1", legs: [baseLeg], totalEstimatedFee: 0, totalEstimatedPayout: 250, planHash: "", createdAt: now };
+    const p2: Plan = {
+      ...p1,
+      legs: [{ ...baseLeg, items: [{ id: "i-1", category: "ELECTRONICS", quantity: 3, estimatedWeightKg: 2.2 }] }],
+    };
+    expect(hashPlan(p1)).not.toBe(hashPlan(p2));
+  });
+
+  it("hashPlan changes when weights change", () => {
+    const now = new Date().toISOString();
+    const baseLeg: PlanLeg = {
+      id: "leg-1",
+      planId: "p-1",
+      recyclerId: "recycler-deccan",
+      recyclerName: "Deccan",
+      itemIds: ["i-1"],
+      items: [{ id: "i-1", category: "ELECTRONICS", quantity: 1, estimatedWeightKg: 2.2 }],
+      estimatedFee: 0,
+      estimatedPayout: 250,
+      state: "APPROVED",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const p1: Plan = { id: "p-1", requestId: "r-1", legs: [baseLeg], totalEstimatedFee: 0, totalEstimatedPayout: 250, planHash: "", createdAt: now };
+    const p2: Plan = {
+      ...p1,
+      legs: [{ ...baseLeg, items: [{ id: "i-1", category: "ELECTRONICS", quantity: 1, estimatedWeightKg: 5.0 }] }],
+    };
+    expect(hashPlan(p1)).not.toBe(hashPlan(p2));
+  });
+
+  it("hashPlan changes when payout changes", () => {
+    const now = new Date().toISOString();
+    const baseLeg: PlanLeg = {
+      id: "leg-1",
+      planId: "p-1",
+      recyclerId: "recycler-deccan",
+      recyclerName: "Deccan",
+      itemIds: ["i-1"],
+      estimatedFee: 0,
+      estimatedPayout: 250,
+      state: "APPROVED",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const p1: Plan = { id: "p-1", requestId: "r-1", legs: [baseLeg], totalEstimatedFee: 0, totalEstimatedPayout: 250, planHash: "", createdAt: now };
+    const p2: Plan = { ...p1, legs: [{ ...baseLeg, estimatedPayout: 300 }], totalEstimatedPayout: 300 };
+    expect(hashPlan(p1)).not.toBe(hashPlan(p2));
+  });
+
+  it("hashPlan changes when slot changes", () => {
+    const now = new Date().toISOString();
+    const baseLeg: PlanLeg = {
+      id: "leg-1",
+      planId: "p-1",
+      recyclerId: "recycler-deccan",
+      recyclerName: "Deccan",
+      itemIds: ["i-1"],
+      slot: "2026-11-01T10:00:00+05:30",
+      estimatedFee: 0,
+      estimatedPayout: 250,
+      state: "APPROVED",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const p1: Plan = { id: "p-1", requestId: "r-1", legs: [baseLeg], totalEstimatedFee: 0, totalEstimatedPayout: 250, planHash: "", createdAt: now };
+    const p2: Plan = { ...p1, legs: [{ ...baseLeg, slot: "2026-11-02T15:00:00+05:30" }] };
+    expect(hashPlan(p1)).not.toBe(hashPlan(p2));
+  });
+
   it("makeIdempotencyKey generates deterministic sha256 hex", () => {
     const k1 = makeIdempotencyKey(PLAN_HASH_A, "leg-1", "r-1");
     const k2 = makeIdempotencyKey(PLAN_HASH_A, "leg-1", "r-1");
@@ -914,6 +1037,95 @@ describe("hashPlan and makeIdempotencyKey", () => {
     expect(k1).toHaveLength(64);
     expect(k1).toBe(k2);
     expect(k1).not.toBe(k3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Strict Request vs Leg Transition Separation
+// ---------------------------------------------------------------------------
+
+describe("Strict Separation: Request vs Leg Transitions", () => {
+  it("rejects transitioning a Request to a Leg state (e.g. SUBMITTING)", () => {
+    const req = makeRequest("APPROVED");
+    expect(() =>
+      transitionState(req, "SUBMITTING" as unknown as RequestState, idempotencyEvidence)
+    ).toThrow(TransitionError);
+  });
+
+  it("rejects transitioning a Leg to a Request state (e.g. ITEMS_PARSED)", () => {
+    const leg = makeLeg("APPROVED");
+    expect(() =>
+      transitionState(leg, "ITEMS_PARSED" as unknown as LegState, {})
+    ).toThrow(TransitionError);
+  });
+
+  it("canTransitionRequest returns false when given a leg transition", () => {
+    const check = canTransition("APPROVED", "SUBMITTING", idempotencyEvidence, {}, "request");
+    expect(check.ok).toBe(false);
+    if (!check.ok) {
+      expect(check.reason).toMatch(/not an allowed request pipeline transition/i);
+    }
+  });
+
+  it("canTransitionLeg returns false when given a request transition", () => {
+    const check = canTransition("AWAITING_APPROVAL", "APPROVED", { approvalId: randomUUID(), planHash: PLAN_HASH_A }, {}, "leg");
+    expect(check.ok).toBe(false);
+    if (!check.ok) {
+      expect(check.reason).toMatch(/not an allowed leg lifecycle transition/i);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Exhaustive Request Pipeline Pairs
+// ---------------------------------------------------------------------------
+
+describe("Exhaustive Request Pipeline Pairs", () => {
+  it("verifies all 10 explicit request transition pairs can be executed", () => {
+    const pairs = [
+      { from: "DRAFT", to: "ITEMS_PARSED", ev: {} },
+      { from: "ITEMS_PARSED", to: "NEEDS_CLARIFICATION", ev: {} },
+      { from: "NEEDS_CLARIFICATION", to: "ITEMS_PARSED", ev: {} },
+      { from: "ITEMS_PARSED", to: "RECYCLERS_DISCOVERED", ev: {} },
+      {
+        from: "RECYCLERS_DISCOVERED",
+        to: "POLICIES_READ",
+        ev: { url: "https://deccan.example.com", screenshotRef: "s://p.png", extractedAt: new Date().toISOString(), sessionId: "sess-1" },
+      },
+      { from: "POLICIES_READ", to: "ELIGIBILITY_CHECKED", ev: {} },
+      {
+        from: "ELIGIBILITY_CHECKED",
+        to: "PLAN_CREATED",
+        ev: { planId: randomUUID(), planHash: PLAN_HASH_A, approvalReason: "Budget check" },
+      },
+      {
+        from: "PLAN_CREATED",
+        to: "AWAITING_APPROVAL",
+        ev: { planId: randomUUID(), planHash: PLAN_HASH_A, approvalReason: "Requires user signature" },
+      },
+      {
+        from: "AWAITING_APPROVAL",
+        to: "APPROVED",
+        ev: { approvalId: randomUUID(), planHash: PLAN_HASH_A },
+        deps: { currentPlanHash: PLAN_HASH_A },
+      },
+      {
+        from: "AWAITING_APPROVAL",
+        to: "REJECTED",
+        ev: { decision: "User declined fee", decidedAt: new Date().toISOString() },
+      },
+    ];
+
+    for (const pair of pairs) {
+      const check = canTransition(
+        pair.from as RequestState,
+        pair.to as RequestState,
+        pair.ev,
+        pair.deps || {},
+        "request"
+      );
+      expect(check.ok).toBe(true);
+    }
   });
 });
 
