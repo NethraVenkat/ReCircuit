@@ -6,9 +6,38 @@
 
 import { z } from "zod";
 
+export const CANONICAL_CATEGORIES = [
+  "laptop",
+  "desktop",
+  "mobile_phone",
+  "charger_cable",
+  "battery_household",
+  "small_electronics",
+  "large_appliance",
+  "newspaper",
+  "cardboard",
+  "books_magazines",
+  "plastic",
+  "metal",
+  "glass",
+  "textiles",
+  "hazardous",
+  "other",
+] as const;
+
+export type CanonicalCategory = (typeof CANONICAL_CATEGORIES)[number];
+
+/**
+ * Type guard ensuring a value is strictly one of the 16 canonical taxonomy categories,
+ * never a coarse domain ItemCategory.
+ */
+export function isCanonicalCategory(value: unknown): value is CanonicalCategory {
+  return typeof value === "string" && (CANONICAL_CATEGORIES as readonly string[]).includes(value);
+}
+
 export const LlmProposedItemSchema = z.object({
   rawText: z.string(),
-  category: z.string(),
+  category: z.enum(CANONICAL_CATEGORIES),
   subcategory: z.string().optional(),
   quantity: z.number().int().positive().default(1),
   declaredWeightKg: z.number().positive().nullable().optional(),

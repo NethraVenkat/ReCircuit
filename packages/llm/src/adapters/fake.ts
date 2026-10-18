@@ -123,6 +123,32 @@ export class FakeLlmAdapter implements LlmAdapter {
       });
     }
 
+    // Exact demo sentence: "I have one dead Dell laptop, two old batteries and around 8 kg of newspaper in Kukatpally, Hyderabad. Don't charge me more than ₹150."
+    if (lower.includes("one dead dell laptop") && lower.includes("two old batteries")) {
+      return JSON.stringify({
+        location: { rawText: "Kukatpally, Hyderabad 500072", locality: "Kukatpally", pincode: "500072", city: "Hyderabad", confidence: 0.98 },
+        feeCapInr: 150,
+        items: [
+          { rawText: "one dead Dell laptop", category: "laptop", quantity: 1, hazardClass: "battery_li_ion", confidence: 0.98 },
+          { rawText: "two old batteries", category: "battery_household", quantity: 2, hazardClass: "battery_alkaline", confidence: 0.95 },
+          { rawText: "around 8 kg of newspaper", category: "newspaper", quantity: 1, declaredWeightKg: 8, confidence: 0.95 },
+        ],
+        clarifications: [],
+      });
+    }
+
+    // A pair of chargers
+    if (lower.includes("pair of chargers")) {
+      return JSON.stringify({
+        location: { rawText: "Madhapur, Hyderabad", locality: "Madhapur", pincode: "500081", city: "Hyderabad", confidence: 0.95 },
+        feeCapInr: null,
+        items: [
+          { rawText: "a pair of chargers", category: "charger_cable", quantity: 2, hazardClass: "none", confidence: 0.95 },
+        ],
+        clarifications: [],
+      });
+    }
+
     // 3 items demo sentence: laptop, newspapers, AA batteries
     if (lower.includes("dell laptop") && lower.includes("newspaper") && lower.includes("batteries")) {
       return JSON.stringify({

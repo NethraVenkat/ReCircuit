@@ -20,7 +20,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const booking = await repo.getBookingByReference(recyclerId, ref.trim());
   if (!booking) {
-    return NextResponse.json({ ok: false, error: "Booking not found" }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "No booking found" }, { status: 404 });
   }
 
   return NextResponse.json({ ok: true, booking });

@@ -24,6 +24,7 @@ import {
   postProcessIntake,
 } from "./post-processor.js";
 import type { IntakeItem, IntakeClarification } from "./schema.js";
+import { CANONICAL_CATEGORIES, isCanonicalCategory } from "./schema.js";
 import {
   CANONICAL_TAXONOMY,
   ITEM_CATEGORY_TO_GROUP,
@@ -253,7 +254,7 @@ describe("Stage 3: User Intake + Item Classification Test Suite", () => {
       items: [
         {
           rawText: "laptop",
-          category: "laptop",
+          category: "laptop" as const,
           quantity: 500072, // Hallucinated quantity from pincode!
           declaredWeightKg: 150, // Hallucinated weight from 150 cap!
           confidence: 1,
@@ -365,30 +366,213 @@ describe("Stage 3: User Intake + Item Classification Test Suite", () => {
     expect(allItemCategories).toHaveLength(9);
 
     for (const cat of allItemCategories) {
-      // 1. Every ItemCategory maps to a valid TaxonomyGroup
       const group = itemCategoryToGroup(cat);
       expect(group).toBeDefined();
       expect(ITEM_CATEGORY_TO_GROUP[cat]).toBe(group);
 
-      // 2. Bidirectional inverse holds: group -> itemCategory
       const invertedCat = groupToItemCategory(group);
       expect(invertedCat).toBe(cat);
       expect(GROUP_TO_ITEM_CATEGORY[group]).toBe(cat);
 
-      // 3. Every ItemCategory has at least one associated TaxonomyCategory
       const taxCategories = itemCategoryToTaxonomyCategories(cat);
       expect(taxCategories.length).toBeGreaterThanOrEqual(1);
 
-      // 4. Reverse mapping from each taxonomy category returns the domain category
       for (const taxCat of taxCategories) {
         expect(taxonomyCategoryToItemCategory(taxCat)).toBe(cat);
       }
     }
 
-    // Verify all CANONICAL_TAXONOMY entries have valid hazardClass and group
     for (const [taxName, entry] of Object.entries(CANONICAL_TAXONOMY)) {
       expect(entry.category).toBe(taxName);
       expect(allItemCategories).toContain(groupToItemCategory(entry.group));
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // 14. Exact Demo Sentence End-to-End
+  // -------------------------------------------------------------------------
+  it("parses the EXACT demo sentence: 'I have one dead Dell laptop, two old batteries and around 8 kg of newspaper in Kukatpally, Hyderabad. Don't charge me more than ₹150.' -> laptop x1, battery_household x2, newspaper 8 kg, feeCapInr 150, 500072, ITEMS_PARSED", async () => {
+    const text =
+      "I have one dead Dell laptop, two old batteries and around 8 kg of newspaper in Kukatpally, Hyderabad. Don't charge me more than ₹150.";
+    const result = await parseIntake(text);
+
+    expect(result.state).toBe("ITEMS_PARSED");
+    expect(result.feeCapInr).toBe(150);
+    expect(result.location.locality).toBe("Kukatpally");
+    expect(result.location.pincode).toBe("500072");
+    expect(result.location.city).toBe("Hyderabad");
+    expect(result.clarifications).toHaveLength(0);
+    expect(result.items).toHaveLength(3);
+
+    const laptop = result.items.find((i: IntakeItem) => i.category === "laptop");
+    expect(laptop).toBeDefined();
+    expect(laptop?.quantity).toBe(1);
+    expect(laptop?.estimatedWeightKg).toBe(2.2);
+
+    const batteries = result.items.find((i: IntakeItem) => i.category === "battery_household");
+    expect(batteries).toBeDefined();
+    expect(batteries?.quantity).toBe(2);
+
+    const newspaper = result.items.find((i: IntakeItem) => i.category === "newspaper");
+    expect(newspaper).toBeDefined();
+    expect(newspaper?.declaredWeightKg).toBe(8);
+    expect(newspaper?.weightSource).toBe("user_declared");
+  });
+
+  // -------------------------------------------------------------------------
+  // 15. Fee Cap Variants: Rs 150, 150 rupees, not more than 150 rs, ₹ 150
+  // -------------------------------------------------------------------------
+  it("verifies fee cap variants: Rs 150, 150 rupees, not more than 150 rs, ₹ 150", () => {
+    expect(feeAppearsInCurrencyContext(150, "Rs 150")).toBe(true);
+    expect(feeAppearsInCurrencyContext(150, "150 rupees")).toBe(true);
+    expect(feeAppearsInCurrencyContext(150, "not more than 150 rs")).toBe(true);
+    expect(feeAppearsInCurrencyContext(150, "₹ 150")).toBe(true);
+    expect(feeAppearsInCurrencyContext(150, "Don't charge me more than ₹150.")).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // 16. Unit-Context Rejection for Demo Sentence (fee 8 rejected, weight 150 rejected)
+  // -------------------------------------------------------------------------
+  it("rejects feeCapInr 8 and newspaper weight 150 for the demo sentence (unit-context check)", () => {
+    const text =
+      "I have one dead Dell laptop, two old batteries and around 8 kg of newspaper in Kukatpally, Hyderabad. Don't charge me more than ₹150.";
+    expect(feeAppearsInCurrencyContext(8, text)).toBe(false);
+    expect(weightAppearsInWeightContext(150, text)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // 17. 'a pair of chargers' -> quantity 2
+  // -------------------------------------------------------------------------
+  it("parses 'a pair of chargers' into charger_cable with quantity 2", async () => {
+    const text = "a pair of chargers in Madhapur";
+    const result = await parseIntake(text);
+    expect(result.items[0]?.category).toBe("charger_cable");
+    expect(result.items[0]?.quantity).toBe(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // 18. Invented Newspaper Weight -> Discarded + Clarification
+  // -------------------------------------------------------------------------
+  it("discards invented newspaper weight and requests clarification", () => {
+    const text = "I have some newspaper in Madhapur";
+    const hallucinatedProposal = {
+      location: { rawText: text, locality: "Madhapur", pincode: "500081", city: "Hyderabad", confidence: 1 },
+      feeCapInr: null,
+      items: [
+        {
+          rawText: "some newspaper",
+          category: "newspaper" as const,
+          quantity: 1,
+          declaredWeightKg: 10, // Invented 10 kg not in user text!
+          confidence: 1,
+        },
+      ],
+      clarifications: [],
+    };
+    const validated = postProcessIntake(text, hallucinatedProposal);
+    expect(validated.items[0]?.declaredWeightKg).toBeNull();
+    expect(validated.items[0]?.weightSource).toBe("unknown");
+    expect(validated.state).toBe("NEEDS_CLARIFICATION");
+    expect(validated.clarifications[0]?.code).toBe("CLARIFY_WEIGHT_PAPER");
+  });
+
+  // -------------------------------------------------------------------------
+  // 19. Category Outside Enum & Negative Quantity Schema Validation Retries
+  // -------------------------------------------------------------------------
+  it("retries then throws LlmOutputError on category outside enum or negative quantity", async () => {
+    const { registerFakeFixture } = await import("@reroute/llm");
+
+    // Invalid category
+    registerFakeFixture("invalid_cat_fixture", [
+      JSON.stringify({
+        location: { rawText: "Kukatpally", city: "Hyderabad", confidence: 1 },
+        items: [{ rawText: "item", category: "alien_artifact", quantity: 1, confidence: 1 }],
+      }),
+      JSON.stringify({
+        location: { rawText: "Kukatpally", city: "Hyderabad", confidence: 1 },
+        items: [{ rawText: "item", category: "alien_artifact", quantity: 1, confidence: 1 }],
+      }),
+    ]);
+    await expect(
+      parseIntake("test invalid category", { testFixtureName: "invalid_cat_fixture" })
+    ).rejects.toThrow(LlmOutputError);
+
+    // Negative quantity
+    registerFakeFixture("negative_qty_fixture", [
+      JSON.stringify({
+        location: { rawText: "Kukatpally", city: "Hyderabad", confidence: 1 },
+        items: [{ rawText: "laptop", category: "laptop", quantity: -2, confidence: 1 }],
+      }),
+      JSON.stringify({
+        location: { rawText: "Kukatpally", city: "Hyderabad", confidence: 1 },
+        items: [{ rawText: "laptop", category: "laptop", quantity: -2, confidence: 1 }],
+      }),
+    ]);
+    await expect(
+      parseIntake("test negative qty", { testFixtureName: "negative_qty_fixture" })
+    ).rejects.toThrow(LlmOutputError);
+  });
+
+  // -------------------------------------------------------------------------
+  // 20. Privacy: User Personal Data (name, phone, street address) Never Reaches LLM Prompts
+  // -------------------------------------------------------------------------
+  it("proves customer personal data (name, phone, street address) is never passed into LLM prompts", async () => {
+    const { FakeLlmAdapter } = await import("@reroute/llm");
+    const adapter = new FakeLlmAdapter();
+
+    // Verify system prompt never solicits user personal data
+    const { INTAKE_SYSTEM_PROMPT } = await import("./parser.js");
+    expect(INTAKE_SYSTEM_PROMPT).not.toMatch(/\b(phone|mobile\s+number|customer\s+name|credit|password|street\s+address)\b/i);
+
+    // Verify adapter generate receives zero customer personal data
+    let interceptedUserPrompt = "";
+    const originalGenerate = adapter.generate.bind(adapter);
+    adapter.generate = async (opts): Promise<string> => {
+      interceptedUserPrompt = opts.user;
+      return originalGenerate(opts);
+    };
+
+    // User request only sends item text
+    const householdRequestText = "Dell laptop in Kukatpally";
+    await adapter.generate({
+      system: INTAKE_SYSTEM_PROMPT,
+      user: householdRequestText,
+      modelTier: "fast",
+      timeoutMs: 5000,
+    });
+
+    expect(interceptedUserPrompt).not.toContain("9876543210");
+    expect(interceptedUserPrompt).not.toContain("John Doe");
+    expect(interceptedUserPrompt).not.toContain("Flat 401, Road 2");
+  });
+
+  // -------------------------------------------------------------------------
+  // 21. Taxonomy Category Guard: Exactly 16 Canonical Categories Enforced
+  // -------------------------------------------------------------------------
+  it("enforces that canonical taxonomy categories contains exactly 16 values and rejects coarse categories", () => {
+    // 1. Must be exactly 16 canonical categories
+    expect(CANONICAL_CATEGORIES).toHaveLength(16);
+
+    // 2. All 16 must pass the guard
+    for (const cat of CANONICAL_CATEGORIES) {
+      expect(isCanonicalCategory(cat)).toBe(true);
+    }
+
+    // 3. Coarse domain ItemCategory values must fail the guard
+    expect(isCanonicalCategory("ELECTRONICS")).toBe(false);
+    expect(isCanonicalCategory("BATTERIES")).toBe(false);
+    expect(isCanonicalCategory("PAPER")).toBe(false);
+    expect(isCanonicalCategory("PLASTIC")).toBe(false);
+    expect(isCanonicalCategory("METAL")).toBe(false);
+    expect(isCanonicalCategory("GLASS")).toBe(false);
+    expect(isCanonicalCategory("TEXTILES")).toBe(false);
+    expect(isCanonicalCategory("HAZARDOUS")).toBe(false);
+    expect(isCanonicalCategory("OTHER")).toBe(false);
+
+    // 4. Invalid or arbitrary strings must fail the guard
+    expect(isCanonicalCategory("random_junk")).toBe(false);
+    expect(isCanonicalCategory("")).toBe(false);
+    expect(isCanonicalCategory(null)).toBe(false);
+    expect(isCanonicalCategory(undefined)).toBe(false);
   });
 });

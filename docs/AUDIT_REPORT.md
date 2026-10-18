@@ -128,3 +128,4 @@ Clarification: [LOCATION_OUTSIDE_SERVICE_AREA] ReRoute currently only operates w
 All Stage 0–3 modules are verified, completely offline functional, robustly tested, and strictly compliant with the deterministic safety rules of ReRoute.
 
 **Stage 4 (Browser Automation & Policy Reader) may now begin.**
+

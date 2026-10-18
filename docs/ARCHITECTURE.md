@@ -5,9 +5,9 @@ Status: **design (Stage 0)**. Nothing below is implemented yet; see `STATUS.md`.
 
 ## 1. Design principles
 
-1. **The LLM interprets; code decides.** The LLM parses text, reads messy policy pages and explains plans. Eligibility, money, approval and state transitions are deterministic TypeScript in `packages/core`, unit-tested without any network.
+1. **The LLM interprets; code decides.** The LLM parses text, reads messy policy pages and explains plans. Eligibility, money, approval and state transitions are deterministic TypeScript in `packages/core`, unit-tested without any network. Eligibility, pricing, and routing (Stage 5) MUST use canonical taxonomy categories (the 16 canonical categories defined in `CANONICAL_CATEGORIES` via `isCanonicalCategory`), never coarse domain categories (`ItemCategory`).
 2. **No evidence, no transition.** Every leg state change goes through `transitionState()`, which rejects a move whose required evidence is missing.
-3. **The browser acts on real pages.** Booking and verification happen by driving the mock recycler websites in Browserbase sessions. The worker never calls a portal's internal API to fake a booking.
+3. **The browser acts on real pages.** Booking and verification happen by driving the mock recycler websites in Browserbase sessions (or local Playwright in offline dev). The ReRoute agent and verifier never call portal JSON APIs; they operate HTML pages via browser.
 4. **Fail closed.** Extraction failure, timeout, missing reference or tracking mismatch stops the leg in a visible state (`FAILED`, `NEEDS_HUMAN`, or stays put). It never reports success it did not observe.
 5. **Small, one language.** TypeScript end to end, npm workspaces, three deployable apps, one database.
 
@@ -75,12 +75,12 @@ Why three portal deployments from one codebase: each gets its own origin and URL
 | --- | --- | --- | --- |
 | IntakeParser | Text → `{location, feeCapInr, items[]}`; confidence per field; `NEEDS_CLARIFICATION` when low | Yes (fast model) | `items`, trace event |
 | PolicyReader | Open each recycler site, find policy/fee pages, extract with schema; retry once, then fail safe | Yes (via Stagehand extract) | `recycler_policies` row + screenshot + session/replay id |
-| core.eligibility | Item × recycler → `ACCEPTED / REJECTED / UNKNOWN` with reason quoting the extracted rule | No | matrix |
+| core.eligibility | Item × recycler → `ACCEPTED / REJECTED / UNKNOWN` with reason quoting extracted rule. Evaluated strictly using canonical taxonomy categories (16 categories via `isCanonicalCategory`), never coarse `ItemCategory` | No | matrix |
 | core.pricing | Fees (incl. weight-based fee tiers), payouts, minimums, net | No | per-leg money |
 | core.routing | Enumerate feasible assignments (≤ 3 recyclers ⇒ ≤ 27 for 3 items), score deterministically, explain | No | `plans` + `plan_legs` |
 | core.approval | Decide if approval is required and why; bind approval to `plan_hash`; invalidate on change | No | `approvals` |
-| Booker | Navigate booking page, fill fields, detect human-verification, submit, capture reference + screenshot | Stagehand act; Playwright fallback | `browser_actions`, `REQUEST_SUBMITTED` |
-| Verifier | Fresh session, `/track?ref=…`, compare observed vs intended | Extraction only | `REQUEST_CONFIRMED` / `PICKUP_SCHEDULED` / mismatch |
+| Booker | Navigate booking page, fill fields, detect human-verification, submit, capture reference + screenshot. Operates via browser HTML form filling; never calls portal JSON APIs | Stagehand act; Playwright fallback | `browser_actions`, `REQUEST_SUBMITTED` |
+| Verifier | Fresh session, `/track?ref=…`, compare observed vs intended. Operates via browser HTML inspection; never calls portal JSON APIs | Extraction only | `REQUEST_CONFIRMED` / `PICKUP_SCHEDULED` / mismatch |
 | Downstream poller | Re-reads tracking page for admin-simulated events (picked up, weight) | No | `PICKED_UP`, `WEIGHED` (labelled SIMULATED) |
 | Test runner | Executes TC1–TC4 scenarios, computes pass/fail from results | No | `test_runs` |
 

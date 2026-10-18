@@ -37,6 +37,7 @@ const NUMBER_WORDS: Record<string, number> = {
   eleven: 11,
   twelve: 12,
   half: 0.5,
+  pair: 2,
 };
 
 /**
@@ -51,7 +52,7 @@ export function feeAppearsInCurrencyContext(fee: number, text: string): boolean 
     return freeRegex.test(lower);
   }
 
-  // 1. Direct currency symbols/abbreviations: ₹150, rs 150, 150 rupees, 150 inr
+  // 1. Direct currency symbols/abbreviations: ₹150, ₹ 150, rs 150, rs. 150, 150 rupees, 150 inr, 150 rs
   const directCurrency = new RegExp(
     `(?:₹|rs\\.?|inr)\\s*${fee}\\b|\\b${fee}\\s*(?:₹|rs\\.?|inr|rupees|bucks)`,
     "i"
@@ -62,9 +63,9 @@ export function feeAppearsInCurrencyContext(fee: number, text: string): boolean 
 
   // 2. Budget/cap/fee words before amount:
   // "max 150", "max fee 150", "budget 150", "cap 150", "cap of 150", "limit 150",
-  // "under 150", "within 150", "not more than 150", "upto 150", "up to 150"
+  // "under 150", "within 150", "not more than 150", "don't charge me more than 150", "upto 150", "up to 150"
   const prefixCap = new RegExp(
-    `\\b(?:max(?:imum)?(?:\\s+fee)?|budget(?:\\s+for\\s+pickup(?:\\s+fees?)?)?(?:\\s+is)?|cap(?:\\s+of)?|limit(?:\\s+of)?|under|within|not\\s+more\\s+than|up\\s*to|upto)\\s+(?:of\\s+)?(?:₹|rs\\.?|inr)?\\s*${fee}\\b`,
+    `\\b(?:max(?:imum)?(?:\\s+fee)?|budget(?:\\s+for\\s+pickup(?:\\s+fees?)?)?(?:\\s+is)?|cap(?:\\s+of)?|limit(?:\\s+of)?|under|within|not\\s+more\\s+than|don'?t\\s+charge(?:\\s+me)?(?:\\s+more\\s+than)?|up\\s*to|upto)\\s+(?:of\\s+)?(?:₹|rs\\.?|inr)?\\s*${fee}\\b`,
     "i"
   );
   if (prefixCap.test(lower)) {

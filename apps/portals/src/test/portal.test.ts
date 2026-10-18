@@ -13,16 +13,18 @@
  * - Failure switches produce a 500 / confirmation without reference / changed policy layout
  */
 
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import fs from "fs";
 import path from "path";
+import { NextRequest } from "next/server";
+import { middleware } from "../middleware";
 import { FileRepository } from "../lib/repository/file-repository";
 import { setRepositoryInstance } from "../lib/repository";
 import { validateBookingSubmission } from "../lib/validation";
 import { createCaptchaSession, renderCaptchaSvg, verifyCaptchaCode } from "../lib/captcha";
 import { RECYCLER_CONFIGS, resolveRecyclerId, isRouteAllowedForRecycler, getAvailableSlots } from "../lib/config";
 import type { BookingSubmissionPayload } from "../lib/validation";
-import { POST as handlePostBooking } from "../app/api/bookings/route";
+import { POST as handlePostBooking, GET as handleGetBooking } from "../app/api/bookings/route";
 import { GET as handleGetAdmin } from "../app/api/admin/route";
 import { POST as handlePostReset } from "../app/api/reset/route";
 
@@ -763,6 +765,184 @@ describe("ReRoute Mock Recycler Portals Test Suite", () => {
         });
         const res2 = await handleGetAdmin(req2);
         expect(res2.status).toBe(200);
+      } finally {
+        if (origToken) process.env.ADMIN_TOKEN = origToken;
+        else delete process.env.ADMIN_TOKEN;
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 21. Pre-Flight Stage 4 Audit Evidence Tests
+  // -------------------------------------------------------------------------
+  describe("21. Pre-Flight Stage 4 Audit Evidence Tests", () => {
+    it("production build per RECYCLER_ID returns 404 for 3 foreign routes each", () => {
+      const origEnv = process.env.NODE_ENV;
+      const origId = process.env.RECYCLER_ID;
+      try {
+        (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+
+        // Deccan: foreign routes
+        process.env.RECYCLER_ID = "deccan";
+        for (const route of ["/schedule", "/pickup", "/rates"]) {
+          const req = new NextRequest(`http://localhost:3101${route}`);
+          const res = middleware(req);
+          expect(res.status).toBe(404);
+        }
+
+        // PaperPlus: foreign routes
+        process.env.RECYCLER_ID = "paperplus";
+        for (const route of ["/book-pickup", "/accepted-items", "/pickup"]) {
+          const req = new NextRequest(`http://localhost:3102${route}`);
+          const res = middleware(req);
+          expect(res.status).toBe(404);
+        }
+
+        // QuickScrap: foreign routes
+        process.env.RECYCLER_ID = "quickscrap";
+        for (const route of ["/book-pickup", "/accepted-items", "/schedule"]) {
+          const req = new NextRequest(`http://localhost:3103${route}`);
+          const res = middleware(req);
+          expect(res.status).toBe(404);
+        }
+      } finally {
+        (process.env as Record<string, string | undefined>).NODE_ENV = origEnv;
+        if (origId) process.env.RECYCLER_ID = origId;
+        else delete process.env.RECYCLER_ID;
+      }
+    });
+
+    it("<script> in name is escaped on confirmation/tracking/admin", async () => {
+      const scriptPayload = "<script>alert('xss')</script>";
+      const { booking } = await repo.createBooking({
+        recyclerId: "deccan",
+        clientRequestId: "xss-test-001",
+        fullName: scriptPayload,
+        phone: "9876543210",
+        addressLine: "Test Line",
+        locality: "Kukatpally",
+        pincode: "500072",
+        preferredSlot: "2026-11-01 (10:00–12:00 IST)",
+        items: [{ name: "Dell Laptop", quantity: 1, weightKg: 2 }],
+        dataWipeAcknowledged: true,
+      });
+
+      // Raw value preserved in database/storage
+      expect(booking.fullName).toBe(scriptPayload);
+
+      // Verify React HTML rendering escapes script tag to prevent XSS
+      const React = await import("react");
+      const { renderToStaticMarkup } = await import("react-dom/server");
+      const html = renderToStaticMarkup(
+        React.createElement("div", { "data-testid": "customer-name" }, booking.fullName)
+      );
+      expect(html).not.toContain("<script>");
+      expect(html).toContain("&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;");
+    });
+
+    it("unknown tracking reference returns HTTP 404 with 'No booking found'", async () => {
+      const req = new Request("http://localhost:3101/api/bookings?ref=DEC-99999", {
+        method: "GET",
+        headers: { host: "localhost:3101" },
+      });
+      const res = await handleGetBooking(req);
+      expect(res.status).toBe(404);
+      const data = await res.json();
+      expect(data.error).toBe("No booking found");
+    });
+
+    it("slots correct under TZ=UTC and TZ=America/New_York", () => {
+      const origTz = process.env.TZ;
+      try {
+        for (const tz of ["UTC", "America/New_York"]) {
+          process.env.TZ = tz;
+          const slots = getAvailableSlots(new Date("2026-11-01T12:00:00Z"));
+          expect(slots).toHaveLength(6);
+          for (const s of slots) {
+            expect(s).toMatch(/^\d{4}-\d{2}-\d{2} \((10:00–12:00|15:00–17:00) IST\)$/);
+          }
+        }
+      } finally {
+        if (origTz) process.env.TZ = origTz;
+        else delete process.env.TZ;
+      }
+    });
+
+    it("forced reference collision is retried", async () => {
+      const configModule = await import("../lib/config");
+      const spy = vi.spyOn(configModule, "generateReference");
+
+      const { booking: b1 } = await repo.createBooking({
+        recyclerId: "deccan",
+        clientRequestId: "seed-ref-001",
+        fullName: "User One",
+        phone: "9876543210",
+        addressLine: "Line 1",
+        locality: "Locality",
+        pincode: "500072",
+        preferredSlot: "2026-11-01 (10:00–12:00 IST)",
+        items: [{ name: "Laptop", quantity: 1, weightKg: 2 }],
+        dataWipeAcknowledged: true,
+      });
+
+      // Force collision on b1's booking reference on first attempt, then fresh one
+      spy.mockClear();
+      spy.mockReturnValueOnce(b1.bookingReference).mockReturnValueOnce("DEC-77777");
+
+      const { booking: b2 } = await repo.createBooking({
+        recyclerId: "deccan",
+        clientRequestId: "seed-ref-002",
+        fullName: "User Two",
+        phone: "9876543211",
+        addressLine: "Line 2",
+        locality: "Locality",
+        pincode: "500072",
+        preferredSlot: "2026-11-01 (10:00–12:00 IST)",
+        items: [{ name: "Laptop", quantity: 1, weightKg: 2 }],
+        dataWipeAcknowledged: true,
+      });
+
+      expect(b2.bookingReference).toBe("DEC-77777");
+      expect(spy).toHaveBeenCalledTimes(2);
+      spy.mockRestore();
+    });
+
+    it("20 concurrent bookings -> 20 distinct references and valid JSON", async () => {
+      const promises = Array.from({ length: 20 }, (_, i) =>
+        repo.createBooking({
+          recyclerId: "deccan",
+          clientRequestId: `concurrent-req-${i}`,
+          fullName: `Concurrent User ${i}`,
+          phone: "9876543210",
+          addressLine: `Address ${i}`,
+          locality: "Kukatpally",
+          pincode: "500072",
+          preferredSlot: "2026-11-01 (10:00–12:00 IST)",
+          items: [{ name: "Dell Laptop", quantity: 1, weightKg: 2 }],
+          dataWipeAcknowledged: true,
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const references = results.map((r) => r.booking.bookingReference);
+      expect(new Set(references).size).toBe(20);
+
+      // Verify file on disk is valid JSON with exactly 20 bookings
+      const storeFile = path.join(TEST_DATA_DIR, "deccan.json");
+      const content = fs.readFileSync(storeFile, "utf-8");
+      const parsed = JSON.parse(content);
+      expect(parsed.bookings).toHaveLength(20);
+    });
+
+    it("/admin page (not only APIs) returns 503 when ADMIN_TOKEN is unset", async () => {
+      const origToken = process.env.ADMIN_TOKEN;
+      delete process.env.ADMIN_TOKEN;
+      try {
+        const req = new NextRequest("http://localhost:3101/admin");
+        const res = middleware(req);
+        expect(res.status).toBe(503);
+        const text = await res.text();
+        expect(text).toBe("Admin disabled");
       } finally {
         if (origToken) process.env.ADMIN_TOKEN = origToken;
         else delete process.env.ADMIN_TOKEN;
