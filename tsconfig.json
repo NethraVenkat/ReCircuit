@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/llm" },
+    { "path": "packages/core" },
+    { "path": "packages/db" }
+  ]
+}
+

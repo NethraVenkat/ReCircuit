@@ -1,0 +1,29 @@
+import React from "react";
+import { QuickScrapLayout } from "@/components/QuickScrapLayout";
+import { TrackingView } from "@/components/TrackingView";
+
+export const dynamic = "force-dynamic";
+
+interface TrackOrderPageProps {
+  searchParams: { ref?: string };
+}
+
+export default function TrackOrderPage({ searchParams }: TrackOrderPageProps): JSX.Element {
+  const initialRef = searchParams.ref || "";
+
+  return (
+    <QuickScrapLayout activePath="/track-order">
+      <div className="space-y-6 max-w-3xl">
+        <div className="border-b border-slate-800 pb-3">
+          <h2 className="text-xl font-bold uppercase tracking-wider text-white">QuickScrap Order Tracking</h2>
+          <p className="text-xs text-slate-400 mt-1 font-mono">
+            Enter your QSH-XXXXX order reference to monitor collection dispatch and weighbridge records.
+          </p>
+        </div>
+
+        <TrackingView recyclerId="quickscrap" initialReference={initialRef} />
+      </div>
+    </QuickScrapLayout>
+  );
+}
+

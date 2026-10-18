@@ -1,0 +1,26 @@
+{
+  "name": "reroute",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "typecheck": "tsc -p packages/llm/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/db/tsconfig.json --noEmit && tsc -p apps/portals/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:portals": "vitest run apps/portals",
+    "test:e2e": "playwright test",
+    "build": "tsc --build",
+    "intake": "node scripts/intake-cli.mjs",
+    "portals:dev": "node scripts/start-portals.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

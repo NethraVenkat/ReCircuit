@@ -1,0 +1,75 @@
+/**
+ * packages/core/src/index.ts
+ *
+ * Public surface of @reroute/core.
+ * All exports are re-exported from sub-modules so consumers
+ * can import from "@reroute/core" directly.
+ */
+
+// Domain types
+export type {
+  RequestState,
+  LegState,
+  HazardClass,
+  ItemCategory,
+  RegistrationStatus,
+  Item,
+  Recycler,
+  RecyclerPolicy,
+  PlanLeg,
+  Plan,
+  Approval,
+  Request,
+  BrowserAction,
+  StatusEvent,
+  TestRun,
+  Evidence,
+  PolicyExtractEvidence,
+  PlanEvidence,
+  UserApprovalEvidence,
+  IdempotencyEvidence,
+  HumanVerificationEvidence,
+  FormSubmissionEvidence,
+  TrackingLookupEvidence,
+  PickupConfirmationEvidence,
+  WeightTicketEvidence,
+  FailureEvidence,
+  UserDecisionEvidence,
+} from "./types.js";
+
+export { TransitionError } from "./types.js";
+
+// Zod schemas
+export {
+  PolicyExtractEvidenceSchema,
+  PlanEvidenceSchema,
+  UserApprovalEvidenceSchema,
+  UserDecisionEvidenceSchema,
+  IdempotencyEvidenceSchema,
+  HumanVerificationEvidenceSchema,
+  FormSubmissionEvidenceSchema,
+  TrackingLookupEvidenceSchema,
+  PickupConfirmationEvidenceSchema,
+  WeightTicketEvidenceSchema,
+  FailureEvidenceSchema,
+} from "./schemas.js";
+
+// State machine
+export {
+  TRANSITIONS,
+  REQUEST_TRANSITIONS,
+  LEG_TRANSITIONS,
+  TERMINAL_STATES,
+  EVIDENCE_REQUIRED,
+  canTransition,
+  transitionState,
+  isCollected,
+  hashPlan,
+  makeIdempotencyKey,
+} from "./state-machine.js";
+
+export type { TransitionCheck, TransitionCheckOk, TransitionCheckFail, TransitionDeps, EvidenceRequirement } from "./state-machine.js";
+
+// Intake & Taxonomy
+export * from "./intake/index.js";
+

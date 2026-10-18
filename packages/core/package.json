@@ -1,0 +1,29 @@
+{
+  "name": "@reroute/core",
+  "version": "0.0.1",
+  "private": true,
+  "description": "ReRoute domain types, state machine, and pure deterministic functions",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@reroute/llm": "*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.5",
+    "typescript": "^5.5.4"
+  }
+}
+

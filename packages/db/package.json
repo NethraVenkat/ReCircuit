@@ -1,0 +1,20 @@
+{
+  "name": "@reroute/db",
+  "version": "0.0.1",
+  "private": true,
+  "description": "ReRoute Supabase client and typed query helpers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@reroute/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
+
