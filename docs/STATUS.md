@@ -140,7 +140,7 @@
 
 | TC | Description | Status |
 |---|---|---|
-| TC1 | Laptop accepted → pickup draft created | ✅ PASS (Deccan cell accepted, approved plan books and reaches `REQUEST_SUBMITTED` with `DEC-XXXXX` ref) |
-| TC2 | Centre takes paper but not batteries → batteries rejected | ✅ PASS (PaperPlus rejects batteries; split routing routes paper to PaperPlus and batteries to Deccan) |
-| TC3 | Fee above user's limit → approval asked | ✅ PASS (Deccan fee ₹180 > ₹150 cap flags `FEE_CAP_EXCEEDED`; booker blocks without approved decision) |
+| TC1 | Laptop accepted → pickup draft created | 🟡 IN PROGRESS (Building blocks verified in routing and booking; end-to-end evaluation in Stage 10) |
+| TC2 | Centre takes paper but not batteries → batteries rejected | 🟡 IN PROGRESS (Building blocks verified in routing; split plan Deccan + PaperPlus generated; end-to-end evaluation in Stage 10) |
+| TC3 | Fee above user's limit → approval asked | 🟡 IN PROGRESS (Building blocks verified in routing and booking; end-to-end evaluation in Stage 10) |
 | TC4 | Pickup requested → not reported as collected | 🟡 IN PROGRESS (State machine invariants enforced; Verifier is Stage 8) |

@@ -70,3 +70,4 @@ All 12 unit tests pass in `apps/worker/src/booking/booker.test.ts`:
 - Human verification: CAPTCHA detection, screenshot capture, `NEEDS_HUMAN` transition, and resumption.
 - Outage handling: portal HTTP 500 error banner, omitted reference, invalid reference format.
 - Success execution: Deccan (`DEC-XXXXX`), QuickScrap (`QSH-XXXXX`), and duplicate notice detection.
+
