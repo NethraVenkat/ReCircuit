@@ -5,11 +5,12 @@ import { TrackingView } from "@/components/TrackingView";
 export const dynamic = "force-dynamic";
 
 interface StatusPageProps {
-  searchParams: { ref?: string };
+  searchParams: { ref?: string; client?: string };
 }
 
 export default function StatusPage({ searchParams }: StatusPageProps): JSX.Element {
   const initialRef = searchParams.ref || "";
+  const initialClient = searchParams.client || "";
 
   return (
     <PaperPlusLayout activePath="/status">
@@ -21,7 +22,7 @@ export default function StatusPage({ searchParams }: StatusPageProps): JSX.Eleme
           </p>
         </div>
 
-        <TrackingView recyclerId="paperplus" initialReference={initialRef} />
+        <TrackingView recyclerId="paperplus" initialReference={initialRef} initialClientRequestId={initialClient} />
       </div>
     </PaperPlusLayout>
   );

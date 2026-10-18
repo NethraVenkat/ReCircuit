@@ -32,11 +32,30 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const [itemQty, setItemQty] = useState<number>(1);
   const [itemWeight, setItemWeight] = useState<number>(5);
 
+  const totalWeight = items.reduce(
+    (sum, item) => sum + (item.weightKg || (item.quantity ? item.quantity * 2 : 1)),
+    0
+  );
+  const initialFee =
+    recyclerId === "deccan" ? (totalWeight < 5 ? 180 : 0) : recyclerId === "quickscrap" ? 50 : 0;
+  const [computedFee, setComputedFee] = useState<number>(initialFee);
+
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [validationErrors, setValidationErrors] = useState<{ field: string; message: string }[]>([]);
 
   const slots = getAvailableSlots();
+
+  useEffect(() => {
+    fetch(`/api/fee?weight=${totalWeight}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.fee === "number") {
+          setComputedFee(data.fee);
+        }
+      })
+      .catch(() => {});
+  }, [totalWeight, recyclerId]);
 
   // Initialize defaults
   useEffect(() => {
@@ -461,11 +480,30 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         </div>
       )}
 
-      {/* Submit Button */}
+      {/* Review Step with Portal-Computed Pickup Fee */}
+      <div
+        data-testid="review-step"
+        className="p-4 rounded-lg border bg-slate-50 text-slate-900 space-y-2"
+      >
+        <div className="text-xs uppercase font-bold tracking-wider text-slate-500">
+          Review Pickup Details & Fee
+        </div>
+        <div
+          data-testid="portal-computed-fee"
+          className="text-base font-bold text-slate-900"
+        >
+          Pickup charge for this request: ₹{computedFee}
+        </div>
+        <p className="text-xs text-slate-600">
+          Please review your items, address, and slot above before confirming your booking.
+        </p>
+      </div>
+
+      {/* Confirm Booking Button */}
       <div className="pt-2">
         <button
           type="submit"
-          data-testid="submit-booking"
+          data-testid="confirm-booking"
           disabled={loading}
           className={`w-full py-3 px-6 rounded-md font-bold text-sm shadow transition-all ${
             isDeccan
@@ -475,7 +513,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               : "bg-orange-600 hover:bg-orange-700 text-white"
           } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
         >
-          {loading ? "Submitting Pickup Request..." : `Submit Pickup Request to ${config.name}`}
+          {loading ? "Submitting Pickup Request..." : "Confirm booking"}
         </button>
       </div>
     </form>

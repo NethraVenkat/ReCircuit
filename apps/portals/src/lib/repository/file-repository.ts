@@ -20,6 +20,7 @@ const DEFAULT_SWITCHES: FailureSwitches = {
   omitNextReference: false,
   changedPolicyLayout: false,
   hideFeeInfo: false,
+  raiseFee: false,
 };
 
 export class FileRepository implements BookingRepository {
@@ -216,6 +217,14 @@ export class FileRepository implements BookingRepository {
       const store = this.readStore(recyclerId);
       const cleanRef = reference.trim().toUpperCase();
       return store.bookings.find((b) => b.bookingReference.toUpperCase() === cleanRef) || null;
+    });
+  }
+
+  async getBookingByClientRequestId(recyclerId: RecyclerId, clientRequestId: string): Promise<PortalBooking | null> {
+    return this.withLock(() => {
+      const store = this.readStore(recyclerId);
+      const cleanClient = clientRequestId.trim();
+      return store.bookings.find((b) => b.clientRequestId === cleanClient) || null;
     });
   }
 

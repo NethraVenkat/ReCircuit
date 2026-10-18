@@ -10,15 +10,23 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request): Promise<NextResponse> {
   const url = new URL(request.url);
   const ref = url.searchParams.get("ref");
-  if (!ref || !ref.trim()) {
-    return NextResponse.json({ ok: false, error: "Missing ref parameter" }, { status: 400 });
+  const client = url.searchParams.get("client") || url.searchParams.get("client_id");
+
+  if ((!ref || !ref.trim()) && (!client || !client.trim())) {
+    return NextResponse.json({ ok: false, error: "Missing ref or client parameter" }, { status: 400 });
   }
 
   const host = request.headers.get("host");
   const recyclerId = resolveRecyclerId(host);
   const repo = getRepository();
 
-  const booking = await repo.getBookingByReference(recyclerId, ref.trim());
+  let booking = null;
+  if (ref && ref.trim()) {
+    booking = await repo.getBookingByReference(recyclerId, ref.trim());
+  } else if (client && client.trim()) {
+    booking = await repo.getBookingByClientRequestId(recyclerId, client.trim());
+  }
+
   if (!booking) {
     return NextResponse.json({ ok: false, error: "No booking found" }, { status: 404 });
   }

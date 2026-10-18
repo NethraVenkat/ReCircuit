@@ -6,24 +6,31 @@ import type { PortalBooking, RecyclerId } from "@/lib/types";
 interface TrackingViewProps {
   recyclerId: RecyclerId;
   initialReference?: string;
+  initialClientRequestId?: string;
 }
 
-export function TrackingView({ recyclerId: _recyclerId, initialReference = "" }: TrackingViewProps): JSX.Element {
+export function TrackingView({
+  recyclerId: _recyclerId,
+  initialReference = "",
+  initialClientRequestId = "",
+}: TrackingViewProps): JSX.Element {
   const [reference, setReference] = useState(initialReference);
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState<PortalBooking | null>(null);
   const [searched, setSearched] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
-  const fetchTracking = async (ref: string): Promise<void> => {
-    if (!ref.trim()) return;
+  const fetchTracking = async (ref: string, clientId: string = ""): Promise<void> => {
+    if (!ref.trim() && !clientId.trim()) return;
     setLoading(true);
     setNotFound(false);
     setSearched(true);
 
     try {
-      // Look up booking via public tracking endpoint
-      const res = await fetch(`/api/bookings?ref=${encodeURIComponent(ref.trim())}`);
+      const url = ref.trim()
+        ? `/api/bookings?ref=${encodeURIComponent(ref.trim())}`
+        : `/api/bookings?client=${encodeURIComponent(clientId.trim())}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (data.booking) {
@@ -45,9 +52,11 @@ export function TrackingView({ recyclerId: _recyclerId, initialReference = "" }:
 
   useEffect(() => {
     if (initialReference) {
-      fetchTracking(initialReference);
+      fetchTracking(initialReference, "");
+    } else if (initialClientRequestId) {
+      fetchTracking("", initialClientRequestId);
     }
-  }, [initialReference]);
+  }, [initialReference, initialClientRequestId]);
 
   const handleSearch = (e: React.FormEvent): void => {
     e.preventDefault();

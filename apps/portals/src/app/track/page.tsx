@@ -5,11 +5,12 @@ import { TrackingView } from "@/components/TrackingView";
 export const dynamic = "force-dynamic";
 
 interface TrackPageProps {
-  searchParams: { ref?: string };
+  searchParams: { ref?: string; client?: string };
 }
 
 export default function TrackPage({ searchParams }: TrackPageProps): JSX.Element {
   const initialRef = searchParams.ref || "";
+  const initialClient = searchParams.client || "";
 
   return (
     <DeccanLayout activePath="/track">
@@ -21,7 +22,7 @@ export default function TrackPage({ searchParams }: TrackPageProps): JSX.Element
           </p>
         </div>
 
-        <TrackingView recyclerId="deccan" initialReference={initialRef} />
+        <TrackingView recyclerId="deccan" initialReference={initialRef} initialClientRequestId={initialClient} />
       </div>
     </DeccanLayout>
   );

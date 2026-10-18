@@ -74,7 +74,7 @@ test.describe("ReCircuit Mock Recycler Portals E2E Suite", () => {
     await page.check('[data-testid="data-wipe-ack"]');
 
     // Submit
-    await page.click('[data-testid="submit-booking"]');
+    await page.click('[data-testid="confirm-booking"]');
 
     // Should land on confirmation page
     await page.waitForURL("**/book-pickup/confirmation?**");
@@ -110,7 +110,7 @@ test.describe("ReCircuit Mock Recycler Portals E2E Suite", () => {
     // Uncheck data-wipe ack
     await page.uncheck('[data-testid="data-wipe-ack"]');
 
-    await page.click('[data-testid="submit-booking"]');
+    await page.click('[data-testid="confirm-booking"]');
 
     // Form should show error banner
     await expect(page.locator('[data-testid="form-error-banner"]')).toBeVisible();
@@ -146,7 +146,7 @@ test.describe("ReCircuit Mock Recycler Portals E2E Suite", () => {
     await page.fill('[data-testid="input-locality"]', "KPHB");
     await page.fill('[data-testid="input-captcha-code"]', "WRONG");
 
-    await page.click('[data-testid="submit-booking"]');
+    await page.click('[data-testid="confirm-booking"]');
 
     await expect(page.locator('[data-testid="form-error-banner"]')).toBeVisible();
     await expect(page.locator('[data-testid="form-error-banner"]')).toContainText("verification code is incorrect");
@@ -164,7 +164,7 @@ test.describe("ReCircuit Mock Recycler Portals E2E Suite", () => {
     await page.fill('[data-testid="input-locality"]', "Madhapur");
     await page.selectOption('[data-testid="input-pincode"]', "500081");
 
-    await page.click('[data-testid="submit-booking"]');
+    await page.click('[data-testid="confirm-booking"]');
 
     await page.waitForURL("**/pickup/thanks?**");
     const refEl = page.locator('[data-testid="booking-reference"]');
@@ -337,7 +337,7 @@ test.describe("ReCircuit Mock Recycler Portals E2E Suite", () => {
     await page.fill('[data-testid="input-locality"]', "Kukatpally");
     await page.selectOption('[data-testid="input-pincode"]', "500072");
     await page.check('[data-testid="data-wipe-ack"]');
-    await page.click('[data-testid="submit-booking"]');
+    await page.click('[data-testid="confirm-booking"]');
 
     await page.waitForURL("**/book-pickup/confirmation?**");
     const ref = (await page.locator('[data-testid="booking-reference"]').textContent())?.trim() || "";

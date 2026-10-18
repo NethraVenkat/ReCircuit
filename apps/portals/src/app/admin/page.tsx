@@ -18,6 +18,7 @@ function AdminPageContent(): JSX.Element {
     omitNextReference: false,
     changedPolicyLayout: false,
     hideFeeInfo: false,
+    raiseFee: false,
   });
   const [_loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
@@ -289,6 +290,23 @@ function AdminPageContent(): JSX.Element {
               </div>
               <p className="text-[11px] text-slate-600">
                 Omits fee thresholds and rates on policy pages to simulate extraction error and POLICY_UNREADABLE. Toggled.
+              </p>
+            </div>
+
+            {/* Switch 5: Raise Fee (+₹40) */}
+            <div className="p-4 rounded border bg-slate-50 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-red-900">Raise Fee (+₹40) [Fee Drift]</span>
+                <input
+                  type="checkbox"
+                  data-testid="switch-raise-fee"
+                  checked={Boolean(switches.raiseFee)}
+                  onChange={() => handleToggleSwitch("raiseFee")}
+                  className="rounded text-red-600 w-4 h-4"
+                />
+              </div>
+              <p className="text-[11px] text-slate-600">
+                Adds ₹40 to the computed pickup charge to simulate fee drift / unexpected price increase. Toggled.
               </p>
             </div>
           </div>

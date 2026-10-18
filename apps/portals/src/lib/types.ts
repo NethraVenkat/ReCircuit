@@ -50,6 +50,7 @@ export interface FailureSwitches {
   omitNextReference: boolean;
   changedPolicyLayout: boolean;
   hideFeeInfo: boolean;
+  raiseFee?: boolean;
 }
 
 export const SERVICEABLE_PINCODES = [
@@ -65,6 +66,7 @@ export interface BookingRepository {
     booking: Omit<PortalBooking, "id" | "createdAt" | "updatedAt" | "events" | "status" | "bookingReference">
   ): Promise<{ booking: PortalBooking; isDuplicate: boolean; omitReference?: boolean }>;
   getBookingByReference(recyclerId: RecyclerId, reference: string): Promise<PortalBooking | null>;
+  getBookingByClientRequestId(recyclerId: RecyclerId, clientRequestId: string): Promise<PortalBooking | null>;
   listBookings(recyclerId: RecyclerId): Promise<PortalBooking[]>;
   updateBookingStatus(
     recyclerId: RecyclerId,

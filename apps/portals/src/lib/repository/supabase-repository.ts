@@ -14,6 +14,7 @@ const DEFAULT_SWITCHES: FailureSwitches = {
   omitNextReference: false,
   changedPolicyLayout: false,
   hideFeeInfo: false,
+  raiseFee: false,
 };
 
 export class SupabaseRepository implements BookingRepository {
@@ -106,6 +107,18 @@ export class SupabaseRepository implements BookingRepository {
       .select("*, events:booking_events(*)")
       .eq("recycler_id", recyclerId)
       .ilike("booking_reference", reference.trim())
+      .maybeSingle();
+
+    if (!data) return null;
+    return this.mapRowToBooking(data);
+  }
+
+  async getBookingByClientRequestId(recyclerId: RecyclerId, clientRequestId: string): Promise<PortalBooking | null> {
+    const { data } = await this.client
+      .from("bookings")
+      .select("*, events:booking_events(*)")
+      .eq("recycler_id", recyclerId)
+      .eq("client_request_id", clientRequestId.trim())
       .maybeSingle();
 
     if (!data) return null;

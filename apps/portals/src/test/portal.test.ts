@@ -25,8 +25,9 @@ import { createCaptchaSession, renderCaptchaSvg, verifyCaptchaCode } from "../li
 import { RECYCLER_CONFIGS, resolveRecyclerId, isRouteAllowedForRecycler, getAvailableSlots } from "../lib/config";
 import type { BookingSubmissionPayload } from "../lib/validation";
 import { POST as handlePostBooking, GET as handleGetBooking } from "../app/api/bookings/route";
-import { GET as handleGetAdmin } from "../app/api/admin/route";
+import { GET as handleGetAdmin, POST as handlePostAdmin } from "../app/api/admin/route";
 import { POST as handlePostReset } from "../app/api/reset/route";
+import { GET as handleGetFee } from "../app/api/fee/route";
 
 const TEST_DATA_DIR = path.resolve(__dirname, "../../.data-test");
 
@@ -947,6 +948,91 @@ describe("ReCircuit Mock Recycler Portals Test Suite", () => {
         if (origToken) process.env.ADMIN_TOKEN = origToken;
         else delete process.env.ADMIN_TOKEN;
       }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Review Step, Fee Calculation, and Client Recovery Lookup
+  // -------------------------------------------------------------------------
+  describe("Review Step & Recovery Engine Portal Features", () => {
+    it("GET /api/fee computes portal fee accurately for Deccan, PaperPlus, and QuickScrap", async () => {
+      // Deccan: <5 kg -> 180, >=5 kg -> 0
+      const decReqLow = new NextRequest("http://localhost:3101/api/fee?weight=2.5", {
+        headers: { host: "localhost:3101" },
+      });
+      const decResLow = await handleGetFee(decReqLow);
+      expect((await decResLow.json()).fee).toBe(180);
+
+      const decReqHigh = new NextRequest("http://localhost:3101/api/fee?weight=6.0", {
+        headers: { host: "localhost:3101" },
+      });
+      const decResHigh = await handleGetFee(decReqHigh);
+      expect((await decResHigh.json()).fee).toBe(0);
+
+      // PaperPlus: 0
+      const ppReq = new NextRequest("http://localhost:3102/api/fee?weight=8.0", {
+        headers: { host: "localhost:3102" },
+      });
+      const ppRes = await handleGetFee(ppReq);
+      expect((await ppRes.json()).fee).toBe(0);
+
+      // QuickScrap: 50
+      const qsReq = new NextRequest("http://localhost:3103/api/fee?weight=4.0", {
+        headers: { host: "localhost:3103" },
+      });
+      const qsRes = await handleGetFee(qsReq);
+      expect((await qsRes.json()).fee).toBe(50);
+    });
+
+    it("Admin switch raise_fee adds ₹40 to computed fee", async () => {
+      process.env.ADMIN_TOKEN = "test-token";
+      try {
+        // Toggle raise_fee switch on QuickScrap
+        const toggleReq = new NextRequest("http://localhost:3103/api/admin", {
+          method: "POST",
+          headers: { host: "localhost:3103", "x-admin-token": "test-token", "content-type": "application/json" },
+          body: JSON.stringify({ action: "toggle_switch", switchName: "raise_fee", value: true }),
+        });
+        const toggleRes = await handlePostAdmin(toggleReq);
+        expect(toggleRes.status).toBe(200);
+
+        // Computed fee on QuickScrap should now be 50 + 40 = 90
+        const qsReq = new NextRequest("http://localhost:3103/api/fee?weight=4.0", {
+          headers: { host: "localhost:3103" },
+        });
+        const qsRes = await handleGetFee(qsReq);
+        const data = await qsRes.json();
+        expect(data.fee).toBe(90);
+        expect(data.raiseFee).toBe(true);
+      } finally {
+        delete process.env.ADMIN_TOKEN;
+      }
+    });
+
+    it("GET /api/bookings?client=<idempotencyKey> recovers existing booking reference", async () => {
+      const clientReqId = "idem-test-key-999";
+      await repo.createBooking({
+        recyclerId: "deccan",
+        clientRequestId: clientReqId,
+        fullName: "Suresh Patel",
+        phone: "9876543210",
+        addressLine: "Flat 101, Road 2",
+        locality: "Kukatpally",
+        pincode: "500072",
+        preferredSlot: "2026-11-01 (10:00–12:00 IST)",
+        items: [{ name: "Dell Laptop", quantity: 1, weightKg: 2.2 }],
+        dataWipeAcknowledged: true,
+      });
+
+      const getReq = new NextRequest(`http://localhost:3101/api/bookings?client=${clientReqId}`, {
+        headers: { host: "localhost:3101" },
+      });
+      const getRes = await handleGetBooking(getReq);
+      expect(getRes.status).toBe(200);
+      const data = await getRes.json();
+      expect(data.ok).toBe(true);
+      expect(data.booking.bookingReference).toMatch(/^DEC-\d{5}$/);
+      expect(data.booking.clientRequestId).toBe(clientReqId);
     });
   });
 });
