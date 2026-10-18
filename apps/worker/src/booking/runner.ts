@@ -44,8 +44,28 @@ export class BookingRunner {
     const idempotencyKey =
       leg.idempotencyKey || makeIdempotencyKey(planHash, leg.id, leg.recyclerId);
 
-    // 1. Transition leg from APPROVED to SUBMITTING
+    // 1. Transition leg from APPROVED to SUBMITTING (or handle already REQUEST_SUBMITTED)
     let currentLeg = leg;
+    if (currentLeg.state === "REQUEST_SUBMITTED") {
+      const bookerResult = await Booker.bookLeg(
+        {
+          ...context,
+          leg: { ...currentLeg, state: "SUBMITTING" },
+        },
+        options,
+        existingSession
+      );
+      const updatedRef = bookerResult.bookingReference ?? currentLeg.bookingReference;
+      return {
+        updatedLeg: {
+          ...currentLeg,
+          ...(updatedRef !== undefined ? { bookingReference: updatedRef } : {}),
+        },
+        result: bookerResult,
+        auditEvents,
+      };
+    }
+
     if (currentLeg.state === "APPROVED") {
       const step1 = transitionState(currentLeg, "SUBMITTING", {
         idempotencyKey,
@@ -74,7 +94,8 @@ export class BookingRunner {
         if (currentLeg.state === "SUBMITTING") {
           const stepHuman = transitionState(currentLeg, "NEEDS_HUMAN", {
             screenshotRef: bookerResult.humanVerification?.screenshotRef || "needs-human.png",
-            liveViewUrl: bookerResult.humanVerification?.liveViewUrl || "",
+            liveViewUrl:
+              bookerResult.humanVerification?.liveViewUrl || "http://localhost:3101/needs-human",
           });
           currentLeg = {
             ...stepHuman.newLeg,
@@ -92,17 +113,25 @@ export class BookingRunner {
 
       // 4. Handle Successful Submission
       if (bookerResult.success && bookerResult.bookingReference) {
-        const stepSuccess = transitionState(currentLeg, "REQUEST_SUBMITTED", {
-          screenshotRef: bookerResult.screenshotRef || "confirmation.png",
-          url: bookerResult.confirmationUrl || "http://localhost/confirmation",
-          bookingReference: bookerResult.bookingReference,
-        });
-        currentLeg = {
-          ...stepSuccess.newLeg,
-          bookingReference: bookerResult.bookingReference,
-          submittingSessionId: bookerResult.sessionId,
-        };
-        auditEvents.push(stepSuccess.auditEvent);
+        if (currentLeg.state === "SUBMITTING") {
+          const stepSuccess = transitionState(currentLeg, "REQUEST_SUBMITTED", {
+            screenshotRef: bookerResult.screenshotRef || "confirmation.png",
+            url: bookerResult.confirmationUrl || "http://localhost/confirmation",
+            bookingReference: bookerResult.bookingReference,
+          });
+          currentLeg = {
+            ...stepSuccess.newLeg,
+            bookingReference: bookerResult.bookingReference,
+            submittingSessionId: bookerResult.sessionId,
+          };
+          auditEvents.push(stepSuccess.auditEvent);
+        } else {
+          currentLeg = {
+            ...currentLeg,
+            bookingReference: bookerResult.bookingReference,
+            submittingSessionId: bookerResult.sessionId,
+          };
+        }
 
         return {
           updatedLeg: currentLeg,
@@ -187,6 +216,7 @@ export class BookingRunner {
       {
         ...options,
         captchaCode,
+        isResuming: true,
       },
       existingSession
     );
@@ -212,6 +242,75 @@ export class BookingRunner {
     }
 
     throw new BookerError("Resumed booking failed to produce valid booking reference.", "RESUME_FAILED");
+  }
+
+  /**
+   * Resumes booking on the SAME open browser session after the human solves verification in the open window.
+   */
+  public static async resumeInSession(
+    context: LegBookingContext,
+    session: BrowserSession,
+    options: BookerOptions = {}
+  ): Promise<LegBookingExecutionResult> {
+    const { leg } = context;
+    const auditEvents: StatusEvent[] = [];
+
+    const planHash = context.plan.planHash || hashPlan(context.plan);
+    const idempotencyKey =
+      leg.idempotencyKey || makeIdempotencyKey(planHash, leg.id, leg.recyclerId);
+
+    // 1. Transition leg from NEEDS_HUMAN to SUBMITTING if needed
+    let currentLeg: PlanLeg = leg;
+    if (currentLeg.state === "NEEDS_HUMAN") {
+      const stepResume = transitionState(currentLeg, "SUBMITTING", {
+        idempotencyKey,
+        priorSuccessfulUse: false,
+      });
+      currentLeg = {
+        ...stepResume.newLeg,
+        idempotencyKey,
+      };
+      auditEvents.push(stepResume.auditEvent);
+    }
+
+    try {
+      // 2. Submit on the same open session
+      const bookerResult = await Booker.bookLeg(
+        {
+          ...context,
+          leg: currentLeg,
+        },
+        {
+          ...options,
+          isResuming: true,
+        },
+        session
+      );
+
+      if (bookerResult.success && bookerResult.bookingReference) {
+        const stepSuccess = transitionState(currentLeg, "REQUEST_SUBMITTED", {
+          screenshotRef: bookerResult.screenshotRef || "confirmation.png",
+          url: bookerResult.confirmationUrl || "http://localhost/confirmation",
+          bookingReference: bookerResult.bookingReference,
+        });
+        currentLeg = {
+          ...stepSuccess.newLeg,
+          bookingReference: bookerResult.bookingReference,
+          submittingSessionId: bookerResult.sessionId,
+        };
+        auditEvents.push(stepSuccess.auditEvent);
+
+        return {
+          updatedLeg: currentLeg,
+          result: bookerResult,
+          auditEvents,
+        };
+      }
+
+      throw new BookerError("Resumed booking failed to produce valid booking reference.", "RESUME_FAILED");
+    } finally {
+      await session.close();
+    }
   }
 }
 

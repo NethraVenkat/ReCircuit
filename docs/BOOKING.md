@@ -21,14 +21,17 @@ The Browser Booking Agent (`Booker`) autonomously executes approved reverse-logi
    - Before clicking the submit button, all input values (`fullName`, `phone`, `addressLine`, `locality`, `pincode`, `clientRequestId`) are read back from the live DOM and asserted against the intended payload.
    - Any discrepancy throws `FormVerificationError` and immediately aborts the submission.
 
-4. **Human Verification (CAPTCHA / OTP) Handoff (Rule S-5)**:
+4. **Human Verification (CAPTCHA / OTP) Handoff in One Live Session (Rule S-5)**:
    - When `data-human-verification="required"` is detected, the agent **never** bypasses or guesses codes.
-   - It captures a full-page screenshot into `.data/evidence/`, records a `liveViewUrl` (Browserbase live URL in cloud mode or local file URL in offline mode), and transitions the leg from `SUBMITTING` to `NEEDS_HUMAN`.
-   - The agent provides a resumption endpoint (`resumeLegWithCaptcha`) that accepts the human-entered code, fills the form, and advances to `REQUEST_SUBMITTED`.
+   - The browser session remains open in the **same live window**.
+   - In local mode, the agent runs headed, displays: *"Solve the verification in the open browser window, then press Enter"*, and waits up to 5 minutes.
+   - The human types the code directly into the open browser window; the agent never reads, OCRs, or types the code.
+   - In Browserbase mode, the agent surfaces the session live view URL and waits in the same way.
+   - Once solved, the agent proceeds on that same page to verify the review fee, submit the booking, and extract the confirmed reference.
 
 5. **Reference Extraction & Pattern Validation**:
    - Upon confirmation page navigation, the reference element (`[data-testid="booking-reference"]`) is extracted and verified against the canonical recycler regex (`/^DEC-\d{5}$/`, `/^PPK-\d{5}$/`, `/^QSH-\d{5}$/`).
-   - If the portal returns a server outage (HTTP 500) or activates the `omitNextReference` failure switch, the agent catches the defect, records the failure, and prevents transition to `REQUEST_SUBMITTED`.
+   - If the portal returns a server outage (HTTP 500) or activates the `omitNextReference` failure switch, the agent catches the defect, queries `/track?client=<idempotencyKey>`, retries once with the same idempotency key if needed, or safely records the failure without creating duplicate bookings.
 
 6. **Idempotency Protection**:
    - The booker injects a deterministic `client_request_id` (`sha256(plan_hash + leg_id + recycler_id)`).
@@ -50,14 +53,9 @@ The Browser Booking Agent (`Booker`) autonomously executes approved reverse-logi
 
 ## CLI Usage
 
-### 1. Execute Bookings for an Approved Request
+### Execute Bookings for an Approved Request
 ```bash
-npm run book -- --request=<requestId>
-```
-
-### 2. Resume After Human Solves CAPTCHA
-```bash
-npm run book -- --request=<requestId> --resume-captcha=<CODE>
+npm run book -- --request=<requestId> [--headless=true|false]
 ```
 
 ---

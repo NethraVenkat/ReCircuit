@@ -166,6 +166,7 @@ export class Booker {
 
     if (hasDataBearingDevice && (approval.dataWipeConfirmedByUser !== true || context.dataWipeAck === false)) {
       // Data wipe not confirmed -> halt with NEEDS_HUMAN, checkbox NEVER ticked, no booking created
+      const portalBase = getPortalBaseUrl(recyclerId, options.portalBaseUrl);
       return {
         success: false,
         needsHuman: true,
@@ -173,6 +174,13 @@ export class Booker {
         error: "User has not confirmed data wipe for data-bearing devices",
         sessionId: "",
         idempotencyKey,
+        humanVerification: {
+          required: true,
+          selector: PORTAL_SELECTORS.dataWipeAck,
+          screenshotRef: "evidence/data-wipe-required.png",
+          liveViewUrl: `${portalBase}/needs-human?reason=DATA_WIPE_NOT_CONFIRMED`,
+          instructions: "User confirmation required for certified data-wipe of data-bearing electronics.",
+        },
         browserActions: [
           {
             action: "fill_form",
@@ -196,6 +204,7 @@ export class Booker {
       }));
 
     const ownsSession = !existingSession;
+    let keepSessionAlive = false;
 
     try {
       const page = session.page;
@@ -205,98 +214,117 @@ export class Booker {
 
       // ---------------------------------------------------------------------
       // 3. Pre-Flight Recovery Check via ?client=<idempotencyKey>
+      // (Only for new sessions, not when resuming an active live session)
       // ---------------------------------------------------------------------
-      try {
-        await page.goto(`${trackUrl}?client=${encodeURIComponent(idempotencyKey)}`, {
-          waitUntil: "domcontentloaded",
-          timeout: options.timeoutMs ?? 15000,
-        });
+      if (!options.isResuming) {
+        try {
+          await page.goto(`${trackUrl}?client=${encodeURIComponent(idempotencyKey)}`, {
+            waitUntil: "domcontentloaded",
+            timeout: options.timeoutMs ?? 15000,
+          });
 
-        const preflightRefEl = page.locator(PORTAL_SELECTORS.bookingReference);
-        if (await preflightRefEl.isVisible({ timeout: 2000 }).catch(() => false)) {
-          const recoveredRef = (await preflightRefEl.textContent())?.trim() || "";
-          if (isValidBookingReference(recyclerId, recoveredRef)) {
-            const ss = await session.captureScreenshot("recovery-preflight-success");
-            browserActions.push({
-              action: "preflight_recovery_check",
-              stepNumber: stepNumber++,
-              timestamp: new Date().toISOString(),
-              url: page.url(),
-              details: { recovered: true, bookingReference: recoveredRef },
-              screenshotRef: ss.filename,
-            });
+          const preflightRefEl = page.locator(PORTAL_SELECTORS.bookingReference);
+          await preflightRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
+          if (await preflightRefEl.isVisible().catch(() => false)) {
+            const recoveredRef = (await preflightRefEl.textContent())?.trim() || "";
+            if (isValidBookingReference(recyclerId, recoveredRef)) {
+              const ss = await session.captureScreenshot("recovery-preflight-success");
+              browserActions.push({
+                action: "preflight_recovery_check",
+                stepNumber: stepNumber++,
+                timestamp: new Date().toISOString(),
+                url: page.url(),
+                details: { recovered: true, bookingReference: recoveredRef },
+                screenshotRef: ss.filename,
+              });
 
-            return {
-              success: true,
-              bookingReference: recoveredRef,
-              confirmationUrl: page.url(),
-              screenshotRef: ss.filename,
-              sessionId: session.sessionId,
-              idempotencyKey,
-              isDuplicate: true,
-              isRecovered: true,
-              browserActions,
-            };
+              return {
+                success: true,
+                bookingReference: recoveredRef,
+                confirmationUrl: page.url(),
+                screenshotRef: ss.filename,
+                sessionId: session.sessionId,
+                idempotencyKey,
+                isDuplicate: true,
+                isRecovered: true,
+                browserActions,
+              };
+            }
           }
+        } catch {
+          // Preflight check failed to find existing booking, proceed with booking flow
         }
-      } catch {
-        // Preflight check failed to find existing booking, proceed with booking flow
       }
 
       // ---------------------------------------------------------------------
       // 4. Navigation by Links (Home -> Booking Page)
       // ---------------------------------------------------------------------
-      let navigatedViaLink = false;
-      try {
-        await page.goto(portalBase, { waitUntil: "domcontentloaded", timeout: 10000 });
-        // Discover booking link on portal home page
-        const bookingLink = page.locator(
-          'a[href*="book"], a[href*="schedule"], a[href*="pickup"]'
-        ).first();
+      const isAlreadyOnBookingPage =
+        Boolean(existingSession) ||
+        (!page.url().includes("track") &&
+          !page.url().includes("status") &&
+          ((await page.locator(PORTAL_SELECTORS.bookingForm).count()) > 0 ||
+            page.url().includes("book") ||
+            page.url().includes("schedule") ||
+            page.url().includes("pickup")));
 
-        if (await bookingLink.isVisible({ timeout: 2500 }).catch(() => false)) {
-          const href = await bookingLink.getAttribute("href");
-          await bookingLink.click();
-          await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { timeout: 8000 });
-          navigatedViaLink = true;
+      if (!isAlreadyOnBookingPage) {
+        let navigatedViaLink = false;
+        try {
+          await page.goto(portalBase, { waitUntil: "domcontentloaded", timeout: 10000 });
+          // Discover booking link on portal home page
+          const bookingLink = page.locator(
+            'a[href*="book"], a[href*="schedule"], a[href*="pickup"]'
+          ).first();
 
-          const ss = await session.captureScreenshot("nav-link-success");
+          if (await bookingLink.isVisible({ timeout: 2500 }).catch(() => false)) {
+            const href = await bookingLink.getAttribute("href");
+            await bookingLink.click();
+            await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { timeout: 8000 });
+            navigatedViaLink = true;
+
+            const ss = await session.captureScreenshot("nav-link-success");
+            browserActions.push({
+              action: "navigate",
+              stepNumber: stepNumber++,
+              timestamp: new Date().toISOString(),
+              url: page.url(),
+              details: { method: "link_click", targetHref: href },
+              screenshotRef: ss.filename,
+            });
+          }
+        } catch {
+          // Link navigation failed or timed out; will use recorded fallback route
+        }
+
+        if (!navigatedViaLink) {
+          // Recorded fallback route
+          await page.goto(bookingUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
+          await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { timeout: 10000 });
+
+          const ss = await session.captureScreenshot("nav-route-fallback");
           browserActions.push({
             action: "navigate",
             stepNumber: stepNumber++,
             timestamp: new Date().toISOString(),
             url: page.url(),
-            details: { method: "link_click", targetHref: href },
+            details: { method: "route_fallback", route: bookingUrl },
             screenshotRef: ss.filename,
           });
         }
-      } catch {
-        // Link navigation failed or timed out; will use recorded fallback route
-      }
-
-      if (!navigatedViaLink) {
-        // Recorded fallback route
-        await page.goto(bookingUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
-        await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { timeout: 10000 });
-
-        const ss = await session.captureScreenshot("nav-route-fallback");
-        browserActions.push({
-          action: "navigate",
-          stepNumber: stepNumber++,
-          timestamp: new Date().toISOString(),
-          url: page.url(),
-          details: { method: "route_fallback", route: bookingUrl },
-          screenshotRef: ss.filename,
-        });
       }
 
       // ---------------------------------------------------------------------
       // 5. Populate Idempotency Client Request ID
       // ---------------------------------------------------------------------
+      await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { state: "visible" });
+
       const clientReqLocator = page.locator(PORTAL_SELECTORS.clientRequestId);
       if ((await clientReqLocator.count()) > 0) {
         await clientReqLocator.evaluate((el: HTMLInputElement, key: string) => {
           el.value = key;
+          el.setAttribute("value", key);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
           el.dispatchEvent(new Event("change", { bubbles: true }));
         }, idempotencyKey);
       }
@@ -331,10 +359,15 @@ export class Booker {
             const lowerText = text.toLowerCase();
             const lowerVal = val.toLowerCase();
 
-            if (desiredSlotPref === "morning" && (lowerText.includes("10:00") || lowerText.includes("morning"))) {
+            const isMorningPref = desiredSlotPref.includes("10:00") || desiredSlotPref.includes("morning");
+            const isAfternoonPref = desiredSlotPref.includes("15:00") || desiredSlotPref.includes("afternoon");
+            const isOptMorning = lowerText.includes("10:00") || lowerText.includes("morning");
+            const isOptAfternoon = lowerText.includes("15:00") || lowerText.includes("afternoon");
+
+            if (isMorningPref && isOptMorning) {
               matchedSlotValue = val;
               break;
-            } else if (desiredSlotPref === "afternoon" && (lowerText.includes("15:00") || lowerText.includes("afternoon"))) {
+            } else if (isAfternoonPref && isOptAfternoon) {
               matchedSlotValue = val;
               break;
             } else if (lowerText.includes(desiredSlotPref) || lowerVal.includes(desiredSlotPref)) {
@@ -347,6 +380,7 @@ export class Booker {
         if (desiredSlotPref && !matchedSlotValue) {
           // No match found -> Halt with NEEDS_HUMAN NO_MATCHING_SLOT
           const ss = await session.captureScreenshot("no-matching-slot");
+          const portalBase = getPortalBaseUrl(recyclerId, options.portalBaseUrl);
           browserActions.push({
             action: "readback",
             stepNumber: stepNumber++,
@@ -363,6 +397,13 @@ export class Booker {
             error: `No matching slot available for preference "${desiredSlotPref}"`,
             sessionId: session.sessionId,
             idempotencyKey,
+            humanVerification: {
+              required: true,
+              selector: PORTAL_SELECTORS.preferredSlot,
+              screenshotRef: ss.filename,
+              liveViewUrl: `${portalBase}/needs-human?reason=NO_MATCHING_SLOT`,
+              instructions: `No matching slot available for preference "${desiredSlotPref}". Manual selection required.`,
+            },
             browserActions,
           };
         }
@@ -377,14 +418,25 @@ export class Booker {
       // ---------------------------------------------------------------------
       // 7. Fill Form Inputs
       // ---------------------------------------------------------------------
-      await page.fill(PORTAL_SELECTORS.fullName, customer.fullName);
-      await page.fill(PORTAL_SELECTORS.phone, customer.phone);
-      await page.fill(PORTAL_SELECTORS.addressLine, customer.addressLine);
-      await page.fill(PORTAL_SELECTORS.locality, customer.locality);
+      const fillCustomerInputs = async (): Promise<void> => {
+        await page.fill(PORTAL_SELECTORS.fullName, customer.fullName);
+        await page.fill(PORTAL_SELECTORS.phone, customer.phone);
+        await page.fill(PORTAL_SELECTORS.addressLine, customer.addressLine);
+        await page.fill(PORTAL_SELECTORS.locality, customer.locality);
+        const pincodeSelect = page.locator(PORTAL_SELECTORS.pincode);
+        if (await pincodeSelect.count()) {
+          await pincodeSelect.selectOption(customer.pincode);
+        }
+      };
 
-      const pincodeSelect = page.locator(PORTAL_SELECTORS.pincode);
-      if (await pincodeSelect.count()) {
-        await pincodeSelect.selectOption(customer.pincode);
+      await fillCustomerInputs();
+
+      // Guard: If React hydration clears controlled inputs after our initial fill, wait and refill
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const curName = (await page.inputValue(PORTAL_SELECTORS.fullName)).trim();
+        if (curName === customer.fullName.trim()) break;
+        await page.waitForTimeout(250);
+        await fillCustomerInputs();
       }
 
       // Consignment items
@@ -393,22 +445,23 @@ export class Booker {
           const nameInput = page.locator(PORTAL_SELECTORS.itemName);
           const addBtn = page.locator(PORTAL_SELECTORS.addItem);
           if ((await nameInput.count()) && (await addBtn.count())) {
-            await nameInput.fill(item.name);
-            if (item.quantity !== undefined) {
-              await page.fill(PORTAL_SELECTORS.itemQty, String(item.quantity));
-            }
-            if (item.weightKg !== undefined) {
-              await page.fill(PORTAL_SELECTORS.itemWeight, String(item.weightKg));
-            }
+            const rawName = item.name || "Recyclable Item";
+            await nameInput.fill(rawName);
+            const qty = item.quantity ?? 1;
+            await page.fill(PORTAL_SELECTORS.itemQty, String(qty));
+            const wt = item.weightKg ?? 1;
+            await page.fill(PORTAL_SELECTORS.itemWeight, String(wt));
             await addBtn.click();
+            await page.waitForTimeout(300);
           }
         }
       }
 
       // Data-wipe acknowledgement (Deccan certified e-waste)
-      const dataWipeCheckbox = page.locator(PORTAL_SELECTORS.dataWipeAck);
-      if (await dataWipeCheckbox.count()) {
-        if (hasDataBearingDevice) {
+      if (hasDataBearingDevice && context.dataWipeAck) {
+        const dataWipeCheckbox = page.locator(PORTAL_SELECTORS.dataWipeAck);
+        await dataWipeCheckbox.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
+        if ((await dataWipeCheckbox.count()) > 0) {
           await dataWipeCheckbox.check();
         }
       }
@@ -426,23 +479,43 @@ export class Booker {
       // ---------------------------------------------------------------------
       // 8. Full DOM Readback Verification
       // ---------------------------------------------------------------------
-      const readFullName = await page.inputValue(PORTAL_SELECTORS.fullName);
-      if (readFullName.trim() !== customer.fullName.trim()) {
+      let readFullName = (await page.inputValue(PORTAL_SELECTORS.fullName)).trim();
+      if (readFullName !== customer.fullName.trim()) {
+        await fillCustomerInputs();
+        await page.waitForTimeout(200);
+        readFullName = (await page.inputValue(PORTAL_SELECTORS.fullName)).trim();
+      }
+      if (readFullName !== customer.fullName.trim()) {
         throw new FormVerificationError("fullName", customer.fullName, readFullName);
       }
 
-      const readPhone = await page.inputValue(PORTAL_SELECTORS.phone);
-      if (readPhone.trim() !== customer.phone.trim()) {
+      let readPhone = (await page.inputValue(PORTAL_SELECTORS.phone)).trim();
+      if (readPhone !== customer.phone.trim()) {
+        await fillCustomerInputs();
+        await page.waitForTimeout(200);
+        readPhone = (await page.inputValue(PORTAL_SELECTORS.phone)).trim();
+      }
+      if (readPhone !== customer.phone.trim()) {
         throw new FormVerificationError("phone", customer.phone, readPhone);
       }
 
-      const readAddress = await page.inputValue(PORTAL_SELECTORS.addressLine);
-      if (readAddress.trim() !== customer.addressLine.trim()) {
+      let readAddress = (await page.inputValue(PORTAL_SELECTORS.addressLine)).trim();
+      if (readAddress !== customer.addressLine.trim()) {
+        await fillCustomerInputs();
+        await page.waitForTimeout(200);
+        readAddress = (await page.inputValue(PORTAL_SELECTORS.addressLine)).trim();
+      }
+      if (readAddress !== customer.addressLine.trim()) {
         throw new FormVerificationError("addressLine", customer.addressLine, readAddress);
       }
 
-      const readLocality = await page.inputValue(PORTAL_SELECTORS.locality);
-      if (readLocality.trim() !== customer.locality.trim()) {
+      let readLocality = (await page.inputValue(PORTAL_SELECTORS.locality)).trim();
+      if (readLocality !== customer.locality.trim()) {
+        await fillCustomerInputs();
+        await page.waitForTimeout(200);
+        readLocality = (await page.inputValue(PORTAL_SELECTORS.locality)).trim();
+      }
+      if (readLocality !== customer.locality.trim()) {
         throw new FormVerificationError("locality", customer.locality, readLocality);
       }
 
@@ -451,8 +524,9 @@ export class Booker {
         throw new FormVerificationError("pincode", customer.pincode, readPincode);
       }
 
-      if ((await dataWipeCheckbox.count()) > 0 && hasDataBearingDevice) {
-        const isChecked = await dataWipeCheckbox.isChecked();
+      const verifyDataWipe = page.locator(PORTAL_SELECTORS.dataWipeAck);
+      if ((await verifyDataWipe.count()) > 0 && hasDataBearingDevice) {
+        const isChecked = await verifyDataWipe.isChecked();
         if (!isChecked) {
           throw new FormVerificationError("dataWipeAck", "checked", "unchecked");
         }
@@ -520,8 +594,19 @@ export class Booker {
           screenshotRef: captchaSs.filename,
         });
 
+        const enteredCode = (await page.inputValue(PORTAL_SELECTORS.captchaInput)).trim();
         const code = options.captchaCode;
-        if (code) {
+
+        if (enteredCode && enteredCode.length >= 4) {
+          // Verification code already filled in the DOM (e.g. by human typing into live window or test hook)
+          browserActions.push({
+            action: "human_verification_solved",
+            stepNumber: stepNumber++,
+            timestamp: new Date().toISOString(),
+            url: page.url(),
+            details: { method: "already_filled_in_dom" },
+          });
+        } else if (code) {
           // If verification code provided directly
           await page.fill(PORTAL_SELECTORS.captchaInput, code);
           browserActions.push({
@@ -541,8 +626,9 @@ export class Booker {
             url: page.url(),
             details: { method: "onHumanVerification_hook" },
           });
-        } else if (options.pauseOnHumanVerification || options.headless !== false) {
+        } else if (options.pauseOnHumanVerification || options.keepSessionOpenOnNeedsHuman || options.headless !== false) {
           // Pause and return needsHuman; keep session live for external solving or report needsHuman in headless
+          keepSessionAlive = Boolean(options.keepSessionOpenOnNeedsHuman || options.pauseOnHumanVerification);
           return {
             success: false,
             needsHuman: true,
@@ -585,6 +671,14 @@ export class Booker {
       // ---------------------------------------------------------------------
       // 11. Submit Booking & Handle Confirmation / Recovery Engine
       // ---------------------------------------------------------------------
+      const lockClientReq = page.locator(PORTAL_SELECTORS.clientRequestId);
+      if ((await lockClientReq.count()) > 0) {
+        await lockClientReq.evaluate((el: HTMLInputElement, key: string) => {
+          el.value = key;
+          el.setAttribute("value", key);
+        }, idempotencyKey);
+      }
+
       const confirmBtn = page.locator(PORTAL_SELECTORS.confirmBooking);
       await confirmBtn.click();
 
@@ -595,14 +689,19 @@ export class Booker {
         url: page.url(),
       });
 
-      // Wait for confirmation URL, error banner, or missing ref element
-      await page.waitForTimeout(1500);
-
-      const errorBanner = page.locator(PORTAL_SELECTORS.formErrorBanner);
-      const isErrorVisible = await errorBanner.isVisible().catch(() => false);
+      // Wait for confirmation reference, missing ref element, or error banner
       const refEl = page.locator(PORTAL_SELECTORS.bookingReference);
-      const isRefVisible = await refEl.isVisible().catch(() => false);
+      const errorBanner = page.locator(PORTAL_SELECTORS.formErrorBanner);
       const missingRefEl = page.locator(PORTAL_SELECTORS.bookingReferenceMissing);
+
+      await Promise.race([
+        refEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
+        errorBanner.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
+        missingRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
+      ]);
+
+      const isErrorVisible = await errorBanner.isVisible().catch(() => false);
+      const isRefVisible = await refEl.isVisible().catch(() => false);
       const isMissingRefVisible = await missingRefEl.isVisible().catch(() => false);
 
       const requiresRecovery =
@@ -617,18 +716,19 @@ export class Booker {
           });
 
           const recRefEl = page.locator(PORTAL_SELECTORS.bookingReference);
-          if (await recRefEl.isVisible({ timeout: 2500 }).catch(() => false)) {
+          await recRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
+          if (await recRefEl.isVisible().catch(() => false)) {
             const recoveredRef = (await recRefEl.textContent())?.trim() || "";
             if (isValidBookingReference(recyclerId, recoveredRef)) {
-              const recSs = await session.captureScreenshot("recovery-lookup-success");
-              browserActions.push({
-                action: "recovery_lookup",
-                stepNumber: stepNumber++,
-                timestamp: new Date().toISOString(),
-                url: page.url(),
-                details: { recovered: true, bookingReference: recoveredRef },
-                screenshotRef: recSs.filename,
-              });
+            const recSs = await session.captureScreenshot("recovery-lookup-success");
+            browserActions.push({
+              action: "recovery_lookup",
+              stepNumber: stepNumber++,
+              timestamp: new Date().toISOString(),
+              url: page.url(),
+              details: { recovered: true, bookingReference: recoveredRef },
+              screenshotRef: recSs.filename,
+            });
 
               return {
                 success: true,
@@ -656,23 +756,124 @@ export class Booker {
         });
 
         await page.goto(bookingUrl, { waitUntil: "domcontentloaded", timeout: 12000 });
-        // Fill and click confirm once more
-        await page.fill(PORTAL_SELECTORS.fullName, customer.fullName);
-        await page.fill(PORTAL_SELECTORS.phone, customer.phone);
-        await page.fill(PORTAL_SELECTORS.addressLine, customer.addressLine);
-        await page.fill(PORTAL_SELECTORS.locality, customer.locality);
-        if (await pincodeSelect.count()) await pincodeSelect.selectOption(customer.pincode);
-        if ((await dataWipeCheckbox.count()) > 0 && hasDataBearingDevice) await dataWipeCheckbox.check();
+        await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { state: "visible", timeout: 8000 });
+        await page.waitForTimeout(300);
 
+        // Fill slot
+        const retrySlotSelect = page.locator(PORTAL_SELECTORS.preferredSlot);
+        if (await retrySlotSelect.count()) {
+          if (matchedSlotValue) {
+            await retrySlotSelect.selectOption(matchedSlotValue);
+          } else {
+            await retrySlotSelect.selectOption({ index: 0 });
+          }
+        }
+
+        // Fill customer inputs with React hydration guard
+        const fillRetryCustomerInputs = async (): Promise<void> => {
+          await page.fill(PORTAL_SELECTORS.fullName, customer.fullName);
+          await page.fill(PORTAL_SELECTORS.phone, customer.phone);
+          await page.fill(PORTAL_SELECTORS.addressLine, customer.addressLine);
+          await page.fill(PORTAL_SELECTORS.locality, customer.locality);
+          const retryPincode = page.locator(PORTAL_SELECTORS.pincode);
+          if (await retryPincode.count()) await retryPincode.selectOption(customer.pincode);
+        };
+        await fillRetryCustomerInputs();
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const curName = (await page.inputValue(PORTAL_SELECTORS.fullName)).trim();
+          if (curName === customer.fullName.trim()) break;
+          await page.waitForTimeout(250);
+          await fillRetryCustomerInputs();
+        }
+
+        // Fill items
+        if (context.items && context.items.length > 0) {
+          for (const item of context.items) {
+            const nameInput = page.locator(PORTAL_SELECTORS.itemName);
+            const addBtn = page.locator(PORTAL_SELECTORS.addItem);
+            if ((await nameInput.count()) && (await addBtn.count())) {
+              const rawName = item.name || "Recyclable Item";
+              await nameInput.fill(rawName);
+              const qty = item.quantity ?? 1;
+              await page.fill(PORTAL_SELECTORS.itemQty, String(qty));
+              const wt = item.weightKg ?? 1;
+              await page.fill(PORTAL_SELECTORS.itemWeight, String(wt));
+              await addBtn.click();
+              await page.waitForTimeout(300);
+            }
+          }
+        }
+
+        // Data wipe ack
+        if (hasDataBearingDevice && context.dataWipeAck) {
+          const retryDataWipe = page.locator(PORTAL_SELECTORS.dataWipeAck);
+          await retryDataWipe.waitFor({ state: "visible", timeout: 8000 });
+          await retryDataWipe.check();
+        }
+
+        // Lock client request id
         const retryClientLocator = page.locator(PORTAL_SELECTORS.clientRequestId);
         if ((await retryClientLocator.count()) > 0) {
           await retryClientLocator.evaluate((el: HTMLInputElement, key: string) => {
             el.value = key;
+            el.setAttribute("value", key);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
           }, idempotencyKey);
         }
 
-        await page.locator(PORTAL_SELECTORS.confirmBooking).click();
-        await page.waitForTimeout(2000);
+        // PaperPlus CAPTCHA if needed
+        const retryCaptchaInput = page.locator(PORTAL_SELECTORS.captchaInput);
+        if ((await retryCaptchaInput.count()) > 0 && options.onHumanVerification) {
+          await options.onHumanVerification(page, session);
+        }
+
+        // Wait for computed fee to appear
+        const retryFeeEl = page.locator(PORTAL_SELECTORS.portalComputedFee);
+        await retryFeeEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
+
+        // Click confirm
+        const retryConfirmBtn = page.locator(PORTAL_SELECTORS.confirmBooking);
+        await retryConfirmBtn.waitFor({ state: "visible", timeout: 8000 });
+        if (typeof page.waitForFunction === "function") {
+          await page.waitForFunction(
+            (sel) => {
+              const btn = document.querySelector(sel) as HTMLButtonElement;
+              return btn && !btn.disabled;
+            },
+            PORTAL_SELECTORS.confirmBooking,
+            { timeout: 8000 }
+          ).catch(() => {});
+        }
+        await retryConfirmBtn.click();
+
+        // Check if confirmation page rendered with reference or error banner
+        const retryRefEl = page.locator(PORTAL_SELECTORS.bookingReference);
+        const retryMissingRefEl = page.locator(PORTAL_SELECTORS.bookingReferenceMissing);
+        const retryErrorBanner = page.locator(PORTAL_SELECTORS.formErrorBanner);
+        await Promise.race([
+          retryRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
+          retryMissingRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
+          retryErrorBanner.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
+        ]);
+
+        const isRetryError = await retryErrorBanner.isVisible().catch(() => false);
+        if (!isRetryError && (await retryRefEl.isVisible().catch(() => false))) {
+          const retryRef = (await retryRefEl.textContent())?.trim() || "";
+          if (isValidBookingReference(recyclerId, retryRef)) {
+            const finalSs = await session.captureScreenshot("recovery-retry-success");
+            return {
+              success: true,
+              bookingReference: retryRef,
+              confirmationUrl: page.url(),
+              screenshotRef: finalSs.filename,
+              sessionId: session.sessionId,
+              idempotencyKey,
+              isRecovered: true,
+              browserActions,
+            };
+          }
+        }
 
         // Re-check tracking for recovered reference
         await page.goto(`${trackUrl}?client=${encodeURIComponent(idempotencyKey)}`, {
@@ -681,7 +882,8 @@ export class Booker {
         });
 
         const finalRecRefEl = page.locator(PORTAL_SELECTORS.bookingReference);
-        if (await finalRecRefEl.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await finalRecRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
+        if (await finalRecRefEl.isVisible().catch(() => false)) {
           const finalRecRef = (await finalRecRefEl.textContent())?.trim() || "";
           if (isValidBookingReference(recyclerId, finalRecRef)) {
             const finalSs = await session.captureScreenshot("recovery-retry-success");
@@ -738,7 +940,7 @@ export class Booker {
         browserActions,
       };
     } finally {
-      if (ownsSession) {
+      if (ownsSession && !keepSessionAlive) {
         await session.close();
       }
     }

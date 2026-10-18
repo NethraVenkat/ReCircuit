@@ -408,7 +408,7 @@ export function canTransition(
 // ---------------------------------------------------------------------------
 
 function isRequest(entity: PlanLeg | Request): entity is Request {
-  return "description" in entity && "items" in entity;
+  return !("recyclerId" in entity);
 }
 
 export function transitionState(

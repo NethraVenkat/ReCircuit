@@ -7,7 +7,7 @@
  * and booking reference extraction.
  *
  * Usage:
- *   npm run book -- --request=<id> [--resume-captcha=<code>] [--headless=false]
+ *   npm run book -- --request=<id> [--headless=true|false]
  */
 
 import fs from "fs";
@@ -50,7 +50,7 @@ async function main() {
 
   if (!requestId) {
     console.error("❌ Error: Missing --request=<id> argument.");
-    console.error("Usage: npm run book -- --request=<id> [--resume-captcha=<code>]\n");
+    console.error("Usage: npm run book -- --request=<id> [--headless=true|false]\n");
     process.exit(1);
   }
 
@@ -66,7 +66,7 @@ async function main() {
   const storedData = JSON.parse(fs.readFileSync(requestFilePath, "utf-8"));
   const request = storedData.request;
   const plan = storedData.plan || (storedData.plans && storedData.plans[0]);
-  const approval = storedData.approval || storedData.decisionRecord;
+  const approval = storedData.priorDecision || storedData.approval || storedData.decisionRecord;
   const legs = storedData.legs || (plan && plan.legs) || [];
 
   if (!plan) {
@@ -88,6 +88,12 @@ async function main() {
     pincode: storedData.customer?.pincode || request.pincode || "500072",
     preferredSlot: storedData.customer?.preferredSlot || "Tomorrow (10:00–12:00 IST)",
   };
+
+  const dataWipeAck = Boolean(
+    approval.dataWipeConfirmedByUser ||
+    plan.dataWipeConfirmedByUser ||
+    storedData.dataWipeConfirmed
+  );
 
   console.log(`📦 Request ID   : ${requestId}`);
   console.log(`📋 Plan Hash    : ${plan.planHash}`);
@@ -112,37 +118,16 @@ async function main() {
       approval,
       customer,
       items: leg.items || [],
-      dataWipeAck: true,
+      dataWipeAck,
     };
 
+    // In local CLI mode, default to headed execution so the human can see the browser and solve verification
+    const isHeadless = options.headless === true || options.headless === "true";
     const bookerOpts = {
-      headless: options.headless !== "false",
+      headless: isHeadless,
     };
 
-    if (leg.state === "NEEDS_HUMAN" && options["resume-captcha"]) {
-      console.log(`\n🔑 Resuming with provided verification code: "${options["resume-captcha"]}"`);
-      try {
-        const resumeResult = await BookingRunner.resumeLegWithCaptcha(
-          context,
-          options["resume-captcha"],
-          bookerOpts
-        );
-        console.log(`✅ Booking Successful!`);
-        console.log(`  Official Reference: ${resumeResult.result.bookingReference}`);
-        console.log(`  Confirmation URL  : ${resumeResult.result.confirmationUrl}`);
-        console.log(`  Screenshot Proof  : ${resumeResult.result.screenshotRef}`);
-        console.log(`  State             : ${resumeResult.updatedLeg.state}\n`);
-
-        updatedLegs.push(resumeResult.updatedLeg);
-        allEvents.push(...resumeResult.auditEvents);
-      } catch (err) {
-        console.error(`❌ Resume Failed: ${err.message}\n`);
-        updatedLegs.push(leg);
-      }
-      continue;
-    }
-
-    if (leg.state === "APPROVED") {
+    if (leg.state === "APPROVED" || leg.state === "NEEDS_HUMAN") {
       try {
         const execResult = await BookingRunner.bookLegWithTransitions(context, bookerOpts);
 
@@ -150,9 +135,7 @@ async function main() {
           console.log(`\n🛡️ Human Verification (CAPTCHA) Required:`);
           console.log(`  Live View Link    : ${execResult.result.humanVerification?.liveViewUrl}`);
           console.log(`  Screenshot Saved  : .data/evidence/${execResult.result.humanVerification?.screenshotRef}`);
-          console.log(`  State             : NEEDS_HUMAN`);
-          console.log(`\n👉 To resume after inspecting the CAPTCHA, run:`);
-          console.log(`   npm run book -- --request=${requestId} --resume-captcha=<CODE>\n`);
+          console.log(`  State             : NEEDS_HUMAN\n`);
         } else if (execResult.result.success) {
           console.log(`\n✅ Booking Successfully Placed:`);
           console.log(`  Official Reference: ${execResult.result.bookingReference}`);

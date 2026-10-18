@@ -87,7 +87,8 @@ export function buildApprovalCard(options: {
   }> | undefined;
   registryWarnings?: string[] | undefined;
 }): ApprovalCard {
-  const { request, plan, approvalReasons } = options;
+  const { request, plan } = options;
+  const approvalReasons = options.approvalReasons ? [...options.approvalReasons] : [];
   const slot = options.slotPreference ?? plan.slotPreference ?? DEFAULT_SLOT_PREFERENCE;
 
   const totalFee = plan.totalEstimatedFee;
@@ -222,7 +223,7 @@ export function requestApproval(options: {
   request: Request;
   plan: Plan;
   slotPreference?: SlotPreference | undefined;
-  approvalReasons: ApprovalReason[];
+  approvalReasons?: ApprovalReason[] | undefined;
   isPartial?: boolean | undefined;
   unroutedItems?: Array<{ description: string; reasons: string }> | undefined;
   alternatives?: Array<{
@@ -236,7 +237,7 @@ export function requestApproval(options: {
   }> | undefined;
   registryWarnings?: string[] | undefined;
 }): { request: Request; plan: Plan; card: ApprovalCard } {
-  const { request, plan, approvalReasons } = options;
+  const { request, plan } = options;
   const slotPreference = options.slotPreference ?? plan.slotPreference ?? DEFAULT_SLOT_PREFERENCE;
 
   // Set slotPreference on plan and re-hash plan
@@ -245,6 +246,15 @@ export function requestApproval(options: {
     slotPreference,
   };
   preparedPlan.planHash = hashPlan(preparedPlan);
+
+  const approvalReasons =
+    options.approvalReasons && options.approvalReasons.length > 0
+      ? [...options.approvalReasons]
+      : computeApprovalReasons({
+          request,
+          plan: preparedPlan,
+          legRecyclerIds: preparedPlan.legs.map((l) => l.recyclerId),
+        });
 
   // Transition request to AWAITING_APPROVAL if currently in PLAN_CREATED
   let currentRequest: Request = { ...request, slotPreference };
@@ -306,6 +316,7 @@ export function recordDecision(options: {
         : [];
     return {
       request,
+      plan,
       legs: existingLegs,
       decisionRecord: priorDecision,
       idempotent: true,
@@ -351,6 +362,7 @@ export function recordDecision(options: {
 
     return {
       request: transitionRes.newRequest,
+      plan: { ...plan, legs: createdLegs, planHash: currentPlanHash },
       legs: createdLegs,
       decisionRecord,
       idempotent: false,
@@ -366,6 +378,7 @@ export function recordDecision(options: {
 
   return {
     request: transitionRes.newRequest,
+    plan,
     legs: [],
     decisionRecord,
     idempotent: false,

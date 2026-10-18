@@ -96,8 +96,11 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
     },
     click: async (): Promise<void> => {
       await Promise.resolve();
-      if ((selector.includes("submit") || selector.includes("confirm")) && onSubmitClicked) {
-        onSubmitClicked();
+      if (selector.includes("submit") || selector.includes("confirm")) {
+        currentUrl = url;
+        if (onSubmitClicked) {
+          onSubmitClicked();
+        }
       }
     },
     waitFor: async (): Promise<void> => {
@@ -168,6 +171,10 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
       },
       waitForTimeout: async (): Promise<void> => {
         await Promise.resolve();
+      },
+      waitForFunction: async (): Promise<null> => {
+        await Promise.resolve();
+        return null;
       },
       url: (): string => currentUrl,
       locator: (selector: string): Record<string, unknown> => mockLocator(selector),

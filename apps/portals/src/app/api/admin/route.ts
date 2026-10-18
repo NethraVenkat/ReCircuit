@@ -97,7 +97,13 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (action === "toggle_switch") {
     const rawSwitchName = String(body.switchName);
-    const switchName = rawSwitchName === "raise_fee" ? "raiseFee" : rawSwitchName;
+    const switchMap: Record<string, string> = {
+      raise_fee: "raiseFee",
+      fail_next_submit: "failNextSubmit",
+      omit_next_reference: "omitNextReference",
+      changed_policy_layout: "changedPolicyLayout",
+    };
+    const switchName = switchMap[rawSwitchName] || rawSwitchName;
     const value = Boolean(body.value);
     const updated = await repo.updateFailureSwitches(recyclerId, { [switchName]: value });
     return NextResponse.json({ ok: true, switches: updated });

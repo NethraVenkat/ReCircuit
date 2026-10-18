@@ -126,8 +126,13 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
     setErrorMessage("");
     setValidationErrors([]);
 
+    const domClientReq =
+      (typeof document !== "undefined"
+        ? (document.querySelector('[data-testid="client-request-id"]') as HTMLInputElement)?.value
+        : undefined) || clientRequestId;
+
     const payload = {
-      client_request_id: clientRequestId,
+      client_request_id: domClientReq,
       full_name: fullName,
       phone,
       address_line: addressLine,
@@ -384,7 +389,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             value={itemWeight}
             onChange={(e) => setItemWeight(parseFloat(e.target.value) || 0)}
             placeholder="Kg"
-            step="0.5"
+            step="any"
             className="w-20 px-3 py-2 border rounded text-sm text-slate-900 bg-white"
             min="0"
           />

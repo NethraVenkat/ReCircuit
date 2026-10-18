@@ -148,7 +148,7 @@ export function buildEligibilityMatrix(options: {
         recyclerName: policy.companyName,
         status,
         quote: citedQuote,
-        url: policy.evidence.url,
+        url: policy.evidence?.url || "",
         reason,
       };
 

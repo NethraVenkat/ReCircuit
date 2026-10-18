@@ -93,6 +93,7 @@ export interface ActionAttemptLog {
 
 export interface ApprovalStateTransitionResult {
   request: Request;
+  plan: Plan;
   legs: PlanLeg[];
   decisionRecord: DecisionRecord;
   idempotent: boolean;

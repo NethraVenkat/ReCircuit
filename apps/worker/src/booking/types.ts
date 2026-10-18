@@ -51,6 +51,10 @@ export interface BookerOptions {
   onHumanVerification?: (page: Page, session: BrowserSession) => Promise<void>;
   /** When true and in headless mode without onHumanVerification, pause and return needsHuman without closing session */
   pauseOnHumanVerification?: boolean;
+  /** Keep browser session open on NEEDS_HUMAN so caller can solve interactively in the same page */
+  keepSessionOpenOnNeedsHuman?: boolean;
+  /** When true, indicates an active session being resumed for CAPTCHA/human verification (skips pre-flight check) */
+  isResuming?: boolean;
   /** Custom user-prompt function for CLI interactive wait */
   promptUserSolve?: () => Promise<void>;
   /** Obsolete: kept only for backward compatibility in existing unit test mocks */
