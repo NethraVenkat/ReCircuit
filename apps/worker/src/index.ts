@@ -7,4 +7,6 @@ export * from "./policy/discovery.js";
 export * from "./policy/policy-reader.js";
 export * from "./booking/types.js";
 export * from "./booking/selectors.js";
+export * from "./booking/errors.js";
+export * from "./booking/booker.js";
 
