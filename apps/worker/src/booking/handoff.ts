@@ -9,7 +9,7 @@
  * generate live view URL, and await user completion.
  */
 
-import type { Page } from "@playwright/test";
+import type { Page } from "playwright";
 import type { BrowserSession } from "../browser/session.js";
 import { PORTAL_SELECTORS } from "./selectors.js";
 import type { HumanVerificationHandoff } from "./types.js";

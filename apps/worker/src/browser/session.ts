@@ -12,7 +12,7 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
-import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 export type BrowserMode = "local" | "browserbase";
 

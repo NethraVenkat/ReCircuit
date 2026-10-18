@@ -8,6 +8,7 @@ import {
   transitionState,
   makeIdempotencyKey,
   hashPlan,
+  FeeChangedReapprovalRequiredError,
   type PlanLeg,
   type StatusEvent,
 } from "@recircuit/core";
@@ -68,17 +69,19 @@ export class BookingRunner {
         existingSession
       );
 
-      // 3. Handle Human Verification (CAPTCHA)
-      if (bookerResult.needsHuman && bookerResult.humanVerification) {
-        const stepHuman = transitionState(currentLeg, "NEEDS_HUMAN", {
-          screenshotRef: bookerResult.humanVerification.screenshotRef,
-          liveViewUrl: bookerResult.humanVerification.liveViewUrl,
-        });
-        currentLeg = {
-          ...stepHuman.newLeg,
-          submittingSessionId: bookerResult.sessionId,
-        };
-        auditEvents.push(stepHuman.auditEvent);
+      // 3. Handle Human Verification (CAPTCHA, Slot Mismatch, Missing Data-Wipe)
+      if (bookerResult.needsHuman) {
+        if (currentLeg.state === "SUBMITTING") {
+          const stepHuman = transitionState(currentLeg, "NEEDS_HUMAN", {
+            screenshotRef: bookerResult.humanVerification?.screenshotRef || "needs-human.png",
+            liveViewUrl: bookerResult.humanVerification?.liveViewUrl || "",
+          });
+          currentLeg = {
+            ...stepHuman.newLeg,
+            submittingSessionId: bookerResult.sessionId,
+          };
+          auditEvents.push(stepHuman.auditEvent);
+        }
 
         return {
           updatedLeg: currentLeg,
@@ -110,6 +113,20 @@ export class BookingRunner {
 
       throw new BookerError("Booking completed without confirmation reference or error.", "UNKNOWN_BOOKING_OUTCOME");
     } catch (err: unknown) {
+      if (err instanceof FeeChangedReapprovalRequiredError) {
+        if (context.request && context.request.state === "APPROVED") {
+          const reqStep = transitionState(context.request, "AWAITING_APPROVAL", {
+            planId: context.plan.id,
+            planHash: context.plan.planHash || hashPlan(context.plan),
+            approvalReason: "FEE_CHANGED_REAPPROVAL_REQUIRED",
+          });
+          context.request.state = reqStep.newRequest.state;
+          context.request.updatedAt = reqStep.newRequest.updatedAt;
+          auditEvents.push(reqStep.auditEvent);
+        }
+        throw err;
+      }
+
       // 5. Safe Failure Transition
       const errorMessage = err instanceof Error ? err.message : String(err);
       const errorCode = err instanceof BookerError ? err.code : "BOOKING_FAILURE";

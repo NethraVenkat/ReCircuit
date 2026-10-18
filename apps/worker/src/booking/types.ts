@@ -4,7 +4,9 @@
  * Domain types and interfaces for the Stage 7 Browser Booking Agent (Booker).
  */
 
-import type { Plan, PlanLeg, DecisionRecord } from "@recircuit/core";
+import type { Plan, PlanLeg, DecisionRecord, Request } from "@recircuit/core";
+import type { Page } from "playwright";
+import type { BrowserSession } from "../browser/session.js";
 
 export interface BookingCustomerInfo {
   fullName: string;
@@ -21,13 +23,38 @@ export interface BookingItemInput {
   weightKg?: number;
 }
 
+export interface BrowserActionLog {
+  action:
+    | "navigate"
+    | "preflight_recovery_check"
+    | "fill_form"
+    | "readback"
+    | "review_fee"
+    | "human_verification_detected"
+    | "human_verification_solved"
+    | "submit"
+    | "confirmation"
+    | "recovery_lookup"
+    | "recovery_retry";
+  stepNumber: number;
+  timestamp: string;
+  url?: string;
+  details?: Record<string, unknown>;
+  screenshotRef?: string;
+}
+
 export interface BookerOptions {
   portalBaseUrl?: string;
   headless?: boolean;
   timeoutMs?: number;
-  /** Human-supplied verification code when resuming from NEEDS_HUMAN */
+  /** Test hook or callback to simulate human solving verification directly on the live page */
+  onHumanVerification?: (page: Page, session: BrowserSession) => Promise<void>;
+  /** When true and in headless mode without onHumanVerification, pause and return needsHuman without closing session */
+  pauseOnHumanVerification?: boolean;
+  /** Custom user-prompt function for CLI interactive wait */
+  promptUserSolve?: () => Promise<void>;
+  /** Obsolete: kept only for backward compatibility in existing unit test mocks */
   captchaCode?: string;
-  /** Used for session resumption */
   captchaSessionId?: string;
 }
 
@@ -50,8 +77,12 @@ export interface BookerResult {
   needsHuman?: boolean;
   humanVerification?: HumanVerificationHandoff;
   isDuplicate?: boolean;
+  isRecovered?: boolean;
+  observedFeeInr?: number;
   error?: string;
   errorCode?: string;
+  browserActions: BrowserActionLog[];
+  session?: BrowserSession;
 }
 
 export interface LegBookingContext {
@@ -63,5 +94,6 @@ export interface LegBookingContext {
   dataWipeAck?: boolean;
   portalBaseUrl?: string;
   usedIdempotencyKeys?: Set<string> | string[];
+  request?: Request;
 }
 

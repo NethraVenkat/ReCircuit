@@ -19,9 +19,11 @@ import {
   hashPlan,
   makeIdempotencyKey,
   clearActionLogs,
+  FeeChangedReapprovalRequiredError,
   type Plan,
   type PlanLeg,
   type DecisionRecord,
+  type Request,
 } from "@recircuit/core";
 import type { BrowserSession } from "../browser/session.js";
 import { Booker } from "./booker.js";
@@ -30,8 +32,7 @@ import type { BookingCustomerInfo, LegBookingContext } from "./types.js";
 import {
   FormVerificationError,
   InvalidBookingReferenceError,
-  MissingBookingReferenceError,
-  PortalServerError,
+  UnverifiedBookingError,
 } from "./errors.js";
 
 interface MockSessionConfig {
@@ -46,6 +47,9 @@ interface MockSessionConfig {
   onFilledCaptcha?: (val: string) => void;
   onSubmitClicked?: () => void;
   defaultCustomer: BookingCustomerInfo;
+  observedFee?: number;
+  slotOptions?: string[];
+  clientFoundReference?: boolean;
 }
 
 function createMockSession(config: MockSessionConfig): BrowserSession {
@@ -61,14 +65,97 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
     onFilledCaptcha,
     onSubmitClicked,
     defaultCustomer,
+    observedFee = 180,
+    slotOptions = ["Tomorrow (10:00–12:00 IST)"],
+    clientFoundReference = false,
   } = config;
+
+  let currentUrl = url;
+
+  const mockLocator = (selector: string): Record<string, unknown> => ({
+    count: async (): Promise<number> => {
+      await Promise.resolve();
+      if (selector.includes("human-verification")) return isHumanVerif ? 1 : 0;
+      return 1;
+    },
+    evaluate: async (): Promise<void> => {
+      await Promise.resolve();
+    },
+    selectOption: async (): Promise<string[]> => {
+      await Promise.resolve();
+      return [];
+    },
+    check: async (): Promise<void> => {
+      await Promise.resolve();
+    },
+    uncheck: async (): Promise<void> => {
+      await Promise.resolve();
+    },
+    fill: async (): Promise<void> => {
+      await Promise.resolve();
+    },
+    click: async (): Promise<void> => {
+      await Promise.resolve();
+      if ((selector.includes("submit") || selector.includes("confirm")) && onSubmitClicked) {
+        onSubmitClicked();
+      }
+    },
+    waitFor: async (): Promise<void> => {
+      await Promise.resolve();
+    },
+    isVisible: async (): Promise<boolean> => {
+      await Promise.resolve();
+      if (selector.includes("form-error-banner")) return Boolean(errorBanner);
+      if (selector.includes("human-verification")) return isHumanVerif;
+      if (selector.includes("booking-reference-missing")) return missingReference;
+      if (selector.includes("booking-reference")) {
+        if (currentUrl.includes("client=")) {
+          return Boolean(clientFoundReference);
+        }
+        return !missingReference && Boolean(reference);
+      }
+      if (selector.includes("duplicate-notice")) return isDuplicate;
+      return true;
+    },
+    isChecked: async (): Promise<boolean> => {
+      await Promise.resolve();
+      return true;
+    },
+    textContent: async (): Promise<string> => {
+      await Promise.resolve();
+      if (selector.includes("form-error-banner")) return errorBanner || "";
+      if (selector.includes("booking-reference")) return reference;
+      if (selector.includes("portal-computed-fee")) return `Pickup charge for this request: ₹${observedFee}`;
+      return "";
+    },
+    getAttribute: async (attr: string): Promise<string | null> => {
+      await Promise.resolve();
+      if (attr === "href") return "/book-pickup";
+      return "slot-val-1";
+    },
+    first: (): Record<string, unknown> => mockLocator(selector),
+    all: async (): Promise<Array<{ textContent: () => Promise<string>; getAttribute: () => Promise<string> }>> => {
+      await Promise.resolve();
+      return slotOptions.map((opt) => ({
+        textContent: async (): Promise<string> => {
+          await Promise.resolve();
+          return opt;
+        },
+        getAttribute: async (): Promise<string> => {
+          await Promise.resolve();
+          return opt;
+        },
+      }));
+    },
+  });
 
   return {
     sessionId,
     mode: "local",
     page: {
-      goto: async (): Promise<null> => {
+      goto: async (destUrl: string): Promise<null> => {
         await Promise.resolve();
+        currentUrl = destUrl;
         return null;
       },
       waitForSelector: async (): Promise<null> => {
@@ -79,51 +166,17 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
         await Promise.resolve();
         return null;
       },
-      url: (): string => url,
-      locator: (selector: string): Record<string, unknown> => ({
-        count: async (): Promise<number> => {
-          await Promise.resolve();
-          if (selector.includes("human-verification")) return isHumanVerif ? 1 : 0;
-          return 1;
-        },
-        evaluate: async (): Promise<void> => {
-          await Promise.resolve();
-        },
-        selectOption: async (): Promise<string[]> => {
-          await Promise.resolve();
-          return [];
-        },
-        check: async (): Promise<void> => {
-          await Promise.resolve();
-        },
-        uncheck: async (): Promise<void> => {
-          await Promise.resolve();
-        },
-        fill: async (): Promise<void> => {
-          await Promise.resolve();
-        },
-        click: async (): Promise<void> => {
-          await Promise.resolve();
-          if (selector.includes("submit-booking") && onSubmitClicked) {
-            onSubmitClicked();
-          }
-        },
-        isVisible: async (): Promise<boolean> => {
-          await Promise.resolve();
-          if (selector.includes("form-error-banner")) return Boolean(errorBanner);
-          if (selector.includes("human-verification")) return isHumanVerif;
-          if (selector.includes("booking-reference-missing")) return missingReference;
-          if (selector.includes("booking-reference")) return !missingReference && Boolean(reference);
-          if (selector.includes("duplicate-notice")) return isDuplicate;
-          return false;
-        },
-        textContent: async (): Promise<string> => {
-          await Promise.resolve();
-          if (selector.includes("form-error-banner")) return errorBanner || "";
-          if (selector.includes("booking-reference")) return reference;
-          return "";
-        },
-      }),
+      waitForTimeout: async (): Promise<void> => {
+        await Promise.resolve();
+      },
+      url: (): string => currentUrl,
+      locator: (selector: string): Record<string, unknown> => mockLocator(selector),
+      click: async (selector: string): Promise<void> => {
+        await Promise.resolve();
+        if ((selector.includes("submit") || selector.includes("confirm")) && onSubmitClicked) {
+          onSubmitClicked();
+        }
+      },
       fill: async (selector: string, val: string): Promise<void> => {
         await Promise.resolve();
         if (selector.includes("captcha-code") && onFilledCaptcha) {
@@ -395,10 +448,12 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
         items: [],
       };
 
-      await expect(BookingRunner.bookLegWithTransitions(context, {}, mockSession)).rejects.toThrow(PortalServerError);
+      await expect(BookingRunner.bookLegWithTransitions(context, {}, mockSession)).rejects.toThrow(
+        UnverifiedBookingError
+      );
     });
 
-    it("throws MissingBookingReferenceError if confirmation page omits reference", async () => {
+    it("throws UnverifiedBookingError if confirmation page omits reference and recovery cannot verify", async () => {
       const mockSession = createMockSession({
         defaultCustomer: sampleCustomer,
         missingReference: true,
@@ -414,7 +469,7 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
       };
 
       await expect(BookingRunner.bookLegWithTransitions(context, {}, mockSession)).rejects.toThrow(
-        MissingBookingReferenceError
+        UnverifiedBookingError
       );
     });
 
@@ -491,6 +546,153 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
       expect(execution.result.bookingReference).toBe("QSH-88888");
       expect(execution.result.isDuplicate).toBe(true);
       expect(execution.updatedLeg.state).toBe("REQUEST_SUBMITTED");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. Stage 7 Review Step, Recovery Engine, and Slot/Data-Wipe Guards
+  // -------------------------------------------------------------------------
+  describe("Stage 7 Review Step & Recovery Engine", () => {
+    it("fee change on review step throws FeeChangedReapprovalRequiredError and rolls request back to AWAITING_APPROVAL", async () => {
+      // QuickScrap plan approved with fee ₹50; portal review step shows ₹90 (e.g. raise_fee switch)
+      const mockSession = createMockSession({
+        defaultCustomer: sampleCustomer,
+        observedFee: 90, // Mismatched fee on review step
+      });
+
+      const sampleRequest: Request = {
+        id: samplePlan.requestId,
+        userId: "user-123",
+        description: "Test request",
+        items: [],
+        state: "APPROVED",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const context: LegBookingContext = {
+        leg: {
+          ...sampleLeg,
+          recyclerId: "quickscrap",
+          estimatedFee: 50,
+        },
+        plan: {
+          ...samplePlan,
+          totalEstimatedFee: 50,
+        },
+        approval: sampleApproval,
+        customer: sampleCustomer,
+        items: [],
+        request: sampleRequest,
+      };
+
+      await expect(BookingRunner.bookLegWithTransitions(context, {}, mockSession)).rejects.toThrow(
+        FeeChangedReapprovalRequiredError
+      );
+
+      // Verify request rolled back from APPROVED to AWAITING_APPROVAL
+      expect(sampleRequest.state).toBe("AWAITING_APPROVAL");
+    });
+
+    it("slot preference mismatch halts with NEEDS_HUMAN and errorCode NO_MATCHING_SLOT", async () => {
+      const mockSession = createMockSession({
+        defaultCustomer: { ...sampleCustomer, preferredSlot: "Evening" },
+        slotOptions: ["Morning (10:00–12:00 IST)", "Afternoon (15:00–17:00 IST)"],
+      });
+
+      const context: LegBookingContext = {
+        leg: sampleLeg,
+        plan: { ...samplePlan, slotPreference: { day: "earliest", window: "afternoon" } },
+        customer: { ...sampleCustomer, preferredSlot: "Evening" },
+        approval: sampleApproval,
+        items: [],
+      };
+
+      const result = await Booker.bookLeg(context, {}, mockSession);
+      expect(result.success).toBe(false);
+      expect(result.needsHuman).toBe(true);
+      expect(result.errorCode).toBe("NO_MATCHING_SLOT");
+    });
+
+    it("unconfirmed data-wipe for data-bearing item halts with NEEDS_HUMAN and never submits", async () => {
+      const mockSession = createMockSession({
+        defaultCustomer: sampleCustomer,
+      });
+
+      const unconfirmedApproval: DecisionRecord = {
+        ...sampleApproval,
+        dataWipeConfirmedByUser: false,
+      };
+
+      const context: LegBookingContext = {
+        leg: sampleLeg, // Contains "Dell Laptop"
+        plan: samplePlan,
+        approval: unconfirmedApproval,
+        customer: sampleCustomer,
+        items: [{ name: "Dell Laptop", quantity: 1, weightKg: 2.2 }],
+        dataWipeAck: false,
+      };
+
+      const result = await Booker.bookLeg(context, {}, mockSession);
+      expect(result.success).toBe(false);
+      expect(result.needsHuman).toBe(true);
+      expect(result.errorCode).toBe("DATA_WIPE_NOT_CONFIRMED");
+    });
+
+    it("pre-flight recovery check via ?client= recovers existing booking without refilling form", async () => {
+      const mockSession = createMockSession({
+        defaultCustomer: sampleCustomer,
+        reference: "DEC-99887",
+        clientFoundReference: true,
+        url: "http://localhost:3101/track?client=req-test-client",
+      });
+
+      const context: LegBookingContext = {
+        leg: sampleLeg,
+        plan: samplePlan,
+        approval: sampleApproval,
+        customer: sampleCustomer,
+        items: [],
+      };
+
+      const result = await Booker.bookLeg(context, {}, mockSession);
+      expect(result.success).toBe(true);
+      expect(result.bookingReference).toBe("DEC-99887");
+      expect(result.isRecovered).toBe(true);
+    });
+
+    it("single-session CAPTCHA handoff executes via onHumanVerification hook on the same page", async () => {
+      let hookCalled = false;
+
+      const mockSession = createMockSession({
+        defaultCustomer: sampleCustomer,
+        isHumanVerif: true,
+        reference: "PPK-33445",
+        url: "http://localhost:3102/schedule/done?ref=PPK-33445",
+      });
+
+      const context: LegBookingContext = {
+        leg: { ...sampleLeg, recyclerId: "paperplus" },
+        plan: samplePlan,
+        approval: sampleApproval,
+        customer: sampleCustomer,
+        items: [],
+      };
+
+      const result = await Booker.bookLeg(
+        context,
+        {
+          onHumanVerification: async () => {
+            await Promise.resolve();
+            hookCalled = true;
+          },
+        },
+        mockSession
+      );
+
+      expect(hookCalled).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.bookingReference).toBe("PPK-33445");
     });
   });
 });

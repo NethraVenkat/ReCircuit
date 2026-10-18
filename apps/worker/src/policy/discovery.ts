@@ -5,7 +5,7 @@
  * by observing DOM navigation links. Capped at max 4 pages per site.
  */
 
-import type { Page } from "@playwright/test";
+import type { Page } from "playwright";
 
 export const POLICY_KEYWORDS = [
   "accepted",

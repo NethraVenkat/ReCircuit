@@ -98,3 +98,41 @@ export class InvalidBookingReferenceError extends BookerError {
   }
 }
 
+/** Thrown when approved slotPreference cannot be matched to available dropdown slots */
+export class NoMatchingSlotError extends BookerError {
+  public readonly preference: string;
+  public readonly availableOptions: string[];
+
+  constructor(preference: string, availableOptions: string[]) {
+    super(
+      `No matching slot available for approved slotPreference "${preference}". Available options: [${availableOptions.join(", ")}]. Handoff to human.`,
+      "NO_MATCHING_SLOT"
+    );
+    this.name = "NoMatchingSlotError";
+    this.preference = preference;
+    this.availableOptions = availableOptions;
+  }
+}
+
+/** Thrown when booking contains data-bearing devices but data-wipe is not confirmed */
+export class DataWipeNotConfirmedError extends BookerError {
+  constructor() {
+    super(
+      "Data-wipe destruction declaration required for data-bearing electronic devices but was not confirmed by user. Aborting booking submission without checking box.",
+      "DATA_WIPE_NOT_CONFIRMED"
+    );
+    this.name = "DataWipeNotConfirmedError";
+  }
+}
+
+/** Thrown when recovery retry fails to verify the booking */
+export class UnverifiedBookingError extends BookerError {
+  constructor(details?: string) {
+    super(
+      `We could not verify this booking yet.${details ? ` Details: ${details}` : ""}`,
+      "UNVERIFIED_BOOKING"
+    );
+    this.name = "UnverifiedBookingError";
+  }
+}
+
