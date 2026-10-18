@@ -114,17 +114,16 @@
 | Domain Types & Routes (`apps/worker/src/booking/types.ts`, `selectors.ts`) | ✅ Done | Type contracts, routes, and reference validation regexes |
 | Safe Action Pre-Flight Gate (`assertActionAllowed`) | ✅ Done | Verifies leg state, user approval, planHash match, unused idempotencyKey, and fee parity |
 | Pure Browser HTML Form Filling | ✅ Done | Operates via Playwright browser page; never calls portal JSON APIs directly |
-| DOM Readback Verification (`FormVerificationError`) | ✅ Done | Verifies live DOM input values match intended payload before submission |
-| Human Verification Handoff (`NEEDS_HUMAN`) | ✅ Done | Rule S-5: Halts on CAPTCHA, captures proof screenshot & liveViewUrl, never guesses codes |
-| Resumption Flow (`resumeLegWithCaptcha`) | ✅ Done | Resumes from `NEEDS_HUMAN` upon human-provided code and advances to `REQUEST_SUBMITTED` |
-| Reference Extraction & Pattern Enforcement | ✅ Done | Extracts reference and asserts prefix regex; rejects omitted or malformed references |
-| Server Outage & Failure Safety (`PortalServerError`) | ✅ Done | Detects HTTP 500 error banner and fails safe without advancing leg state |
-| Idempotency Protection & Deduplication | ✅ Done | Injects deterministic `client_request_id`; marks `isDuplicate: true` on repeat submissions |
-| State Machine Transitions & Audit Events | ✅ Done | Orchestrates `APPROVED -> SUBMITTING -> (NEEDS_HUMAN) -> REQUEST_SUBMITTED` |
-| CLI Runner (`npm run book`) | ✅ Done | Interactive runner executing bookings and resuming CAPTCHA challenges from terminal |
-| Vitest Unit & Integration Tests (`apps/worker/src/booking/booker.test.ts` - 12 tests) | ✅ Done | 12 test cases covering safe actions, readback, CAPTCHA, outages, references, and duplicates |
-| Total Vitest tests: 225 passing across 10 files | ✅ Done | 0 warnings, 0 failures |
-| Total Playwright E2E tests: 15 passing across 2 files | ✅ Done | 100% passing |
+| DOM Readback Verification (`FormVerificationError`) | ✅ Done | Verifies items, quantities/kg, slot matched against approved slotPreference, pincode, and data-wipe checkbox |
+| Portal Review Step with Real Computed Fee | ✅ Done | Portals render computed fee review step; Booker reads `observedFeeInr` from DOM; `raise_fee` switch tested |
+| Live Human Verification Handoff (`NEEDS_HUMAN`) | ✅ Done | Rule S-5: Kept open in SAME browser session; agent never reads/OCRs/types code; test hook `humanSolveForTest` solves in same page |
+| Recovery Engine & Idempotency Protection | ✅ Done | Pre-flight `?client=` lookup; on 500 or missing reference checks `?client=` first, retries once with same key, else `UnverifiedBookingError` |
+| Navigation by Links (Home -> Booking Page) | ✅ Done | Traverses link text from home page with recorded fallback route |
+| Architectural Guards & Action Audit | ✅ Done | Static test guards against worker calling portal `/api/*` or importing test helpers; screenshot per browser action |
+| Real Browser E2E Suite (`tests/e2e/booking.spec.ts`) | ✅ Done | 8 real browser scenarios (a–h) testing live mock portals with zero browser/portal mocks |
+| Vitest Unit & Integration Tests (`apps/worker/src/booking/booker.test.ts`, etc.) | ✅ Done | 17 tests covering safe action gate, readback, outages, CAPTCHA, and duplicates |
+| Total Vitest tests: 243 passing across 11 files | ✅ Done | 0 warnings, 0 failures |
+| Total Playwright E2E tests: 23 passing across 3 files | ✅ Done | Portals: 10, Policies: 5, Booking: 8 (100% passing) |
 
 ## Known Issues & Security Audit Findings
 
