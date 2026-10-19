@@ -567,8 +567,9 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
     expect(formatted).toContain("npm run approve -- --request=");
   });
 
-  // Stage 6 Fix Test 1: Mandatory Idempotency parameter
-  it("mandatory idempotency: assertActionAllowed throws if usedIdempotencyKeys is omitted", () => {
+  // Stage 7 Fix Test: Caller cannot bypass idempotency check by passing an empty list
+  it("caller cannot bypass idempotency check by passing an empty list: assertActionAllowed loads from action store", () => {
+    clearActionLogs();
     const request = createMockRequest();
     const plan = createMockPlan(request.id);
     const leg = plan.legs[0]!;
@@ -584,6 +585,17 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       dataWipeConfirmedByUser: true,
     };
 
+    // First call succeeds and writes to action store
+    const res = assertActionAllowed({
+      leg,
+      plan,
+      approval,
+      action: "submit_booking",
+      observedFeeInr: 180,
+    });
+    expect(res.allowed).toBe(true);
+
+    // Second call: caller passes an empty list attempting to bypass store
     expect(() => {
       assertActionAllowed({
         leg,
@@ -591,8 +603,22 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval,
         action: "submit_booking",
         observedFeeInr: 180,
-      } as unknown as Parameters<typeof assertActionAllowed>[0]);
-    }).toThrow(/usedIdempotencyKeys is mandatory/i);
+        usedIdempotencyKeys: [],
+      });
+    }).toThrow(SafeActionBlockedError);
+
+    try {
+      assertActionAllowed({
+        leg,
+        plan,
+        approval,
+        action: "submit_booking",
+        observedFeeInr: 180,
+        usedIdempotencyKeys: [],
+      });
+    } catch (err) {
+      expect((err as SafeActionBlockedError).code).toBe("IDEMPOTENCY_KEY_REUSED");
+    }
   });
 
   // Stage 6 Fix Test 2: Data wipe unconfirmed blocks laptop booking

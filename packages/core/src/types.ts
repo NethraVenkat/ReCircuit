@@ -205,6 +205,7 @@ export interface RecyclerPolicy {
 
 export interface PlanLegItem {
   id: string;
+  name?: string;
   category?: ItemCategory;
   description?: string;
   quantity?: number;

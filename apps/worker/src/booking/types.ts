@@ -18,9 +18,13 @@ export interface BookingCustomerInfo {
 }
 
 export interface BookingItemInput {
-  name: string;
+  id?: string;
+  name?: string;
+  category?: string;
+  description?: string;
   quantity?: number;
   weightKg?: number;
+  estimatedWeightKg?: number;
 }
 
 export interface BrowserActionLog {

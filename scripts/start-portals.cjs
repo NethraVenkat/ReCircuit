@@ -10,6 +10,31 @@
 
 const { spawn } = require("child_process");
 const path = require("path");
+const fs = require("fs");
+
+function loadEnvLocal() {
+  const envLocalPath = path.resolve(__dirname, "..", ".env.local");
+  if (fs.existsSync(envLocalPath)) {
+    const lines = fs.readFileSync(envLocalPath, "utf-8").split("\n");
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eqIdx = line.indexOf("=");
+      if (eqIdx !== -1) {
+        const key = line.slice(0, eqIdx).trim();
+        let val = line.slice(eqIdx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+
+loadEnvLocal();
 
 const portalsDir = path.resolve(__dirname, "..", "apps", "portals");
 const isWin = process.platform === "win32";
@@ -32,7 +57,7 @@ PORTALS.forEach(({ id, name, port, color }) => {
     PORT: String(port),
     RECYCLER_ID: id,
     NEXT_DIST_DIR: `.next-${port}`,
-    ADMIN_TOKEN: process.env.ADMIN_TOKEN || "test-admin-secret-token",
+    ...(process.env.ADMIN_TOKEN ? { ADMIN_TOKEN: process.env.ADMIN_TOKEN } : {}),
   };
 
   const cmd = `${npmCmd} run dev -- -p ${port}`;

@@ -51,6 +51,7 @@ export interface FailureSwitches {
   changedPolicyLayout: boolean;
   hideFeeInfo: boolean;
   raiseFee?: boolean;
+  hideReviewFee?: boolean;
 }
 
 export const SERVICEABLE_PINCODES = [

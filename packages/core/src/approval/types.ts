@@ -73,7 +73,7 @@ export interface SafeActionParams {
   approval: DecisionRecord | null;
   action: "submit_booking";
   observedFeeInr: number;
-  usedIdempotencyKeys: Set<string> | string[];
+  usedIdempotencyKeys?: Set<string> | string[] | undefined;
 }
 
 export interface ActionAttemptLog {

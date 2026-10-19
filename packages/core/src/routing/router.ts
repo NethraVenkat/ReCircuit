@@ -17,7 +17,7 @@
 
 import { randomUUID } from "crypto";
 import type { IntakeItem } from "../intake/schema.js";
-import { taxonomyCategoryToItemCategory } from "../intake/taxonomy.js";
+import { taxonomyCategoryToItemCategory, getCanonicalItemLabel } from "../intake/taxonomy.js";
 import type { ExtractedPolicy } from "../policy/policy-schema.js";
 import { hashPlan } from "../state-machine.js";
 import type { Plan, PlanLeg, RegistrationStatus } from "../types.js";
@@ -167,6 +167,7 @@ export function generateRoutingPlans(options: {
         itemIds: groupItems.map((gi) => gi.id),
         items: groupItems.map((gi) => ({
           id: gi.id,
+          name: getCanonicalItemLabel(gi.category),
           category: taxonomyCategoryToItemCategory(gi.category),
           description: gi.rawText,
           quantity: gi.quantity,

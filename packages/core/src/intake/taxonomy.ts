@@ -220,3 +220,54 @@ export function itemCategoryToTaxonomyCategories(cat: ItemCategory): TaxonomyCat
     .map((entry) => entry.category);
 }
 
+export const CANONICAL_LABELS: Record<TaxonomyCategory, string> = {
+  laptop: "Laptop",
+  desktop: "Desktop Computer",
+  mobile_phone: "Mobile Phone",
+  charger_cable: "Charger / Cable",
+  battery_household: "Household Battery",
+  small_electronics: "Small Electronics",
+  large_appliance: "Large Appliance",
+  newspaper: "Newspaper",
+  cardboard: "Cardboard",
+  books_magazines: "Books & Magazines",
+  plastic: "Plastic Scrap",
+  metal: "Metal Scrap",
+  glass: "Glass Scrap",
+  textiles: "Textiles",
+  hazardous: "Hazardous Waste",
+  other: "Other E-Waste",
+};
+
+export function getCanonicalItemLabel(input: string): string {
+  if (!input) return "Recyclable Item";
+  const lower = input.toLowerCase().trim();
+
+  // Direct taxonomy category match
+  if (lower in CANONICAL_LABELS) {
+    return CANONICAL_LABELS[lower as TaxonomyCategory];
+  }
+
+  // Common keyword matches
+  if (lower.includes("laptop") || lower.includes("notebook")) return "Laptop";
+  if (lower.includes("desktop") || lower.includes("pc")) return "Desktop Computer";
+  if (lower.includes("phone") || lower.includes("mobile")) return "Mobile Phone";
+  if (lower.includes("battery") || lower.includes("batteries")) return "Household Battery";
+  if (lower.includes("newspaper") || lower.includes("raddi")) return "Newspaper";
+  if (lower.includes("cardboard") || lower.includes("carton")) return "Cardboard";
+  if (lower.includes("book") || lower.includes("magazine")) return "Books & Magazines";
+  if (lower.includes("charger") || lower.includes("cable") || lower.includes("wire")) return "Charger / Cable";
+  if (lower.includes("electronic") || lower.includes("gadget")) return "Small Electronics";
+  if (lower.includes("plastic")) return "Plastic Scrap";
+  if (lower.includes("metal") || lower.includes("iron") || lower.includes("copper") || lower.includes("aluminum")) return "Metal Scrap";
+  if (lower.includes("glass")) return "Glass Scrap";
+
+  // ItemCategory matching
+  if (lower === "electronics") return "Small Electronics";
+  if (lower === "batteries") return "Household Battery";
+  if (lower === "paper") return "Newspaper";
+
+  return input;
+}
+
+

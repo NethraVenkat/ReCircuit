@@ -26,8 +26,15 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const [captchaCode, setCaptchaCode] = useState("");
   const [captchaKey, setCaptchaKey] = useState(0);
 
+  // Default item based on recycler
+  const getDefaultItems = (rId: string): BookingItemInput[] => {
+    if (rId === "deccan") return [{ name: "Dell Laptop", quantity: 1, weightKg: 2.2 }];
+    if (rId === "paperplus") return [{ name: "Old Newspaper", quantity: 1, weightKg: 8.0 }];
+    return [{ name: "Old Electronics & Books", quantity: 2, weightKg: 6.0 }];
+  };
+
   // Items list
-  const [items, setItems] = useState<BookingItemInput[]>([]);
+  const [items, setItems] = useState<BookingItemInput[]>(() => getDefaultItems(recyclerId));
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState<number>(1);
   const [itemWeight, setItemWeight] = useState<number>(5);
@@ -38,7 +45,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   );
   const initialFee =
     recyclerId === "deccan" ? (totalWeight < 5 ? 180 : 0) : recyclerId === "quickscrap" ? 50 : 0;
-  const [computedFee, setComputedFee] = useState<number>(initialFee);
+  const [computedFee, setComputedFee] = useState<number | null>(initialFee);
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -52,6 +59,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       .then((data) => {
         if (typeof data.fee === "number") {
           setComputedFee(data.fee);
+        } else if (data.fee === null || data.hideReviewFee) {
+          setComputedFee(null);
         }
       })
       .catch(() => {});
@@ -64,15 +73,6 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
     setClientRequestId(randId);
     if (slots.length > 0) {
       setPreferredSlot(slots[0] || "");
-    }
-
-    // Default item based on recycler
-    if (recyclerId === "deccan") {
-      setItems([{ name: "Dell Laptop", quantity: 1, weightKg: 2.2 }]);
-    } else if (recyclerId === "paperplus") {
-      setItems([{ name: "Old Newspaper", quantity: 1, weightKg: 8.0 }]);
-    } else {
-      setItems([{ name: "Old Electronics & Books", quantity: 2, weightKg: 6.0 }]);
     }
 
     // Initialize CAPTCHA for PaperPlus
@@ -343,12 +343,13 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               className="flex items-center justify-between p-3 rounded border text-sm bg-slate-50 text-slate-800"
             >
               <div>
-                <span className="font-bold">{item.name}</span>
-                {item.quantity && <span className="ml-2 text-xs text-slate-600">Qty: {item.quantity}</span>}
-                {item.weightKg && <span className="ml-2 text-xs text-slate-600">Weight: {item.weightKg} kg</span>}
+                <span data-testid="item-row-name" className="font-bold">{item.name}</span>
+                {item.quantity && <span data-testid="item-row-qty" className="ml-2 text-xs text-slate-600">Qty: {item.quantity}</span>}
+                {item.weightKg && <span data-testid="item-row-weight" className="ml-2 text-xs text-slate-600">Weight: {item.weightKg} kg</span>}
               </div>
               <button
                 type="button"
+                data-testid="remove-item"
                 onClick={() => handleRemoveItem(idx)}
                 className="text-xs text-red-600 hover:text-red-800 font-medium"
               >
@@ -493,12 +494,21 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <div className="text-xs uppercase font-bold tracking-wider text-slate-500">
           Review Pickup Details & Fee
         </div>
-        <div
-          data-testid="portal-computed-fee"
-          className="text-base font-bold text-slate-900"
-        >
-          Pickup charge for this request: ₹{computedFee}
-        </div>
+        {computedFee !== null && typeof computedFee === "number" ? (
+          <div
+            data-testid="portal-computed-fee"
+            className="text-base font-bold text-slate-900"
+          >
+            Pickup charge for this request: ₹{computedFee}
+          </div>
+        ) : (
+          <div
+            data-testid="portal-fee-notice"
+            className="text-sm italic text-slate-500"
+          >
+            Pickup fee to be assessed upon collection by depot agent.
+          </div>
+        )}
         <p className="text-xs text-slate-600">
           Please review your items, address, and slot above before confirming your booking.
         </p>

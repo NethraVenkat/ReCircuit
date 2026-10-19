@@ -18,6 +18,7 @@
 import readline from "readline";
 import {
   assertActionAllowed,
+  getCanonicalItemLabel,
   hashPlan,
   makeIdempotencyKey,
   SafeActionBlockedError,
@@ -40,7 +41,9 @@ import type {
   LegBookingContext,
 } from "./types.js";
 import {
+  FeeNotFoundError,
   FormVerificationError,
+  DomReadbackMismatchError,
   InvalidBookingReferenceError,
   UnverifiedBookingError,
 } from "./errors.js";
@@ -88,7 +91,6 @@ export class Booker {
     const currentPlanHash = plan.planHash || hashPlan(plan);
     const idempotencyKey =
       leg.idempotencyKey || makeIdempotencyKey(currentPlanHash, leg.id, leg.recyclerId);
-    const usedKeys = context.usedIdempotencyKeys ?? new Set<string>();
 
     // -----------------------------------------------------------------------
     // 1. Initial Gating Checks (Pre-Browser Validation)
@@ -199,7 +201,7 @@ export class Booker {
       existingSession ||
       (await openSession({
         mode: (process.env.BROWSER_MODE as "local" | "browserbase") || "local",
-        headless: options.headless ?? true,
+        headless: options.headless === true,
         recyclerId,
       }));
 
@@ -439,17 +441,25 @@ export class Booker {
         await fillCustomerInputs();
       }
 
-      // Consignment items
+      // 7. Add Leg Items (Clearing any pre-filled rows first)
+      const removeButtons = page.locator(PORTAL_SELECTORS.removeItem);
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const count = await removeButtons.count();
+        if (count === 0) break;
+        await removeButtons.first().click().catch(() => {});
+        await page.waitForTimeout(200);
+      }
+
       if (context.items && context.items.length > 0) {
         for (const item of context.items) {
           const nameInput = page.locator(PORTAL_SELECTORS.itemName);
           const addBtn = page.locator(PORTAL_SELECTORS.addItem);
           if ((await nameInput.count()) && (await addBtn.count())) {
-            const rawName = item.name || "Recyclable Item";
-            await nameInput.fill(rawName);
+            const canonicalName = getCanonicalItemLabel(item.name || item.description || item.category || "Recyclable Item");
+            await nameInput.fill(canonicalName);
             const qty = item.quantity ?? 1;
             await page.fill(PORTAL_SELECTORS.itemQty, String(qty));
-            const wt = item.weightKg ?? 1;
+            const wt = item.weightKg ?? item.estimatedWeightKg ?? 1;
             await page.fill(PORTAL_SELECTORS.itemWeight, String(wt));
             await addBtn.click();
             await page.waitForTimeout(300);
@@ -524,6 +534,47 @@ export class Booker {
         throw new FormVerificationError("pincode", customer.pincode, readPincode);
       }
 
+      // Verify full item list
+      const renderedItemRows = await page.locator(PORTAL_SELECTORS.itemRow).all();
+      const expectedItems = context.items || [];
+      if (renderedItemRows.length !== expectedItems.length) {
+        throw new DomReadbackMismatchError(
+          "items.count",
+          String(expectedItems.length),
+          String(renderedItemRows.length)
+        );
+      }
+
+      for (let idx = 0; idx < expectedItems.length; idx++) {
+        const expItem = expectedItems[idx]!;
+        const row = renderedItemRows[idx]!;
+        const rowName = (await row.locator(PORTAL_SELECTORS.itemRowName).textContent())?.trim() || "";
+        const rowQtyText = (await row.locator(PORTAL_SELECTORS.itemRowQty).textContent())?.trim() || "";
+        const rowWeightText = (await row.locator(PORTAL_SELECTORS.itemRowWeight).textContent())?.trim() || "";
+
+        const expCanonical = getCanonicalItemLabel(expItem.name || expItem.description || expItem.category || "");
+        if (rowName !== expCanonical) {
+          throw new DomReadbackMismatchError(`items[${idx}].name`, expCanonical, rowName);
+        }
+
+        if (expItem.quantity !== undefined) {
+          const qtyMatch = rowQtyText.match(/\d+/);
+          const obsQty = qtyMatch ? parseInt(qtyMatch[0], 10) : undefined;
+          if (obsQty !== expItem.quantity) {
+            throw new DomReadbackMismatchError(`items[${idx}].quantity`, String(expItem.quantity), String(obsQty));
+          }
+        }
+
+        const expWeight = expItem.weightKg ?? expItem.estimatedWeightKg;
+        if (expWeight !== undefined && expWeight > 0) {
+          const wtMatch = rowWeightText.match(/[\d.]+/);
+          const obsWt = wtMatch ? parseFloat(wtMatch[0]) : undefined;
+          if (obsWt !== expWeight) {
+            throw new DomReadbackMismatchError(`items[${idx}].weightKg`, String(expWeight), String(obsWt));
+          }
+        }
+      }
+
       const verifyDataWipe = page.locator(PORTAL_SELECTORS.dataWipeAck);
       if ((await verifyDataWipe.count()) > 0 && hasDataBearingDevice) {
         const isChecked = await verifyDataWipe.isChecked();
@@ -546,12 +597,18 @@ export class Booker {
       // 9. Portal Review Step & Real Computed Fee Extraction
       // ---------------------------------------------------------------------
       const feeElement = page.locator(PORTAL_SELECTORS.portalComputedFee);
-      await feeElement.waitFor({ state: "visible", timeout: 6000 });
+      const isFeeVisible = await feeElement.waitFor({ state: "visible", timeout: 6000 }).then(() => true).catch(() => false);
+      if (!isFeeVisible) {
+        throw new FeeNotFoundError("Portal review step fee element is missing. Stopped with FEE_NOT_FOUND.");
+      }
 
       // CODE LINE WHERE observedFeeInr IS READ FROM THE PAGE:
       const feeText = (await feeElement.textContent()) || "";
       const feeMatch = feeText.match(/₹\s*(\d+)/);
-      const observedFeeInr = feeMatch && feeMatch[1] ? parseInt(feeMatch[1], 10) : 0;
+      if (!feeMatch || !feeMatch[1]) {
+        throw new FeeNotFoundError(`Could not parse numeric pickup fee from review text "${feeText}". Stopped with FEE_NOT_FOUND.`);
+      }
+      const observedFeeInr = parseInt(feeMatch[1], 10);
 
       const feeSs = await session.captureScreenshot("review-fee-verified");
       browserActions.push({
@@ -571,7 +628,6 @@ export class Booker {
         approval,
         action: "submit_booking",
         observedFeeInr,
-        usedIdempotencyKeys: usedKeys,
       });
 
       // ---------------------------------------------------------------------
@@ -626,7 +682,7 @@ export class Booker {
             url: page.url(),
             details: { method: "onHumanVerification_hook" },
           });
-        } else if (options.pauseOnHumanVerification || options.keepSessionOpenOnNeedsHuman || options.headless !== false) {
+        } else if (options.pauseOnHumanVerification || options.keepSessionOpenOnNeedsHuman || options.headless === true) {
           // Pause and return needsHuman; keep session live for external solving or report needsHuman in headless
           keepSessionAlive = Boolean(options.keepSessionOpenOnNeedsHuman || options.pauseOnHumanVerification);
           return {
@@ -787,16 +843,25 @@ export class Booker {
         }
 
         // Fill items
+        // Clear any pre-filled default item rows
+        const retryRemoveBtns = page.locator(PORTAL_SELECTORS.removeItem);
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const count = await retryRemoveBtns.count();
+          if (count === 0) break;
+          await retryRemoveBtns.first().click().catch(() => {});
+          await page.waitForTimeout(200);
+        }
+
         if (context.items && context.items.length > 0) {
           for (const item of context.items) {
             const nameInput = page.locator(PORTAL_SELECTORS.itemName);
             const addBtn = page.locator(PORTAL_SELECTORS.addItem);
             if ((await nameInput.count()) && (await addBtn.count())) {
-              const rawName = item.name || "Recyclable Item";
-              await nameInput.fill(rawName);
+              const canonicalName = getCanonicalItemLabel(item.name || item.description || item.category || "Recyclable Item");
+              await nameInput.fill(canonicalName);
               const qty = item.quantity ?? 1;
               await page.fill(PORTAL_SELECTORS.itemQty, String(qty));
-              const wt = item.weightKg ?? 1;
+              const wt = item.weightKg ?? item.estimatedWeightKg ?? 1;
               await page.fill(PORTAL_SELECTORS.itemWeight, String(wt));
               await addBtn.click();
               await page.waitForTimeout(300);
@@ -807,8 +872,10 @@ export class Booker {
         // Data wipe ack
         if (hasDataBearingDevice && context.dataWipeAck) {
           const retryDataWipe = page.locator(PORTAL_SELECTORS.dataWipeAck);
-          await retryDataWipe.waitFor({ state: "visible", timeout: 8000 });
-          await retryDataWipe.check();
+          await retryDataWipe.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
+          if ((await retryDataWipe.count()) > 0) {
+            await retryDataWipe.check();
+          }
         }
 
         // Lock client request id

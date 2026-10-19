@@ -33,6 +33,8 @@ import {
   FormVerificationError,
   InvalidBookingReferenceError,
   UnverifiedBookingError,
+  DomReadbackMismatchError,
+  FeeNotFoundError,
 } from "./errors.js";
 
 interface MockSessionConfig {
@@ -50,6 +52,8 @@ interface MockSessionConfig {
   observedFee?: number;
   slotOptions?: string[];
   clientFoundReference?: boolean;
+  items?: Array<{ name: string; quantity: number; weightKg: number }>;
+  hideReviewFee?: boolean;
 }
 
 function createMockSession(config: MockSessionConfig): BrowserSession {
@@ -68,6 +72,8 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
     observedFee = 180,
     slotOptions = ["Tomorrow (10:00–12:00 IST)"],
     clientFoundReference = false,
+    items = [],
+    hideReviewFee = false,
   } = config;
 
   let currentUrl = url;
@@ -76,6 +82,10 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
     count: async (): Promise<number> => {
       await Promise.resolve();
       if (selector.includes("human-verification")) return isHumanVerif ? 1 : 0;
+      if (selector.includes("remove-item")) return 0;
+      if (selector.includes("item-row-name") || selector.includes("item-row-qty") || selector.includes("item-row-weight") || selector.includes("item-row")) {
+        return items.length;
+      }
       return 1;
     },
     evaluate: async (): Promise<void> => {
@@ -105,12 +115,16 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
     },
     waitFor: async (): Promise<void> => {
       await Promise.resolve();
+      if (selector.includes("portal-computed-fee") && hideReviewFee) {
+        throw new Error("Timeout waiting for portal-computed-fee");
+      }
     },
     isVisible: async (): Promise<boolean> => {
       await Promise.resolve();
       if (selector.includes("form-error-banner")) return Boolean(errorBanner);
       if (selector.includes("human-verification")) return isHumanVerif;
       if (selector.includes("booking-reference-missing")) return missingReference;
+      if (selector.includes("portal-computed-fee")) return !hideReviewFee;
       if (selector.includes("booking-reference")) {
         if (currentUrl.includes("client=")) {
           return Boolean(clientFoundReference);
@@ -128,7 +142,12 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
       await Promise.resolve();
       if (selector.includes("form-error-banner")) return errorBanner || "";
       if (selector.includes("booking-reference")) return reference;
-      if (selector.includes("portal-computed-fee")) return `Pickup charge for this request: ₹${observedFee}`;
+      if (selector.includes("portal-computed-fee")) {
+        return hideReviewFee ? "" : `Pickup charge for this request: ₹${observedFee}`;
+      }
+      if (selector.includes("item-row-name")) return items[0]?.name || "Electronics";
+      if (selector.includes("item-row-qty")) return String(items[0]?.quantity ?? 1);
+      if (selector.includes("item-row-weight")) return String(items[0]?.weightKg ?? 2.2);
       return "";
     },
     getAttribute: async (attr: string): Promise<string | null> => {
@@ -137,9 +156,37 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
       return "slot-val-1";
     },
     first: (): Record<string, unknown> => mockLocator(selector),
-    all: async (): Promise<Array<{ textContent: () => Promise<string>; getAttribute: () => Promise<string> }>> => {
+    nth: (idx: number): Record<string, unknown> => ({
+      ...mockLocator(selector),
+      textContent: async (): Promise<string> => {
+        await Promise.resolve();
+        const item = items[idx] || items[0]!;
+        if (selector.includes("item-row-name")) return item.name;
+        if (selector.includes("item-row-qty")) return String(item.quantity);
+        if (selector.includes("item-row-weight")) return String(item.weightKg);
+        return "";
+      },
+    }),
+    locator: (childSel: string): Record<string, unknown> => mockLocator(childSel),
+    all: async (): Promise<Array<Record<string, unknown>>> => {
       await Promise.resolve();
+      if (selector.includes("item-row")) {
+        return items.map((item) => ({
+          ...mockLocator(selector),
+          locator: (childSel: string): Record<string, unknown> => ({
+            ...mockLocator(childSel),
+            textContent: async (): Promise<string> => {
+              await Promise.resolve();
+              if (childSel.includes("item-row-name")) return item.name;
+              if (childSel.includes("item-row-qty")) return String(item.quantity);
+              if (childSel.includes("item-row-weight")) return String(item.weightKg);
+              return "";
+            },
+          }),
+        }));
+      }
       return slotOptions.map((opt) => ({
+        ...mockLocator(selector),
         textContent: async (): Promise<string> => {
           await Promise.resolve();
           return opt;
@@ -367,6 +414,26 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
 
       await expect(Booker.bookLeg(context, {}, mockSession)).rejects.toThrow(FormVerificationError);
     });
+
+    it("throws DomReadbackMismatchError and aborts submission if DOM item count differs from leg items", async () => {
+      const mockSession = createMockSession({
+        defaultCustomer: sampleCustomer,
+        items: [
+          { name: "Electronics", quantity: 1, weightKg: 2.2 },
+          { name: "Extra Item", quantity: 1, weightKg: 1 },
+        ],
+      });
+
+      const context: LegBookingContext = {
+        leg: sampleLeg,
+        plan: samplePlan,
+        approval: sampleApproval,
+        customer: sampleCustomer,
+        items: sampleLeg.items || [],
+      };
+
+      await expect(Booker.bookLeg(context, {}, mockSession)).rejects.toThrow(DomReadbackMismatchError);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -392,7 +459,7 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
         items: [],
       };
 
-      const execution = await BookingRunner.bookLegWithTransitions(context, {}, mockSession);
+      const execution = await BookingRunner.bookLegWithTransitions(context, { headless: true }, mockSession);
 
       expect(submitClicked).toBe(false); // Must NEVER click submit when CAPTCHA is unhandled
       expect(execution.result.needsHuman).toBe(true);
@@ -496,6 +563,25 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
 
       await expect(BookingRunner.bookLegWithTransitions(context, {}, mockSession)).rejects.toThrow(
         InvalidBookingReferenceError
+      );
+    });
+
+    it("throws FeeNotFoundError when review fee element is missing and halts without defaulting to 0", async () => {
+      const mockSession = createMockSession({
+        defaultCustomer: sampleCustomer,
+        hideReviewFee: true,
+      });
+
+      const context: LegBookingContext = {
+        leg: sampleLeg,
+        plan: samplePlan,
+        approval: sampleApproval,
+        customer: sampleCustomer,
+        items: [],
+      };
+
+      await expect(BookingRunner.bookLegWithTransitions(context, {}, mockSession)).rejects.toThrow(
+        FeeNotFoundError
       );
     });
   });

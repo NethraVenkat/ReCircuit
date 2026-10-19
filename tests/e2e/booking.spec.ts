@@ -37,6 +37,7 @@ import {
 } from "@recircuit/core";
 import { BookingRunner } from "../../apps/worker/src/booking/runner.js";
 import type { LegBookingContext } from "../../apps/worker/src/booking/types.js";
+import { FeeNotFoundError } from "../../apps/worker/src/booking/errors.js";
 
 const TEST_ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret-token";
 
@@ -241,6 +242,12 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
     await expect(page.locator('[data-testid="tracking-result"]')).toBeVisible();
     await expect(page.locator('[data-testid="booking-reference"]')).toHaveText(reference);
     await expect(page.locator('[data-testid="tracking-status"]')).toHaveText(/RECEIVED/i);
+
+    // Verify exact items on HTML tracking page
+    const itemRows = page.locator('[data-testid="tracking-item-row"]');
+    await expect(itemRows).toHaveCount(leg.items.length); // exactly 1 item: Laptop
+    await expect(itemRows.first().locator('[data-testid="tracking-item-name"]')).toHaveText("Laptop");
+    await expect(itemRows.first().locator('[data-testid="tracking-item-details"]')).toContainText("Qty: 1");
   });
 
   // -------------------------------------------------------------------------
@@ -249,6 +256,7 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
   // -------------------------------------------------------------------------
   test("b. Demo sentence splits into Deccan and PaperPlus: Deccan books directly; PaperPlus transitions to NEEDS_HUMAN without booking; solved in the same page -> PPK-xxxxx", async ({
     request,
+    page,
   }) => {
     const demoSentence =
       "I have one dead Dell laptop, two old batteries and around 8 kg of newspaper in Kukatpally, Hyderabad. Don't charge me more than ₹150.";
@@ -369,6 +377,26 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
       `http://localhost:3102/api/bookings?client=${encodeURIComponent(ppIdempotencyKey)}`
     );
     expect(checkStorageAfter.status()).toBe(200);
+
+    // Verify exact items on HTML tracking pages for both legs
+    // 1. Deccan tracking page
+    await page.goto(
+      `http://localhost:3101/track?ref=${encodeURIComponent(deccanResult.result.bookingReference!)}`
+    );
+    await expect(page.locator('[data-testid="tracking-result"]')).toBeVisible();
+    const deccanItemRows = page.locator('[data-testid="tracking-item-row"]');
+    await expect(deccanItemRows).toHaveCount(deccanLeg.items.length); // exactly 2 items: Laptop x1, Batteries x2
+    const deccanNames = await deccanItemRows.locator('[data-testid="tracking-item-name"]').allTextContents();
+    expect(deccanNames.sort()).toEqual(["Household Battery", "Laptop"].sort());
+
+    // 2. PaperPlus tracking page
+    await page.goto(
+      `http://localhost:3102/status?ref=${encodeURIComponent(ppExecution2.result.bookingReference!)}`
+    );
+    await expect(page.locator('[data-testid="tracking-result"]')).toBeVisible();
+    const ppItemRows = page.locator('[data-testid="tracking-item-row"]');
+    await expect(ppItemRows).toHaveCount(paperPlusLeg.items.length); // exactly 1 item: Newspaper
+    await expect(ppItemRows.first().locator('[data-testid="tracking-item-name"]')).toHaveText("Newspaper");
   });
 
   // -------------------------------------------------------------------------
@@ -579,6 +607,83 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
       // Restore switch
       await request.post(`http://localhost:3103/api/admin?token=${TEST_ADMIN_TOKEN}`, {
         data: { action: "toggle_switch", switchName: "raise_fee", value: false },
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // e2. Missing review fee (hide_review_fee switch) -> FEE_NOT_FOUND, leg FAILED
+  // -------------------------------------------------------------------------
+  test("e2. If portal review step fee element is missing or hidden, booker stops with FEE_NOT_FOUND and transitions leg to FAILED with failure evidence", async ({
+    request,
+  }) => {
+    // Enable hide_review_fee failure switch on Deccan
+    await request.post(`http://localhost:3101/api/admin?token=${TEST_ADMIN_TOKEN}`, {
+      data: { action: "toggle_switch", switchName: "hide_review_fee", value: true },
+    });
+
+    try {
+      const intake = await parseIntake("1 dead Dell laptop in Kukatpally, Hyderabad, pincode 500072");
+      const domainReq = createDomainRequestFromIntake(intake);
+      domainReq.state = "PLAN_CREATED";
+
+      const routing = generateRoutingPlans({
+        request: {
+          id: domainReq.id,
+          feeCapInr: domainReq.feeCapInr,
+          pincode: domainReq.pincode,
+        },
+        items: intake.items,
+        policies: getTestPolicies(),
+      });
+
+      const chosenPlan = routing.bestPlan!;
+      const reApproval = requestApproval({
+        request: domainReq,
+        plan: chosenPlan,
+        slotPreference: chosenPlan.slotPreference,
+        approvalReasons: chosenPlan.approvalReasons,
+        isPartial: chosenPlan.isPartial,
+      });
+
+      const approved = recordDecision({
+        request: reApproval.request,
+        plan: reApproval.plan,
+        decision: "approved",
+        decidedBy: "test_user",
+        dataWipeConfirmedByUser: true,
+      });
+
+      const leg = approved.legs[0];
+      const context: LegBookingContext = {
+        leg,
+        plan: approved.plan,
+        approval: approved.decisionRecord,
+        customer: {
+          fullName: "Ramesh Reddy",
+          phone: "9876543210",
+          addressLine: "Plot 10, Road No 2",
+          locality: "Kukatpally",
+          pincode: "500072",
+          preferredSlot: "Tomorrow (10:00–12:00 IST)",
+        },
+        items: leg.items || [],
+        dataWipeAck: true,
+        request: approved.request,
+      };
+
+      await expect(BookingRunner.bookLegWithTransitions(context, { headless: true })).rejects.toThrow(
+        FeeNotFoundError
+      );
+
+      // Verify zero bookings created on Deccan
+      const adminRes = await request.get(`http://localhost:3101/api/admin?token=${TEST_ADMIN_TOKEN}`);
+      const adminData = await adminRes.json();
+      expect(adminData.bookings.length).toBe(0);
+    } finally {
+      // Restore switch
+      await request.post(`http://localhost:3101/api/admin?token=${TEST_ADMIN_TOKEN}`, {
+        data: { action: "toggle_switch", switchName: "hide_review_fee", value: false },
       });
     }
   });

@@ -136,3 +136,20 @@ export class UnverifiedBookingError extends BookerError {
   }
 }
 
+/** Thrown when portal review fee element or numeric fee value is missing from review step */
+export class FeeNotFoundError extends BookerError {
+  constructor(message = "Portal review fee element or numeric charge is missing. Cannot proceed with booking.") {
+    super(message, "FEE_NOT_FOUND");
+    this.name = "FeeNotFoundError";
+  }
+}
+
+/** Thrown when DOM readback of items count, names, or quantities does not match expected leg items */
+export class DomReadbackMismatchError extends FormVerificationError {
+  constructor(field: string, expected: string, actual: string) {
+    super(field, expected, actual);
+    this.name = "DomReadbackMismatchError";
+  }
+}
+
+

@@ -56,6 +56,10 @@ export const PORTAL_SELECTORS = {
   itemWeight: '[data-testid="input-item-weight"]',
   addItem: '[data-testid="add-item"]',
   itemRow: '[data-testid="item-row"]',
+  removeItem: '[data-testid="remove-item"]',
+  itemRowName: '[data-testid="item-row-name"]',
+  itemRowQty: '[data-testid="item-row-qty"]',
+  itemRowWeight: '[data-testid="item-row-weight"]',
   dataWipeAck: '[data-testid="data-wipe-ack"]',
   dataWipePanel: '[data-testid="data-wipe-panel"]',
   humanVerificationPanel: '[data-human-verification="required"]',
@@ -74,6 +78,10 @@ export const PORTAL_SELECTORS = {
   submitTrack: '[data-testid="submit-track"]',
   trackingResult: '[data-testid="tracking-result"]',
   trackingStatus: '[data-testid="tracking-status"]',
+  trackingItemsList: '[data-testid="tracking-items-list"]',
+  trackingItemRow: '[data-testid="tracking-item-row"]',
+  trackingItemName: '[data-testid="tracking-item-name"]',
+  trackingItemDetails: '[data-testid="tracking-item-details"]',
 } as const;
 
 function getEnvPortalUrl(recyclerId: string): string | undefined {

@@ -102,6 +102,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       fail_next_submit: "failNextSubmit",
       omit_next_reference: "omitNextReference",
       changed_policy_layout: "changedPolicyLayout",
+      hide_review_fee: "hideReviewFee",
+      hide_fee_info: "hideFeeInfo",
     };
     const switchName = switchMap[rawSwitchName] || rawSwitchName;
     const value = Boolean(body.value);

@@ -47,14 +47,74 @@ const inMemoryActionLogs: ActionAttemptLog[] = [];
  * Returns a copy of all recorded action logs (in-memory + disk).
  */
 export function getActionLogEntries(): ActionAttemptLog[] {
-  return [...inMemoryActionLogs];
+  const logs = [...inMemoryActionLogs];
+  try {
+    const logFile = path.resolve(process.cwd(), ".data", "action-log.jsonl");
+    if (fs.existsSync(logFile)) {
+      const content = fs.readFileSync(logFile, "utf-8");
+      const lines = content.split("\n").filter(Boolean);
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as ActionAttemptLog;
+          if (!logs.some((l) => l.id === entry.id)) {
+            logs.push(entry);
+          }
+        } catch {
+          // ignore malformed line
+        }
+      }
+    }
+  } catch {
+    // ignore read error
+  }
+  return logs;
 }
 
 /**
- * Clears recorded in-memory action logs (used between test runs).
+ * Clears recorded in-memory action logs and disk action-log.jsonl (used between test runs).
  */
 export function clearActionLogs(): void {
   inMemoryActionLogs.length = 0;
+  try {
+    const logFile = path.resolve(process.cwd(), ".data", "action-log.jsonl");
+    if (fs.existsSync(logFile)) {
+      fs.writeFileSync(logFile, "", "utf-8");
+    }
+  } catch (err) {
+    void err;
+  }
+}
+
+/**
+ * Loads all used idempotency keys from the action attempt store (in-memory + disk).
+ */
+export function getUsedIdempotencyKeysFromStore(): Set<string> {
+  const used = new Set<string>();
+  for (const log of inMemoryActionLogs) {
+    if (log.allowed && log.idempotencyKey) {
+      used.add(log.idempotencyKey);
+    }
+  }
+  try {
+    const logFile = path.resolve(process.cwd(), ".data", "action-log.jsonl");
+    if (fs.existsSync(logFile)) {
+      const content = fs.readFileSync(logFile, "utf-8");
+      const lines = content.split("\n").filter(Boolean);
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as Record<string, unknown>;
+          if (entry.allowed === true && typeof entry.idempotencyKey === "string") {
+            used.add(entry.idempotencyKey);
+          }
+        } catch (err) {
+          void err;
+        }
+      }
+    }
+  } catch (err) {
+    void err;
+  }
+  return used;
 }
 
 /**
@@ -196,12 +256,17 @@ export function assertActionAllowed(params: SafeActionParams): {
     );
   }
 
-  // 5. Check Idempotency Key Reuse (mandatory parameter)
-  if (usedIdempotencyKeys === undefined || usedIdempotencyKeys === null) {
-    throw new Error("usedIdempotencyKeys is mandatory for assertActionAllowed");
-  }
-  const keysSet = new Set(usedIdempotencyKeys);
-  if (keysSet.has(idempotencyKey)) {
+  // 5. Check Idempotency Key Reuse
+  // assertActionAllowed loads used keys from the action/browser_actions store itself;
+  // callers cannot bypass by passing an empty list.
+  const storeLogs = getActionLogEntries();
+  const isResumingSameLeg =
+    leg.state === "SUBMITTING" &&
+    storeLogs.some((l) => l.allowed && l.idempotencyKey === idempotencyKey && l.legId === leg.id);
+  const storeKeys = getUsedIdempotencyKeysFromStore();
+  const callerKeys = usedIdempotencyKeys ? Array.from(usedIdempotencyKeys) : [];
+  const keysSet = new Set([...storeKeys, ...callerKeys]);
+  if (!isResumingSameLeg && keysSet.has(idempotencyKey)) {
     const attemptLog: ActionAttemptLog = {
       id: attemptId,
       timestamp,

@@ -179,11 +179,11 @@ export function TrackingView({
           {/* Items List */}
           <div>
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">Booked Items</h4>
-            <div className="border rounded divide-y text-xs">
+            <div data-testid="tracking-items-list" className="border rounded divide-y text-xs">
               {booking.items.map((item, i) => (
-                <div key={i} className="p-2.5 flex justify-between bg-slate-50/50">
-                  <span className="font-bold">{item.name}</span>
-                  <span className="text-slate-600">
+                <div key={i} data-testid="tracking-item-row" className="p-2.5 flex justify-between bg-slate-50/50">
+                  <span data-testid="tracking-item-name" className="font-bold">{item.name}</span>
+                  <span data-testid="tracking-item-details" className="text-slate-600">
                     {item.quantity ? `Qty: ${item.quantity}` : ""}
                     {item.weightKg ? ` · Weight: ${item.weightKg} kg` : ""}
                   </span>

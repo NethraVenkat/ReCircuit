@@ -26,6 +26,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     fee = 50;
   }
 
+  if (switches.hideReviewFee || switches.hideFeeInfo) {
+    return NextResponse.json({ ok: true, recyclerId, fee: null, hideReviewFee: true });
+  }
+
   if (switches.raiseFee) {
     fee += 40;
   }
