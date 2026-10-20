@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   test: {
+    env: { CAPTCHA_SECRET: "vitest-only-captcha-secret" },
     globals: true,
     environment: "node",
     include: ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts"],

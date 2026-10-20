@@ -109,7 +109,7 @@ export function buildApprovalCard(options: {
     items: (leg.items ?? []).map((itm) => ({
       description: itm.description ?? itm.id,
       quantity: itm.quantity ?? 1,
-      weightKg: itm.estimatedWeightKg ?? 0,
+      weightKg: itm.estimatedWeightKg ?? null,
     })),
   }));
 
@@ -295,7 +295,10 @@ export function recordDecision(options: {
   priorDecision?: DecisionRecord | null | undefined;
   dataWipeConfirmedByUser?: boolean | undefined;
 }): ApprovalStateTransitionResult {
-  const { request, plan, decision, decidedBy, priorDecision, reason } = options;
+  const { request, decision, decidedBy, priorDecision, reason } = options;
+  const plan: Plan = { ...options.plan };
+  if (options.dataWipeConfirmedByUser !== undefined) plan.dataWipeConfirmedByUser = options.dataWipeConfirmedByUser;
+  plan.planHash = hashPlan(plan);
   const decidedAt = options.decidedAt ?? new Date().toISOString();
   const dataWipeConfirmedByUser = options.dataWipeConfirmedByUser ?? plan.dataWipeConfirmedByUser;
 
@@ -324,7 +327,7 @@ export function recordDecision(options: {
   }
 
   // 2. Stale Approval Guard: If decision is approved but planHash does not match plan
-  const currentPlanHash = plan.planHash || hashPlan(plan);
+  const currentPlanHash = hashPlan(plan);
 
   const decisionRecord: DecisionRecord = {
     id: randomUUID(),

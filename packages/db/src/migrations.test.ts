@@ -29,7 +29,19 @@ describe("PostgreSQL Migrations & Schema Offline Verification", () => {
     // Execute migrations
     await db.exec(migration1);
     await db.exec(migration2);
+    await db.exec(fs.readFileSync(path.join(rootDir, "supabase/migrations/0003_booking_fee.sql"), "utf8"));
     await db.exec(seed);
+  });
+
+  it("stores submitted fees as nullable numeric values with a nonnegative constraint", async () => {
+    const column = await db.query<{ data_type: string; is_nullable: string }>(
+      "SELECT data_type, is_nullable FROM information_schema.columns WHERE table_schema='portal' AND table_name='bookings' AND column_name='charged_fee_inr'"
+    );
+    expect(column.rows).toEqual([{ data_type: "numeric", is_nullable: "YES" }]);
+    const constraint = await db.query<{ definition: string }>(
+      "SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='portal.bookings'::regclass AND contype='c'"
+    );
+    expect(constraint.rows.some((row) => row.definition.includes("charged_fee_inr >= "))).toBe(true);
   });
 
   it("applies migrations and seed successfully with recyclers and policies populated", async () => {

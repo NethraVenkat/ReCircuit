@@ -9,6 +9,7 @@ import {
   makeIdempotencyKey,
   hashPlan,
   FeeChangedReapprovalRequiredError,
+  SafeActionBlockedError,
   type PlanLeg,
   type StatusEvent,
 } from "@recircuit/core";
@@ -40,7 +41,7 @@ export class BookingRunner {
     const { leg, plan } = context;
     const auditEvents: StatusEvent[] = [];
 
-    const planHash = plan.planHash || hashPlan(plan);
+    const planHash = hashPlan(plan);
     const idempotencyKey =
       leg.idempotencyKey || makeIdempotencyKey(planHash, leg.id, leg.recyclerId);
 
@@ -142,12 +143,13 @@ export class BookingRunner {
 
       throw new BookerError("Booking completed without confirmation reference or error.", "UNKNOWN_BOOKING_OUTCOME");
     } catch (err: unknown) {
-      if (err instanceof FeeChangedReapprovalRequiredError) {
+      if (err instanceof FeeChangedReapprovalRequiredError ||
+          (err instanceof SafeActionBlockedError && err.code === "STALE_APPROVAL_PLAN_CHANGED")) {
         if (context.request && context.request.state === "APPROVED") {
           const reqStep = transitionState(context.request, "AWAITING_APPROVAL", {
             planId: context.plan.id,
-            planHash: context.plan.planHash || hashPlan(context.plan),
-            approvalReason: "FEE_CHANGED_REAPPROVAL_REQUIRED",
+            planHash: hashPlan(context.plan),
+            approvalReason: err.code,
           });
           context.request.state = reqStep.newRequest.state;
           context.request.updatedAt = reqStep.newRequest.updatedAt;
@@ -168,6 +170,7 @@ export class BookingRunner {
             observedAt: new Date().toISOString(),
           });
           currentLeg = stepFail.newLeg;
+          Object.assign(context.leg, currentLeg);
           auditEvents.push(stepFail.auditEvent);
         }
       } catch {
@@ -176,72 +179,6 @@ export class BookingRunner {
 
       throw err;
     }
-  }
-
-  /**
-   * Resumes a paused leg from NEEDS_HUMAN state after human verification code is provided.
-   */
-  public static async resumeLegWithCaptcha(
-    context: LegBookingContext,
-    captchaCode: string,
-    options: BookerOptions = {},
-    existingSession?: BrowserSession
-  ): Promise<LegBookingExecutionResult> {
-    const { leg } = context;
-    const auditEvents: StatusEvent[] = [];
-
-    if (leg.state !== "NEEDS_HUMAN") {
-      throw new Error(`Cannot resume leg in state "${leg.state}". Expected "NEEDS_HUMAN".`);
-    }
-
-    const idempotencyKey = leg.idempotencyKey || `idem-${Date.now()}`;
-
-    // 1. Transition NEEDS_HUMAN -> SUBMITTING
-    const stepResume = transitionState(leg, "SUBMITTING", {
-      idempotencyKey,
-      priorSuccessfulUse: false,
-    });
-    let currentLeg: PlanLeg = {
-      ...stepResume.newLeg,
-      idempotencyKey,
-    };
-    auditEvents.push(stepResume.auditEvent);
-
-    // 2. Book with the human-provided CAPTCHA code
-    const bookerResult = await Booker.bookLeg(
-      {
-        ...context,
-        leg: currentLeg,
-      },
-      {
-        ...options,
-        captchaCode,
-        isResuming: true,
-      },
-      existingSession
-    );
-
-    if (bookerResult.success && bookerResult.bookingReference) {
-      const stepSuccess = transitionState(currentLeg, "REQUEST_SUBMITTED", {
-        screenshotRef: bookerResult.screenshotRef || "confirmation.png",
-        url: bookerResult.confirmationUrl || "http://localhost/confirmation",
-        bookingReference: bookerResult.bookingReference,
-      });
-      currentLeg = {
-        ...stepSuccess.newLeg,
-        bookingReference: bookerResult.bookingReference,
-        submittingSessionId: bookerResult.sessionId,
-      };
-      auditEvents.push(stepSuccess.auditEvent);
-
-      return {
-        updatedLeg: currentLeg,
-        result: bookerResult,
-        auditEvents,
-      };
-    }
-
-    throw new BookerError("Resumed booking failed to produce valid booking reference.", "RESUME_FAILED");
   }
 
   /**
@@ -255,7 +192,7 @@ export class BookingRunner {
     const { leg } = context;
     const auditEvents: StatusEvent[] = [];
 
-    const planHash = context.plan.planHash || hashPlan(context.plan);
+    const planHash = hashPlan(context.plan);
     const idempotencyKey =
       leg.idempotencyKey || makeIdempotencyKey(planHash, leg.id, leg.recyclerId);
 

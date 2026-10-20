@@ -48,7 +48,7 @@ async function main() {
   console.log(`💰 User Fee Cap:    ${intakeResult.feeCapInr != null ? `₹${intakeResult.feeCapInr}` : "None stated"}`);
   console.log(`📦 Parsed Items (${intakeResult.items.length}):`);
   for (const itm of intakeResult.items) {
-    const weight = itm.declaredWeightKg ?? itm.estimatedWeightKg ?? 0;
+    const weight = itm.declaredWeightKg ?? itm.estimatedWeightKg ?? "UNKNOWN";
     console.log(`   • ${itm.rawText} -> ${itm.category} (qty: ${itm.quantity}, wt: ${weight} kg [${itm.weightSource}], hazard: ${itm.hazardClass})`);
   }
 

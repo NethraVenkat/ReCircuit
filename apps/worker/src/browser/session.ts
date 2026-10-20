@@ -13,6 +13,7 @@ import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { guardPortalApi } from "./api-guard.js";
 
 export type BrowserMode = "local" | "browserbase";
 
@@ -90,6 +91,7 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
   }
 
   const page = await context.newPage();
+  await guardPortalApi(page);
 
   const evidenceDir = path.resolve(process.cwd(), ".data", "evidence");
   if (!fs.existsSync(evidenceDir)) {

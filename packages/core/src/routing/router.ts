@@ -171,7 +171,7 @@ export function generateRoutingPlans(options: {
           category: taxonomyCategoryToItemCategory(gi.category),
           description: gi.rawText,
           quantity: gi.quantity,
-          estimatedWeightKg: gi.declaredWeightKg ?? gi.estimatedWeightKg ?? 0,
+          estimatedWeightKg: (gi.declaredWeightKg ?? gi.estimatedWeightKg)!,
         })),
         estimatedFee: pricing.estimatedFee,
         estimatedPayout: pricing.estimatedPayout,

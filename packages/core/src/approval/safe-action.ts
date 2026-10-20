@@ -143,8 +143,8 @@ export function assertActionAllowed(params: SafeActionParams): {
   idempotencyKey: string;
   attemptLog: ActionAttemptLog;
 } {
-  const { leg, plan, approval, action, observedFeeInr, usedIdempotencyKeys } = params;
-  const currentPlanHash = plan.planHash || hashPlan(plan);
+  const { leg, plan, approval, action, observedFeeInr } = params;
+  const currentPlanHash = hashPlan(plan);
   const idempotencyKey =
     leg.idempotencyKey || makeIdempotencyKey(currentPlanHash, leg.id, leg.recyclerId);
 
@@ -264,8 +264,7 @@ export function assertActionAllowed(params: SafeActionParams): {
     leg.state === "SUBMITTING" &&
     storeLogs.some((l) => l.allowed && l.idempotencyKey === idempotencyKey && l.legId === leg.id);
   const storeKeys = getUsedIdempotencyKeysFromStore();
-  const callerKeys = usedIdempotencyKeys ? Array.from(usedIdempotencyKeys) : [];
-  const keysSet = new Set([...storeKeys, ...callerKeys]);
+  const keysSet = storeKeys;
   if (!isResumingSameLeg && keysSet.has(idempotencyKey)) {
     const attemptLog: ActionAttemptLog = {
       id: attemptId,

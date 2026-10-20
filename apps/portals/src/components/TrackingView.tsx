@@ -177,6 +177,9 @@ export function TrackingView({
           </div>
 
           {/* Items List */}
+          <div data-testid="tracking-fee">
+            Pickup fee: {booking.chargedFeeInr == null ? "UNKNOWN" : `₹${booking.chargedFeeInr}`}
+          </div>
           <div>
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">Booked Items</h4>
             <div data-testid="tracking-items-list" className="border rounded divide-y text-xs">

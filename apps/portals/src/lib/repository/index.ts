@@ -1,10 +1,12 @@
 import type { BookingRepository } from "../types";
 import { FileRepository } from "./file-repository";
 import { SupabaseRepository } from "./supabase-repository";
+import { assertPortalConfiguration } from "../runtime-config";
 
 let repositoryInstance: BookingRepository | null = null;
 
 export function getRepository(): BookingRepository {
+  assertPortalConfiguration();
   if (repositoryInstance) {
     return repositoryInstance;
   }
@@ -26,6 +28,7 @@ export function setRepositoryInstance(repo: BookingRepository | null): void {
 }
 
 export function getStorageType(): "supabase" | "file" {
+  assertPortalConfiguration();
   return process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? "supabase" : "file";
 }
 

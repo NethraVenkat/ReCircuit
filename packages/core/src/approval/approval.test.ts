@@ -91,6 +91,30 @@ function createMockPlan(requestId: string, overrides?: Partial<Plan>): Plan {
 }
 
 describe("Stage 6: Approval Gate & Safe Action System", () => {
+  it.each([
+    ["legs", (p: Plan): void => { p.legs[0]!.recyclerId = "paperplus"; }],
+    ["items", (p: Plan): void => { p.legs[0]!.items![0]!.quantity = 7; }],
+    ["fees", (p: Plan): void => { p.legs[0]!.estimatedFee = 181; }],
+    ["payouts", (p: Plan): void => { p.legs[0]!.estimatedPayout = 251; }],
+    ["slotPreference", (p: Plan): void => { p.slotPreference = { day: "tomorrow", window: "afternoon" }; }],
+    ["dataWipeConfirmedByUser", (p: Plan): void => { p.dataWipeConfirmedByUser = false; }],
+  ] as const)("rejects changed %s even with an unchanged cached hash", (_field, mutate) => {
+    const request = createMockRequest();
+    const approved = recordDecision({
+      request: { ...request, state: "AWAITING_APPROVAL" },
+      plan: createMockPlan(request.id),
+      decision: "approved", decidedBy: "user", dataWipeConfirmedByUser: true,
+    });
+    const altered = structuredClone(approved.plan);
+    mutate(altered);
+    expect(altered.planHash).toBe(approved.plan.planHash);
+    expect(hashPlan(altered)).not.toBe(approved.plan.planHash);
+    expect(() => assertActionAllowed({
+      leg: approved.legs[0]!, plan: altered, approval: approved.decisionRecord,
+      action: "submit_booking", observedFeeInr: 180,
+    })).toThrow(/stale approval/i);
+  });
+
   beforeEach(() => {
     clearActionLogs();
   });
@@ -217,7 +241,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: null,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
-        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -228,7 +251,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: null,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
-        usedIdempotencyKeys: new Set(),
       });
     } catch (err: unknown) {
       expect(err).toBeInstanceOf(SafeActionBlockedError);
@@ -274,7 +296,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
-        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -285,7 +306,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: leg.estimatedFee,
-        usedIdempotencyKeys: new Set(),
       });
     } catch (err: unknown) {
       expect(err).toBeInstanceOf(SafeActionBlockedError);
@@ -302,7 +322,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
     const plan = createMockPlan(request.id, { totalEstimatedFee: 180 });
     const leg: PlanLeg = { ...plan.legs[0]!, estimatedFee: 180 };
 
-    const { decisionRecord } = recordDecision({
+    const { decisionRecord, plan: approvedPlan } = recordDecision({
       request: { ...request, state: "AWAITING_APPROVAL" },
       plan,
       decision: "approved",
@@ -314,22 +334,20 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
     expect(() => {
       assertActionAllowed({
         leg,
-        plan,
+        plan: approvedPlan,
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: 220,
-        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(FeeChangedReapprovalRequiredError);
 
     try {
       assertActionAllowed({
         leg,
-        plan,
+        plan: approvedPlan,
         approval: decisionRecord,
         action: "submit_booking",
         observedFeeInr: 220,
-        usedIdempotencyKeys: new Set(),
       });
     } catch (err: unknown) {
       expect(err).toBeInstanceOf(FeeChangedReapprovalRequiredError);
@@ -419,7 +437,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: approvalA.decisionRecord, // Stale approval from Plan A!
         action: "submit_booking",
         observedFeeInr: 199,
-        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -434,11 +451,10 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
 
     const allowedAction = assertActionAllowed({
       leg: planB.legs[0]!,
-      plan: planB,
+      plan: approvalB.plan,
       approval: approvalB.decisionRecord,
       action: "submit_booking",
       observedFeeInr: 199,
-      usedIdempotencyKeys: new Set(),
     });
 
     expect(allowedAction.allowed).toBe(true);
@@ -460,7 +476,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: null,
         action: "submit_booking",
         observedFeeInr: 180,
-        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -477,6 +492,7 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       dataWipeConfirmedByUser: true,
     };
     const legWithKey: PlanLeg = { ...leg, idempotencyKey: usedKey };
+    assertActionAllowed({ leg: legWithKey, plan, approval: approvalRecord, action: "submit_booking", observedFeeInr: 180 });
     expect(() => {
       assertActionAllowed({
         leg: legWithKey,
@@ -484,16 +500,15 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: approvalRecord,
         action: "submit_booking",
         observedFeeInr: 180,
-        usedIdempotencyKeys: [usedKey],
       });
     }).toThrow(SafeActionBlockedError);
 
     const logEntries = getActionLogEntries();
-    expect(logEntries).toHaveLength(2);
+    expect(logEntries).toHaveLength(3);
     expect(logEntries[0]!.allowed).toBe(false);
     expect(logEntries[0]!.blockReason).toContain('Leg state "FAILED" is not APPROVED or SUBMITTING');
-    expect(logEntries[1]!.allowed).toBe(false);
-    expect(logEntries[1]!.blockReason).toContain('Idempotency key "used-key-123" has already been used');
+    expect(logEntries[2]!.allowed).toBe(false);
+    expect(logEntries[2]!.blockReason).toContain('Idempotency key "used-key-123" has already been used');
   });
 
   // Extra invariant tests: SlotPreference changes hashPlan, formatApprovalCard output
@@ -529,7 +544,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: approvalMorning.decisionRecord,
         action: "submit_booking",
         observedFeeInr: afternoonLeg.estimatedFee,
-        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
   });
@@ -603,7 +617,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval,
         action: "submit_booking",
         observedFeeInr: 180,
-        usedIdempotencyKeys: [],
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -614,7 +627,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval,
         action: "submit_booking",
         observedFeeInr: 180,
-        usedIdempotencyKeys: [],
       });
     } catch (err) {
       expect((err as SafeActionBlockedError).code).toBe("IDEMPOTENCY_KEY_REUSED");
@@ -646,7 +658,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: unconfirmedApproval,
         action: "submit_booking",
         observedFeeInr: 180,
-        usedIdempotencyKeys: new Set(),
       });
     }).toThrow(SafeActionBlockedError);
 
@@ -657,7 +668,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
         approval: unconfirmedApproval,
         action: "submit_booking",
         observedFeeInr: 180,
-        usedIdempotencyKeys: new Set(),
       });
     } catch (err) {
       expect(err).toBeInstanceOf(SafeActionBlockedError);
@@ -691,7 +701,6 @@ describe("Stage 6: Approval Gate & Safe Action System", () => {
       approval: confirmedApproval,
       action: "submit_booking",
       observedFeeInr: 180,
-      usedIdempotencyKeys: new Set(),
     });
     expect(res.allowed).toBe(true);
     expect(res.idempotencyKey).toBeTruthy();

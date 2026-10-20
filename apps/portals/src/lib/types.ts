@@ -36,6 +36,7 @@ export interface PortalBooking {
   pincode: string;
   preferredSlot: string;
   items: BookingItemInput[];
+  chargedFeeInr?: number;
   status: PortalBookingStatus;
   pickupOtp?: string;
   weightKg?: number;

@@ -17,6 +17,9 @@
 
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "crypto";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import {
   parseIntake,
   createDomainRequestFromIntake,
@@ -260,38 +263,23 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
   }) => {
     const demoSentence =
       "I have one dead Dell laptop, two old batteries and around 8 kg of newspaper in Kukatpally, Hyderabad. Don't charge me more than ₹150.";
-    const intake = await parseIntake(demoSentence);
-    const domainReq = createDomainRequestFromIntake(intake);
-    domainReq.state = "PLAN_CREATED";
-
-    const routing = generateRoutingPlans({
-      request: {
-        id: domainReq.id,
-        feeCapInr: domainReq.feeCapInr,
-        pincode: domainReq.pincode,
-      },
-      items: intake.items,
-      policies: getTestPolicies(),
+    const cli = (script: string, args: string[] = []): string => execFileSync(process.execPath, [script, ...args], {
+      cwd: process.cwd(), encoding: "utf8",
+      env: { ...process.env, LLM_PROVIDER: "fake", BROWSER_MODE: "local", ADMIN_TOKEN: TEST_ADMIN_TOKEN },
     });
-
-    const chosenPlan = routing.bestPlan!;
-    expect(chosenPlan.legs.length).toBe(2);
-
-    const reApproval = requestApproval({
-      request: domainReq,
-      plan: chosenPlan,
-      slotPreference: chosenPlan.slotPreference,
-      approvalReasons: chosenPlan.approvalReasons,
-      isPartial: chosenPlan.isPartial,
-    });
-
-    const approved = recordDecision({
-      request: reApproval.request,
-      plan: reApproval.plan,
-      decision: "approved",
-      decidedBy: "test_user",
-      dataWipeConfirmedByUser: true,
-    });
+    cli("scripts/demo-reset.mjs");
+    cli("scripts/plan-cli.mjs", [demoSentence]);
+    const requestsDir = path.resolve(".data/requests");
+    const files = fs.readdirSync(requestsDir).filter((file) => file.endsWith(".json"));
+    expect(files).toHaveLength(1);
+    const requestId = files[0]!.replace(/\.json$/, "");
+    cli("scripts/approve-cli.mjs", [`--request=${requestId}`, "--decision=approve", "--data-wipe-confirmed"]);
+    const persisted = JSON.parse(fs.readFileSync(path.join(requestsDir, files[0]!), "utf8"));
+    const approved = { ...persisted, decisionRecord: persisted.priorDecision };
+    expect(approved.plan.totalEstimatedFee).toBe(180);
+    expect(approved.plan.totalEstimatedPayout).toBe(346);
+    expect(approved.plan.totalEstimatedPayout - approved.plan.totalEstimatedFee).toBe(166);
+    expect(persisted.approvalCard.approvalReasons).toContain("FEE_CAP_EXCEEDED");
 
     const deccanLeg = approved.legs.find((l) => l.recyclerId === "deccan")!;
     const paperPlusLeg = approved.legs.find((l) => l.recyclerId === "paperplus")!;
@@ -385,9 +373,15 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
     );
     await expect(page.locator('[data-testid="tracking-result"]')).toBeVisible();
     const deccanItemRows = page.locator('[data-testid="tracking-item-row"]');
-    await expect(deccanItemRows).toHaveCount(deccanLeg.items.length); // exactly 2 items: Laptop x1, Batteries x2
+    await expect(deccanItemRows).toHaveCount(2); // exactly 2 items: Laptop x1, Batteries x2
     const deccanNames = await deccanItemRows.locator('[data-testid="tracking-item-name"]').allTextContents();
     expect(deccanNames.sort()).toEqual(["Household Battery", "Laptop"].sort());
+    await expect(page.getByTestId("tracking-fee")).toHaveText("Pickup fee: ?180");
+    await expect(page.getByTestId("tracking-status")).toHaveText("RECEIVED");
+    await expect(deccanItemRows.filter({ hasText: "Laptop" }).getByTestId("tracking-item-details")).toContainText("Qty: 1");
+    await expect(deccanItemRows.filter({ hasText: "Household Battery" }).getByTestId("tracking-item-details")).toContainText("Qty: 2");
+    const deccanHtmlText = await page.getByTestId("tracking-result").innerText();
+
 
     // 2. PaperPlus tracking page
     await page.goto(
@@ -395,8 +389,20 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
     );
     await expect(page.locator('[data-testid="tracking-result"]')).toBeVisible();
     const ppItemRows = page.locator('[data-testid="tracking-item-row"]');
-    await expect(ppItemRows).toHaveCount(paperPlusLeg.items.length); // exactly 1 item: Newspaper
+    await expect(ppItemRows).toHaveCount(1); // exactly 1 item: Newspaper
     await expect(ppItemRows.first().locator('[data-testid="tracking-item-name"]')).toHaveText("Newspaper");
+    await expect(ppItemRows.getByTestId("tracking-item-details")).toContainText("Weight: 8 kg");
+    await expect(page.getByTestId("tracking-fee")).toHaveText("Pickup fee: ?0");
+    await expect(page.getByTestId("tracking-status")).toHaveText("RECEIVED");
+    const paperplusHtmlText = await page.getByTestId("tracking-result").innerText();
+    for (const [port, count] of [[3101, 1], [3102, 1], [3103, 0]]) {
+      const response = await request.get(`http://localhost:${port}/api/admin`, { headers: { "x-admin-token": TEST_ADMIN_TOKEN } });
+      expect(response.ok()).toBe(true);
+      expect((await response.json()).bookings).toHaveLength(count!);
+    }
+    fs.mkdirSync(".data/audit-evidence", { recursive: true });
+    fs.writeFileSync(".data/audit-evidence/demo-tracking.txt", `Deccan HTML tracking:\n${deccanHtmlText}\n\nPaperPlus HTML tracking:\n${paperplusHtmlText}\n`);
+
   });
 
   // -------------------------------------------------------------------------

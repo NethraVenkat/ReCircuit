@@ -350,10 +350,9 @@ export function postProcessIntake(
   // -------------------------------------------------------------------------
   const state = clarifications.length > 0 ? "NEEDS_CLARIFICATION" : "ITEMS_PARSED";
 
-  const totalEstimatedWeightKg = items.reduce(
-    (sum, it) => sum + (it.estimatedWeightKg || it.declaredWeightKg || 0),
-    0
-  );
+  const totalEstimatedWeightKg = items.every((it) => Number.isFinite(it.declaredWeightKg ?? it.estimatedWeightKg))
+    ? items.reduce((sum, it) => sum + (it.declaredWeightKg ?? it.estimatedWeightKg)!, 0)
+    : null;
 
   const evidence =
     state === "ITEMS_PARSED"
@@ -449,10 +448,9 @@ export function applyClarification(
   }
 
   const newState = remainingClarifications.length === 0 ? "ITEMS_PARSED" : "NEEDS_CLARIFICATION";
-  const totalEstimatedWeightKg = updatedItems.reduce(
-    (sum: number, it: IntakeItem) => sum + (it.estimatedWeightKg || it.declaredWeightKg || 0),
-    0
-  );
+  const totalEstimatedWeightKg = updatedItems.every((it) => Number.isFinite(it.declaredWeightKg ?? it.estimatedWeightKg))
+    ? updatedItems.reduce((sum, it) => sum + (it.declaredWeightKg ?? it.estimatedWeightKg)!, 0)
+    : null;
 
   return {
     ...current,

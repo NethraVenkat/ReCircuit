@@ -10,7 +10,9 @@ import {
 import type { BookingRepository } from "./types";
 
 function getSecret(): string {
-  return process.env.CAPTCHA_SECRET || "dev-secret-do-not-use-in-prod";
+  const secret = process.env.CAPTCHA_SECRET;
+  if (!secret?.trim()) throw new Error("Portal configuration error: CAPTCHA_SECRET is required.");
+  return secret;
 }
 
 function deriveKey(secret: string): Buffer {

@@ -254,6 +254,9 @@ function createMockSession(config: MockSessionConfig): BrowserSession {
         if (selector.includes("pincode")) {
           return readbackOverrides.pincode ?? defaultCustomer.pincode;
         }
+        if (selector.includes("slot")) {
+          return readbackOverrides.preferredSlot ?? slotOptions[0]!;
+        }
         return "";
       },
     } as unknown as BrowserSession["page"],
@@ -468,7 +471,7 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
       expect(execution.auditEvents).toHaveLength(2); // APPROVED->SUBMITTING, SUBMITTING->NEEDS_HUMAN
     });
 
-    it("resumes from NEEDS_HUMAN when human provides verification code and reaches REQUEST_SUBMITTED", async () => {
+    it("resumes in the same page without reading or typing verification code and reaches REQUEST_SUBMITTED", async () => {
       let filledCaptchaCode = "";
 
       const mockSession = createMockSession({
@@ -493,9 +496,9 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
         items: [],
       };
 
-      const execution = await BookingRunner.resumeLegWithCaptcha(context, "ABCDE", {}, mockSession);
+      const execution = await BookingRunner.resumeInSession(context, mockSession);
 
-      expect(filledCaptchaCode).toBe("ABCDE");
+      expect(filledCaptchaCode).toBe("");
       expect(execution.result.success).toBe(true);
       expect(execution.result.bookingReference).toBe("PPK-54321");
       expect(execution.updatedLeg.state).toBe("REQUEST_SUBMITTED");
@@ -679,6 +682,7 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
         request: sampleRequest,
       };
 
+      context.approval = { ...sampleApproval, planHash: hashPlan(context.plan) };
       await expect(BookingRunner.bookLegWithTransitions(context, {}, mockSession)).rejects.toThrow(
         FeeChangedReapprovalRequiredError
       );
@@ -701,6 +705,7 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
         items: [],
       };
 
+      context.approval = { ...sampleApproval, planHash: hashPlan(context.plan) };
       const result = await Booker.bookLeg(context, {}, mockSession);
       expect(result.success).toBe(false);
       expect(result.needsHuman).toBe(true);
@@ -726,6 +731,7 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
         dataWipeAck: false,
       };
 
+      context.approval = { ...sampleApproval, planHash: hashPlan(context.plan) };
       const result = await Booker.bookLeg(context, {}, mockSession);
       expect(result.success).toBe(false);
       expect(result.needsHuman).toBe(true);

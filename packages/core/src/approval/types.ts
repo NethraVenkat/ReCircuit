@@ -20,7 +20,7 @@ export interface ApprovalLegSummary {
   items: Array<{
     description: string;
     quantity: number;
-    weightKg: number;
+    weightKg: number | null;
   }>;
 }
 
@@ -73,7 +73,6 @@ export interface SafeActionParams {
   approval: DecisionRecord | null;
   action: "submit_booking";
   observedFeeInr: number;
-  usedIdempotencyKeys?: Set<string> | string[] | undefined;
 }
 
 export interface ActionAttemptLog {

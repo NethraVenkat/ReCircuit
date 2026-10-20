@@ -3,6 +3,8 @@ import { resolveRecyclerId } from "@/lib/config";
 import { getRepository } from "@/lib/repository";
 import { validateBookingSubmission, type BookingSubmissionPayload } from "@/lib/validation";
 import { verifyCaptchaToken } from "@/lib/captcha";
+import { assertPortalConfiguration } from "@/lib/runtime-config";
+import { pickupFee } from "@/lib/fees";
 
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,11 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  try {
+    assertPortalConfiguration();
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Portal configuration error" }, { status: 503 });
+  }
   const host = request.headers.get("host");
   const recyclerId = resolveRecyclerId(host);
   const repo = getRepository();
@@ -80,7 +87,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // 4. Create booking via repository (handles duplicate client_request_id and omitNextReference)
+  const switches = await repo.getFailureSwitches(recyclerId);
+  if (body.items.some((item) => typeof item.weightKg !== "number" || !Number.isFinite(item.weightKg))) {
+    return NextResponse.json({ ok: false, error: "Item weights are required" }, { status: 400 });
+  }
   const result = await repo.createBooking({
+    chargedFeeInr: pickupFee(recyclerId, body.items.reduce((sum, item) => sum + item.weightKg!, 0), switches.raiseFee),
     recyclerId,
     clientRequestId: body.client_request_id.trim(),
     fullName: body.full_name.trim(),

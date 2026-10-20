@@ -176,6 +176,7 @@ async function main() {
   });
 
   persisted.request = transitionResult.request;
+  persisted.plan = transitionResult.plan;
   persisted.legs = transitionResult.legs;
   persisted.priorDecision = transitionResult.decisionRecord;
   persisted.updatedAt = new Date().toISOString();

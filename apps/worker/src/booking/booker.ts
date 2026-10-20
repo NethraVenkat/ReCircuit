@@ -51,11 +51,10 @@ import {
 /** Helper to wait for Enter key press on stdin or a timeout (max 5 minutes) */
 async function waitForEnter(timeoutMs = 300000): Promise<void> {
   if (!process.stdin.isTTY) {
-    // Non-interactive environment: brief wait
-    return new Promise((resolve) => setTimeout(resolve, Math.min(timeoutMs, 1000)));
+    throw new Error("Human verification requires an interactive terminal or explicit handoff callback");
   }
 
-  return new Promise<void>((resolve) => {
+  return new Promise<void>((resolve, reject) => {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -63,7 +62,7 @@ async function waitForEnter(timeoutMs = 300000): Promise<void> {
 
     const timer = setTimeout(() => {
       rl.close();
-      resolve();
+      reject(new Error("Human verification timed out; booking was not submitted"));
     }, timeoutMs);
 
     rl.question("", () => {
@@ -88,7 +87,7 @@ export class Booker {
     const browserActions: BrowserActionLog[] = [];
     let stepNumber = 1;
 
-    const currentPlanHash = plan.planHash || hashPlan(plan);
+    const currentPlanHash = hashPlan(plan);
     const idempotencyKey =
       leg.idempotencyKey || makeIdempotencyKey(currentPlanHash, leg.id, leg.recyclerId);
 
@@ -457,9 +456,11 @@ export class Booker {
           if ((await nameInput.count()) && (await addBtn.count())) {
             const canonicalName = getCanonicalItemLabel(item.name || item.description || item.category || "Recyclable Item");
             await nameInput.fill(canonicalName);
-            const qty = item.quantity ?? 1;
+            const qty = item.quantity;
+            if (qty == null || !Number.isFinite(qty)) throw new FormVerificationError("quantity", "finite number", String(qty));
             await page.fill(PORTAL_SELECTORS.itemQty, String(qty));
-            const wt = item.weightKg ?? item.estimatedWeightKg ?? 1;
+            const wt = item.weightKg ?? item.estimatedWeightKg;
+            if (wt == null || !Number.isFinite(wt)) throw new FormVerificationError("weight", "finite number", String(wt));
             await page.fill(PORTAL_SELECTORS.itemWeight, String(wt));
             await addBtn.click();
             await page.waitForTimeout(300);
@@ -532,6 +533,12 @@ export class Booker {
       const readPincode = await page.inputValue(PORTAL_SELECTORS.pincode);
       if (readPincode.trim() !== customer.pincode.trim()) {
         throw new FormVerificationError("pincode", customer.pincode, readPincode);
+      }
+      if (matchedSlotValue !== null) {
+        const readSlot = await page.inputValue(PORTAL_SELECTORS.preferredSlot);
+        if (readSlot !== matchedSlotValue) {
+          throw new FormVerificationError("preferredSlot", matchedSlotValue, readSlot);
+        }
       }
 
       // Verify full item list
@@ -650,28 +657,8 @@ export class Booker {
           screenshotRef: captchaSs.filename,
         });
 
-        const enteredCode = (await page.inputValue(PORTAL_SELECTORS.captchaInput)).trim();
-        const code = options.captchaCode;
-
-        if (enteredCode && enteredCode.length >= 4) {
-          // Verification code already filled in the DOM (e.g. by human typing into live window or test hook)
-          browserActions.push({
-            action: "human_verification_solved",
-            stepNumber: stepNumber++,
-            timestamp: new Date().toISOString(),
-            url: page.url(),
-            details: { method: "already_filled_in_dom" },
-          });
-        } else if (code) {
-          // If verification code provided directly
-          await page.fill(PORTAL_SELECTORS.captchaInput, code);
-          browserActions.push({
-            action: "human_verification_solved",
-            stepNumber: stepNumber++,
-            timestamp: new Date().toISOString(),
-            url: page.url(),
-            details: { method: "captcha_code_direct" },
-          });
+        if (options.isResuming && existingSession) {
+          // The human has finished in this same page. Never inspect the code.
         } else if (options.onHumanVerification) {
           // Live test hook: simulates human typing code directly into the browser window
           await options.onHumanVerification(page, session);
@@ -802,173 +789,14 @@ export class Booker {
           // Recovery lookup did not find it; attempt single retry
         }
 
-        // Recovery Step B: Retry ONCE with the same idempotency key
-        browserActions.push({
-          action: "recovery_retry",
-          stepNumber: stepNumber++,
-          timestamp: new Date().toISOString(),
-          url: page.url(),
-          details: { attempt: 1, idempotencyKey },
-        });
-
-        await page.goto(bookingUrl, { waitUntil: "domcontentloaded", timeout: 12000 });
-        await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { state: "visible", timeout: 8000 });
-        await page.waitForTimeout(300);
-
-        // Fill slot
-        const retrySlotSelect = page.locator(PORTAL_SELECTORS.preferredSlot);
-        if (await retrySlotSelect.count()) {
-          if (matchedSlotValue) {
-            await retrySlotSelect.selectOption(matchedSlotValue);
-          } else {
-            await retrySlotSelect.selectOption({ index: 0 });
-          }
-        }
-
-        // Fill customer inputs with React hydration guard
-        const fillRetryCustomerInputs = async (): Promise<void> => {
-          await page.fill(PORTAL_SELECTORS.fullName, customer.fullName);
-          await page.fill(PORTAL_SELECTORS.phone, customer.phone);
-          await page.fill(PORTAL_SELECTORS.addressLine, customer.addressLine);
-          await page.fill(PORTAL_SELECTORS.locality, customer.locality);
-          const retryPincode = page.locator(PORTAL_SELECTORS.pincode);
-          if (await retryPincode.count()) await retryPincode.selectOption(customer.pincode);
-        };
-        await fillRetryCustomerInputs();
-        for (let attempt = 0; attempt < 5; attempt++) {
-          const curName = (await page.inputValue(PORTAL_SELECTORS.fullName)).trim();
-          if (curName === customer.fullName.trim()) break;
-          await page.waitForTimeout(250);
-          await fillRetryCustomerInputs();
-        }
-
-        // Fill items
-        // Clear any pre-filled default item rows
-        const retryRemoveBtns = page.locator(PORTAL_SELECTORS.removeItem);
-        for (let attempt = 0; attempt < 10; attempt++) {
-          const count = await retryRemoveBtns.count();
-          if (count === 0) break;
-          await retryRemoveBtns.first().click().catch(() => {});
-          await page.waitForTimeout(200);
-        }
-
-        if (context.items && context.items.length > 0) {
-          for (const item of context.items) {
-            const nameInput = page.locator(PORTAL_SELECTORS.itemName);
-            const addBtn = page.locator(PORTAL_SELECTORS.addItem);
-            if ((await nameInput.count()) && (await addBtn.count())) {
-              const canonicalName = getCanonicalItemLabel(item.name || item.description || item.category || "Recyclable Item");
-              await nameInput.fill(canonicalName);
-              const qty = item.quantity ?? 1;
-              await page.fill(PORTAL_SELECTORS.itemQty, String(qty));
-              const wt = item.weightKg ?? item.estimatedWeightKg ?? 1;
-              await page.fill(PORTAL_SELECTORS.itemWeight, String(wt));
-              await addBtn.click();
-              await page.waitForTimeout(300);
-            }
-          }
-        }
-
-        // Data wipe ack
-        if (hasDataBearingDevice && context.dataWipeAck) {
-          const retryDataWipe = page.locator(PORTAL_SELECTORS.dataWipeAck);
-          await retryDataWipe.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
-          if ((await retryDataWipe.count()) > 0) {
-            await retryDataWipe.check();
-          }
-        }
-
-        // Lock client request id
-        const retryClientLocator = page.locator(PORTAL_SELECTORS.clientRequestId);
-        if ((await retryClientLocator.count()) > 0) {
-          await retryClientLocator.evaluate((el: HTMLInputElement, key: string) => {
-            el.value = key;
-            el.setAttribute("value", key);
-            el.dispatchEvent(new Event("input", { bubbles: true }));
-            el.dispatchEvent(new Event("change", { bubbles: true }));
-          }, idempotencyKey);
-        }
-
-        // PaperPlus CAPTCHA if needed
-        const retryCaptchaInput = page.locator(PORTAL_SELECTORS.captchaInput);
-        if ((await retryCaptchaInput.count()) > 0 && options.onHumanVerification) {
-          await options.onHumanVerification(page, session);
-        }
-
-        // Wait for computed fee to appear
-        const retryFeeEl = page.locator(PORTAL_SELECTORS.portalComputedFee);
-        await retryFeeEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
-
-        // Click confirm
-        const retryConfirmBtn = page.locator(PORTAL_SELECTORS.confirmBooking);
-        await retryConfirmBtn.waitFor({ state: "visible", timeout: 8000 });
-        if (typeof page.waitForFunction === "function") {
-          await page.waitForFunction(
-            (sel) => {
-              const btn = document.querySelector(sel) as HTMLButtonElement;
-              return btn && !btn.disabled;
-            },
-            PORTAL_SELECTORS.confirmBooking,
-            { timeout: 8000 }
-          ).catch(() => {});
-        }
-        await retryConfirmBtn.click();
-
-        // Check if confirmation page rendered with reference or error banner
-        const retryRefEl = page.locator(PORTAL_SELECTORS.bookingReference);
-        const retryMissingRefEl = page.locator(PORTAL_SELECTORS.bookingReferenceMissing);
-        const retryErrorBanner = page.locator(PORTAL_SELECTORS.formErrorBanner);
-        await Promise.race([
-          retryRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
-          retryMissingRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
-          retryErrorBanner.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
-        ]);
-
-        const isRetryError = await retryErrorBanner.isVisible().catch(() => false);
-        if (!isRetryError && (await retryRefEl.isVisible().catch(() => false))) {
-          const retryRef = (await retryRefEl.textContent())?.trim() || "";
-          if (isValidBookingReference(recyclerId, retryRef)) {
-            const finalSs = await session.captureScreenshot("recovery-retry-success");
-            return {
-              success: true,
-              bookingReference: retryRef,
-              confirmationUrl: page.url(),
-              screenshotRef: finalSs.filename,
-              sessionId: session.sessionId,
-              idempotencyKey,
-              isRecovered: true,
-              browserActions,
-            };
-          }
-        }
-
-        // Re-check tracking for recovered reference
-        await page.goto(`${trackUrl}?client=${encodeURIComponent(idempotencyKey)}`, {
-          waitUntil: "domcontentloaded",
-          timeout: 10000,
-        });
-
-        const finalRecRefEl = page.locator(PORTAL_SELECTORS.bookingReference);
-        await finalRecRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
-        if (await finalRecRefEl.isVisible().catch(() => false)) {
-          const finalRecRef = (await finalRecRefEl.textContent())?.trim() || "";
-          if (isValidBookingReference(recyclerId, finalRecRef)) {
-            const finalSs = await session.captureScreenshot("recovery-retry-success");
-            return {
-              success: true,
-              bookingReference: finalRecRef,
-              confirmationUrl: page.url(),
-              screenshotRef: finalSs.filename,
-              sessionId: session.sessionId,
-              idempotencyKey,
-              isRecovered: true,
-              browserActions,
-            };
-          }
-        }
-
-        // If recovery retry fails to verify the booking, throw UnverifiedBookingError
-        throw new UnverifiedBookingError();
+        // A missing reference is not permission to submit again. Only a failed
+        // submission may retry, and the retry must repeat every safety check.
+        if (!isErrorVisible || options.recoveryRetry) throw new UnverifiedBookingError();
+        const retried = await Booker.bookLeg(context, {
+          ...options, isResuming: false, recoveryRetry: true,
+        }, session);
+        keepSessionAlive = Boolean(retried.needsHuman && retried.session);
+        return { ...retried, browserActions: [...browserActions, ...retried.browserActions] };
       }
 
       // ---------------------------------------------------------------------

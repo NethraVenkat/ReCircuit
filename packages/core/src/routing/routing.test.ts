@@ -119,6 +119,24 @@ function makeItem(overrides: Partial<IntakeItem>): IntakeItem {
 
 describe("Stage 5: Deterministic Reverse-Logistics Routing & Pricing", () => {
   const policies = createTestPolicies();
+  it("rejects missing weight instead of silently using zero", () => {
+    expect(() => priceLeg({
+      recyclerId: "deccan", policy: policies[0]!,
+      items: [makeItem({ estimatedWeightKg: null, declaredWeightKg: null })],
+    })).toThrow("UNKNOWN_WEIGHT");
+  });
+
+  it("does not infer free pickup above a threshold without an explicit free rule", () => {
+    const policy = { ...policies[0]!, feeRules: policies[0]!.feeRules.filter((rule) => rule.kind !== "free") };
+    expect(priceLeg({ recyclerId: "deccan", policy, items: [makeItem({ estimatedWeightKg: 6 })] }))
+      .toMatchObject({ valid: false, invalidReason: "UNKNOWN_FEE", estimatedFee: null });
+  });
+
+  it("does not apply a thresholded free rule below its threshold", () => {
+    const policy = { ...policies[0]!, feeRules: policies[0]!.feeRules.filter((rule) => rule.kind === "free") };
+    expect(priceLeg({ recyclerId: "deccan", policy, items: [makeItem({ estimatedWeightKg: 2 })] }))
+      .toMatchObject({ valid: false, invalidReason: "UNKNOWN_FEE", estimatedFee: null });
+  });
 
   it("TC1: laptop accepted by Deccan & QuickScrap, rejected by PaperPlus", () => {
     const laptopItem = makeItem({ rawText: "Dell laptop", category: "laptop", quantity: 1, estimatedWeightKg: 2.2 });

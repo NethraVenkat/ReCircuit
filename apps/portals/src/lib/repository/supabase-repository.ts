@@ -64,6 +64,7 @@ export class SupabaseRepository implements BookingRepository {
         locality: bookingData.locality,
         pincode: bookingData.pincode,
         preferred_slot: bookingData.preferredSlot,
+        charged_fee_inr: bookingData.chargedFeeInr,
         items: bookingData.items,
         status: "RECEIVED",
       })
@@ -265,6 +266,7 @@ export class SupabaseRepository implements BookingRepository {
       locality: String(row.locality),
       pincode: String(row.pincode),
       preferredSlot: String(row.preferred_slot),
+      ...(typeof row.charged_fee_inr === "number" ? { chargedFeeInr: row.charged_fee_inr } : {}),
       items: (row.items as PortalBooking["items"]) || [],
       status: row.status as PortalBookingStatus,
       pickupOtp: row.pickup_otp ? String(row.pickup_otp) : undefined,

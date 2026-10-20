@@ -61,8 +61,8 @@ export interface BookerOptions {
   isResuming?: boolean;
   /** Custom user-prompt function for CLI interactive wait */
   promptUserSolve?: () => Promise<void>;
-  /** Obsolete: kept only for backward compatibility in existing unit test mocks */
-  captchaCode?: string;
+  /** Internal bound on recovery: at most one fully verified retry. */
+  recoveryRetry?: boolean;
   captchaSessionId?: string;
 }
 
@@ -101,7 +101,6 @@ export interface LegBookingContext {
   items: BookingItemInput[];
   dataWipeAck?: boolean;
   portalBaseUrl?: string;
-  usedIdempotencyKeys?: Set<string> | string[];
   request?: Request;
 }
 

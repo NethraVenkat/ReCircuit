@@ -65,10 +65,18 @@ export function priceLeg(options: {
     };
   }
 
+  if (items.some((item) => !Number.isFinite(item.declaredWeightKg ?? item.estimatedWeightKg))) {
+    throw new Error("UNKNOWN_WEIGHT: every routed item requires an explicit or estimated weight");
+  }
+
+  if (items.some((item) => !Number.isFinite(item.declaredWeightKg ?? item.estimatedWeightKg))) {
+    throw new Error("UNKNOWN_WEIGHT: every routed item requires an explicit or estimated weight");
+  }
+
   // 4. Calculate total estimated weight for this leg
   const totalWeightKg = Number(
     items
-      .reduce((sum, item) => sum + (item.declaredWeightKg ?? item.estimatedWeightKg ?? 0), 0)
+      .reduce((sum, item) => sum + ((item.declaredWeightKg ?? item.estimatedWeightKg)!), 0)
       .toFixed(3)
   );
 
@@ -110,7 +118,7 @@ export function priceLeg(options: {
           thresholdDistancePercent = Math.round((diff / threshold) * 100);
         }
       } else {
-        estimatedFee = 0;
+        estimatedFee = freeRule && freeRule.thresholdKg != null && totalWeightKg >= freeRule.thresholdKg ? freeRule.amountInr : null;
       }
     } else {
       estimatedFee = belowRule.amountInr;
@@ -118,7 +126,7 @@ export function priceLeg(options: {
   } else if (flatRule) {
     estimatedFee = flatRule.amountInr;
   } else if (freeRule) {
-    estimatedFee = 0;
+    estimatedFee = freeRule.thresholdKg == null || totalWeightKg >= freeRule.thresholdKg ? freeRule.amountInr : null;
     if (freeRule.thresholdKg != null && totalWeightKg < freeRule.thresholdKg) {
       const diff = freeRule.thresholdKg - totalWeightKg;
       if (diff > 0 && diff <= 1.0) {
@@ -158,7 +166,7 @@ export function priceLeg(options: {
       if (matchingRule.unit === "per_item") {
         itemPayout = matchingRule.amountInr * item.quantity;
       } else if (matchingRule.unit === "per_kg") {
-        const weight = item.declaredWeightKg ?? item.estimatedWeightKg ?? 0;
+        const weight = (item.declaredWeightKg ?? item.estimatedWeightKg)!;
         itemPayout = Math.round(matchingRule.amountInr * weight);
       }
       itemPayouts[item.id] = itemPayout;

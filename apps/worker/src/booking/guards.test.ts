@@ -21,7 +21,7 @@ function getAllTsFiles(dir: string, fileList: string[] = []): string[] {
       if (file !== "node_modules" && file !== "dist") {
         getAllTsFiles(fullPath, fileList);
       }
-    } else if (file.endsWith(".ts") && !file.endsWith(".d.ts")) {
+    } else if (/\.(ts|mjs|cjs)$/.test(file) && !file.endsWith(".d.ts")) {
       fileList.push(fullPath);
     }
   }
@@ -31,6 +31,23 @@ function getAllTsFiles(dir: string, fileList: string[] = []): string[] {
 describe("Stage 7 Static Architectural Guards for apps/worker", () => {
   const workerSrcDir = path.resolve(__dirname, "..");
   const allWorkerFiles = getAllTsFiles(workerSrcDir);
+  const productionFiles = [...allWorkerFiles, ...getAllTsFiles(path.resolve(__dirname, "../../../../scripts"))]
+    .filter((file) => !file.endsWith(".test.ts"));
+
+  it("worker and scripts never read or type verification codes or import solvers", () => {
+    for (const file of productionFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      expect(content, file).not.toMatch(/humanSolveForTest|simulateHumanCaptchaSolve|getStoredCaptchaCode|lib\/captcha/);
+      expect(content, file).not.toMatch(/(?:fill|inputValue|textContent|evaluate)\([^;\n]*(?:captchaInput|input-captcha-code)/);
+    }
+  });
+
+  it("booking never assigns verifier-owned downstream states", () => {
+    for (const file of productionFiles) {
+      expect(fs.readFileSync(file, "utf8"), file)
+        .not.toMatch(/(?:state\s*[:=]|transitionState\([^,]+,)\s*["'](?:REQUEST_CONFIRMED|PICKUP_SCHEDULED|PICKED_UP)["']/);
+    }
+  });
 
   it("found worker source files to inspect", () => {
     expect(allWorkerFiles.length).toBeGreaterThan(0);

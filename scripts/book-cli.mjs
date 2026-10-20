@@ -102,6 +102,7 @@ async function main() {
   console.log(`🔢 Total Legs   : ${legs.length}\n`);
 
   const updatedLegs = [];
+  let failed = false;
   const allEvents = storedData.events || [];
 
   for (let i = 0; i < legs.length; i++) {
@@ -119,6 +120,7 @@ async function main() {
       customer,
       items: leg.items || [],
       dataWipeAck,
+      request,
     };
 
     // In local CLI mode, default to headed execution so the human can see the browser and solve verification
@@ -148,6 +150,7 @@ async function main() {
         updatedLegs.push(execResult.updatedLeg);
         allEvents.push(...execResult.auditEvents);
       } catch (err) {
+        failed = true;
         console.error(`\n❌ Leg Booking Failed: ${err.message}\n`);
         updatedLegs.push(leg);
       }
@@ -160,6 +163,7 @@ async function main() {
 
   // Persist updated state
   storedData.legs = updatedLegs;
+  if (failed) process.exitCode = 1;
   if (storedData.plan) {
     storedData.plan.legs = updatedLegs;
   }
