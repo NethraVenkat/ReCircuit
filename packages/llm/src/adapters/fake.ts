@@ -349,6 +349,19 @@ export class FakeLlmAdapter implements LlmAdapter {
       });
     }
 
+    // TC2 official scenario: 2 batteries and 8 kg newspaper
+    if ((lower.includes("batteries") || lower.includes("battery")) && lower.includes("newspaper") && !lower.includes("laptop")) {
+      return JSON.stringify({
+        location: { rawText: "Kukatpally, Hyderabad 500072", locality: "Kukatpally", pincode: "500072", city: "Hyderabad", confidence: 0.98 },
+        feeCapInr: null,
+        items: [
+          { rawText: "8 kg newspaper", category: "newspaper", quantity: 1, declaredWeightKg: 8, confidence: 0.95 },
+          { rawText: "2 batteries", category: "battery_household", quantity: 2, hazardClass: "battery_alkaline", confidence: 0.95 },
+        ],
+        clarifications: [],
+      });
+    }
+
     // Two laptops and 8 kg newspaper
     if (lower.includes("two laptops") && lower.includes("newspaper")) {
       return JSON.stringify({

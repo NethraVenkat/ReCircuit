@@ -240,7 +240,7 @@ export const CANONICAL_LABELS: Record<TaxonomyCategory, string> = {
 };
 
 export function getCanonicalItemLabel(input: string): string {
-  if (!input) return "Recyclable Item";
+  if (!input || typeof input !== "string") return "Recyclable Item";
   const lower = input.toLowerCase().trim();
 
   // Direct taxonomy category match
@@ -248,15 +248,19 @@ export function getCanonicalItemLabel(input: string): string {
     return CANONICAL_LABELS[lower as TaxonomyCategory];
   }
 
-  // Common keyword matches
+  // 1. Specific subcomponents & accessories take priority to prevent collapsing accessories into data-bearing hosts
+  if (lower.includes("battery") || lower.includes("batteries") || lower.includes("cell")) return "Household Battery";
+  if (lower.includes("charger") || lower.includes("cable") || lower.includes("wire") || lower.includes("adapter")) return "Charger / Cable";
+
+  // 2. Data-bearing host devices (strictly distinct computing equipment)
   if (lower.includes("laptop") || lower.includes("notebook")) return "Laptop";
   if (lower.includes("desktop") || lower.includes("pc")) return "Desktop Computer";
   if (lower.includes("phone") || lower.includes("mobile")) return "Mobile Phone";
-  if (lower.includes("battery") || lower.includes("batteries")) return "Household Battery";
+
   if (lower.includes("newspaper") || lower.includes("raddi")) return "Newspaper";
   if (lower.includes("cardboard") || lower.includes("carton")) return "Cardboard";
   if (lower.includes("book") || lower.includes("magazine")) return "Books & Magazines";
-  if (lower.includes("charger") || lower.includes("cable") || lower.includes("wire")) return "Charger / Cable";
+
   if (lower.includes("electronic") || lower.includes("gadget")) return "Small Electronics";
   if (lower.includes("plastic")) return "Plastic Scrap";
   if (lower.includes("metal") || lower.includes("iron") || lower.includes("copper") || lower.includes("aluminum")) return "Metal Scrap";

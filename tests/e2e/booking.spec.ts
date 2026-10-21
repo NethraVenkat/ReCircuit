@@ -39,6 +39,8 @@ import {
   type Request as DomainRequest,
 } from "@recircuit/core";
 import { BookingRunner } from "../../apps/worker/src/booking/runner.js";
+import { VerificationRunner } from "../../apps/worker/src/verifier/runner.js";
+import { isCollected } from "@recircuit/core";
 import type { LegBookingContext } from "../../apps/worker/src/booking/types.js";
 import { FeeNotFoundError } from "../../apps/worker/src/booking/errors.js";
 
@@ -139,9 +141,10 @@ function getTestPolicies(): any[] {
 }
 
 test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
 
   test.beforeAll(async ({ request }) => {
+    test.setTimeout(180000);
     // Warm up all 3 portal servers
     await Promise.all(
       [3101, 3102, 3103].map(async (port) => {
@@ -157,6 +160,7 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
       })
     );
 
+    await Promise.all([request.get("http://localhost:3101/book-pickup"), request.get("http://localhost:3102/pickup"), request.get("http://localhost:3103/schedule")]);
     // Reset demo state across all portals
     await request.post("http://localhost:3101/api/reset?all=true", {
       headers: { "x-admin-token": TEST_ADMIN_TOKEN },
@@ -240,11 +244,28 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
     expect(bookResult.updatedLeg.state).not.toBe("CONFIRMED");
     expect(bookResult.updatedLeg.state).not.toBe("COLLECTED");
 
+    // Stage 8: Independent Verifier verifies booking in a separate session
+    const verifierRes = await VerificationRunner.verifyLegWithAudit(
+      {
+        leg: bookResult.updatedLeg,
+        plan: approved.plan,
+      },
+      { headless: true, portalBaseUrl: "http://localhost:3101" }
+    );
+    expect(verifierRes.verified).toBe(true);
+    expect(verifierRes.bookingReference).toBe(reference);
+    expect(verifierRes.verifyingSessionId).toBeTruthy();
+    expect(verifierRes.submittingSessionId).toBe(bookResult.result.sessionId);
+    expect(verifierRes.verifyingSessionId).not.toBe(verifierRes.submittingSessionId);
+    expect(bookResult.updatedLeg.state).toBe("REQUEST_CONFIRMED");
+    expect(isCollected(bookResult.updatedLeg.state)).toBe(false);
+
     // Live tracking page verification
     await page.goto(`http://localhost:3101/track?ref=${encodeURIComponent(reference)}`);
     await expect(page.locator('[data-testid="tracking-result"]')).toBeVisible();
     await expect(page.locator('[data-testid="booking-reference"]')).toHaveText(reference);
     await expect(page.locator('[data-testid="tracking-status"]')).toHaveText(/RECEIVED/i);
+    await expect(page.getByTestId("tracking-fee")).toHaveText("Pickup fee: \u20B9180");
 
     // Verify exact items on HTML tracking page
     const itemRows = page.locator('[data-testid="tracking-item-row"]');
@@ -376,7 +397,7 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
     await expect(deccanItemRows).toHaveCount(2); // exactly 2 items: Laptop x1, Batteries x2
     const deccanNames = await deccanItemRows.locator('[data-testid="tracking-item-name"]').allTextContents();
     expect(deccanNames.sort()).toEqual(["Household Battery", "Laptop"].sort());
-    await expect(page.getByTestId("tracking-fee")).toHaveText("Pickup fee: ?180");
+    await expect(page.getByTestId("tracking-fee")).toHaveText("Pickup fee: \u20B9180");
     await expect(page.getByTestId("tracking-status")).toHaveText("RECEIVED");
     await expect(deccanItemRows.filter({ hasText: "Laptop" }).getByTestId("tracking-item-details")).toContainText("Qty: 1");
     await expect(deccanItemRows.filter({ hasText: "Household Battery" }).getByTestId("tracking-item-details")).toContainText("Qty: 2");
@@ -392,7 +413,7 @@ test.describe("Stage 7: Browser Booking Agent E2E Suite (Live Portals)", () => {
     await expect(ppItemRows).toHaveCount(1); // exactly 1 item: Newspaper
     await expect(ppItemRows.first().locator('[data-testid="tracking-item-name"]')).toHaveText("Newspaper");
     await expect(ppItemRows.getByTestId("tracking-item-details")).toContainText("Weight: 8 kg");
-    await expect(page.getByTestId("tracking-fee")).toHaveText("Pickup fee: ?0");
+    await expect(page.getByTestId("tracking-fee")).toHaveText("Pickup fee: \u20B90");
     await expect(page.getByTestId("tracking-status")).toHaveText("RECEIVED");
     const paperplusHtmlText = await page.getByTestId("tracking-result").innerText();
     for (const [port, count] of [[3101, 1], [3102, 1], [3103, 0]]) {

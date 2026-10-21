@@ -43,7 +43,8 @@ describe("Stage 7 Static Architectural Guards for apps/worker", () => {
   });
 
   it("booking never assigns verifier-owned downstream states", () => {
-    for (const file of productionFiles) {
+    const bookingFiles = productionFiles.filter((file) => !file.includes("verifier"));
+    for (const file of bookingFiles) {
       expect(fs.readFileSync(file, "utf8"), file)
         .not.toMatch(/(?:state\s*[:=]|transitionState\([^,]+,)\s*["'](?:REQUEST_CONFIRMED|PICKUP_SCHEDULED|PICKED_UP)["']/);
     }

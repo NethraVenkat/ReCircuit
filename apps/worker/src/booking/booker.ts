@@ -159,10 +159,14 @@ export class Booker {
 
     // Check data-wipe requirement for data-bearing electronic items
     const dataKeywords = ["laptop", "phone", "desktop", "computer", "notebook", "tablet", "hard drive", "ssd", "disk"];
+    const nonDataBearingAccessories = ["battery", "charger", "cable", "wire", "adapter"];
     const hasDataBearingDevice = (leg.items || []).some((item) => {
+      const name = (item.name || "").toLowerCase();
       const desc = (item.description || "").toLowerCase();
       const cat = (item.category || "").toLowerCase();
-      return dataKeywords.some((k) => desc.includes(k) || cat.includes(k));
+      const text = `${name} ${desc} ${cat}`;
+      if (nonDataBearingAccessories.some((k) => text.includes(k))) return false;
+      return dataKeywords.some((k) => text.includes(k));
     });
 
     if (hasDataBearingDevice && (approval.dataWipeConfirmedByUser !== true || context.dataWipeAck === false)) {
@@ -260,19 +264,24 @@ export class Booker {
       // ---------------------------------------------------------------------
       // 4. Navigation by Links (Home -> Booking Page)
       // ---------------------------------------------------------------------
-      const isAlreadyOnBookingPage =
-        Boolean(existingSession) ||
-        (!page.url().includes("track") &&
-          !page.url().includes("status") &&
-          ((await page.locator(PORTAL_SELECTORS.bookingForm).count()) > 0 ||
-            page.url().includes("book") ||
-            page.url().includes("schedule") ||
-            page.url().includes("pickup")));
+      let isAlreadyOnBookingPage = false;
+      try {
+        const currentUrl = new URL(page.url());
+        const expectedBaseUrl = new URL(portalBase);
+        const expectedBookingUrl = new URL(bookingUrl);
+        const isMatchingOrigin = currentUrl.origin === expectedBaseUrl.origin;
+        const isMatchingRoute = currentUrl.pathname.replace(/\/$/, "") === expectedBookingUrl.pathname.replace(/\/$/, "");
+        const hasVisibleForm = (await page.locator(PORTAL_SELECTORS.bookingForm).count()) > 0 &&
+          (await page.locator(PORTAL_SELECTORS.bookingForm).isVisible().catch(() => false));
+        isAlreadyOnBookingPage = isMatchingOrigin && isMatchingRoute && hasVisibleForm;
+      } catch {
+        isAlreadyOnBookingPage = false;
+      }
 
       if (!isAlreadyOnBookingPage) {
         let navigatedViaLink = false;
         try {
-          await page.goto(portalBase, { waitUntil: "domcontentloaded", timeout: 10000 });
+          await page.goto(portalBase, { waitUntil: "domcontentloaded", timeout: options.timeoutMs ?? 30000 });
           // Discover booking link on portal home page
           const bookingLink = page.locator(
             'a[href*="book"], a[href*="schedule"], a[href*="pickup"]'
@@ -300,8 +309,8 @@ export class Booker {
 
         if (!navigatedViaLink) {
           // Recorded fallback route
-          await page.goto(bookingUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
-          await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { timeout: 10000 });
+          await page.goto(bookingUrl, { waitUntil: "domcontentloaded", timeout: options.timeoutMs ?? 30000 });
+          await page.waitForSelector(PORTAL_SELECTORS.bookingForm, { timeout: options.timeoutMs ?? 30000 });
 
           const ss = await session.captureScreenshot("nav-route-fallback");
           browserActions.push({
@@ -440,19 +449,23 @@ export class Booker {
         await fillCustomerInputs();
       }
 
-      // 7. Add Leg Items (Clearing any pre-filled rows first)
+      // 7. Add Leg Items (Observable clearing of any pre-filled default rows first)
+      const nameInput = page.locator(PORTAL_SELECTORS.itemName);
+      const addBtn = page.locator(PORTAL_SELECTORS.addItem);
+      if ((await nameInput.count()) > 0) {
+        await nameInput.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
+      }
+
       const removeButtons = page.locator(PORTAL_SELECTORS.removeItem);
-      for (let attempt = 0; attempt < 10; attempt++) {
+      for (let attempt = 0; attempt < 15; attempt++) {
         const count = await removeButtons.count();
         if (count === 0) break;
         await removeButtons.first().click().catch(() => {});
-        await page.waitForTimeout(200);
+        await page.locator(PORTAL_SELECTORS.itemRow).first().waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
       }
 
       if (context.items && context.items.length > 0) {
         for (const item of context.items) {
-          const nameInput = page.locator(PORTAL_SELECTORS.itemName);
-          const addBtn = page.locator(PORTAL_SELECTORS.addItem);
           if ((await nameInput.count()) && (await addBtn.count())) {
             const canonicalName = getCanonicalItemLabel(item.name || item.description || item.category || "Recyclable Item");
             await nameInput.fill(canonicalName);
@@ -462,9 +475,20 @@ export class Booker {
             const wt = item.weightKg ?? item.estimatedWeightKg;
             if (wt == null || !Number.isFinite(wt)) throw new FormVerificationError("weight", "finite number", String(wt));
             await page.fill(PORTAL_SELECTORS.itemWeight, String(wt));
+
+            const prevRowCount = await page.locator(PORTAL_SELECTORS.itemRow).count();
             await addBtn.click();
-            await page.waitForTimeout(300);
+            // Observable wait for new item row to be attached and visible
+            await page.locator(PORTAL_SELECTORS.itemRow).nth(prevRowCount).waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
           }
+        }
+      }
+
+      // Observable verification: item count must match expected items
+      if (context.items && context.items.length > 0) {
+        const renderedCount = await page.locator(PORTAL_SELECTORS.itemRow).count();
+        if (renderedCount !== context.items.length) {
+          throw new DomReadbackMismatchError("items.count", String(context.items.length), String(renderedCount));
         }
       }
 
@@ -755,7 +779,7 @@ export class Booker {
         try {
           await page.goto(`${trackUrl}?client=${encodeURIComponent(idempotencyKey)}`, {
             waitUntil: "domcontentloaded",
-            timeout: 10000,
+            timeout: options.timeoutMs ?? 30000,
           });
 
           const recRefEl = page.locator(PORTAL_SELECTORS.bookingReference);

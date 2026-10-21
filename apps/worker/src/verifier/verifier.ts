@@ -1,0 +1,165 @@
+import type { TrackingLookupEvidence } from "@recircuit/core";
+import { transitionState, isCollected } from "@recircuit/core";
+import { openSession } from "../browser/session.js";
+import { getPortalTrackingUrl, isValidBookingReference } from "../booking/selectors.js";
+import type { LegVerificationContext, VerifierOptions, VerifierResult, ObservedConsignmentItem } from "./types.js";
+
+export class VerifierError extends Error {
+  constructor(message: string, public readonly code: string = "VERIFIER_ERROR") {
+    super(message);
+    this.name = "VerifierError";
+  }
+}
+
+export class Verifier {
+  /**
+   * Independently observes the mock recycler portal tracking page through a
+   * separate browser session, verifying reference, status, and items.
+   */
+  public static async verifyLeg(
+    context: LegVerificationContext,
+    options: VerifierOptions = {}
+  ): Promise<VerifierResult> {
+    const { leg } = context;
+    const recyclerId = leg.recyclerId;
+    const bookingReference = context.expectedReference || leg.bookingReference;
+
+    if (!bookingReference) {
+      throw new VerifierError(
+        `Cannot verify leg ${leg.id}: missing booking reference. Leg must be in REQUEST_SUBMITTED.`,
+        "MISSING_BOOKING_REFERENCE"
+      );
+    }
+
+    if (!isValidBookingReference(recyclerId, bookingReference)) {
+      throw new VerifierError(
+        `Invalid booking reference format for recycler "${recyclerId}": "${bookingReference}".`,
+        "INVALID_REFERENCE_FORMAT"
+      );
+    }
+
+    // 1. Open an INDEPENDENT, distinct browser session
+    const session = await openSession({
+      mode: (process.env.BROWSER_MODE as "local" | "browserbase") || "local",
+      headless: options.headless !== false,
+      recyclerId,
+    });
+
+    const submittingSessionId = leg.submittingSessionId || "";
+    const verifyingSessionId = session.sessionId;
+
+    // Strict invariant: Verifier session must differ from Submitting session
+    if (submittingSessionId && verifyingSessionId === submittingSessionId) {
+      await session.close().catch(() => {});
+      throw new VerifierError(
+        `Independent verification violation: verifying sessionId must differ from submitting sessionId (both are "${verifyingSessionId}").`,
+        "SESSION_NOT_INDEPENDENT"
+      );
+    }
+
+    try {
+      const page = session.page;
+      const trackBaseUrl = getPortalTrackingUrl(recyclerId, options.portalBaseUrl);
+      const trackingUrl = `${trackBaseUrl}?ref=${encodeURIComponent(bookingReference)}`;
+
+      await page.goto(trackingUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: options.timeoutMs ?? 30000,
+      });
+
+      // 2. Wait for either tracking result or not-found container
+      const resultLocator = page.locator('[data-testid="tracking-result"]');
+      const notFoundLocator = page.locator('[data-testid="not-found"]');
+
+      await Promise.race([
+        resultLocator.waitFor({ state: "visible", timeout: 15000 }).catch(() => {}),
+        notFoundLocator.waitFor({ state: "visible", timeout: 15000 }).catch(() => {}),
+      ]);
+
+      const isFound = await resultLocator.isVisible().catch(() => false);
+      const isNotFound = await notFoundLocator.isVisible().catch(() => false);
+
+      if (!isFound || isNotFound) {
+        const failureSs = await session.captureScreenshot("verification-not-found");
+        throw new VerifierError(
+          `Consignment "${bookingReference}" was not found on recycler tracking portal (${trackingUrl}). Screenshot: ${failureSs.filename}`,
+          "CONSIGNMENT_NOT_FOUND"
+        );
+      }
+
+      // 3. Extract observed values from live DOM
+      const refEl = page.locator('[data-testid="booking-reference"]');
+      const statusEl = page.locator('[data-testid="tracking-status"]');
+      const feeEl = page.locator('[data-testid="tracking-fee"]');
+      const itemRows = page.locator('[data-testid="tracking-item-row"]');
+      const simulatedBadge = page.locator('[data-testid="simulated-event-badge"]');
+
+      const observedRef = (await refEl.textContent())?.trim() || "";
+      const observedStatus = (await statusEl.textContent())?.trim() || "";
+      const observedFeeText = (await feeEl.textContent())?.trim() || "";
+      const isSimulatedDownstream = (await simulatedBadge.count()) > 0;
+
+      // Verify reference matches expected submitted reference
+      if (observedRef !== bookingReference) {
+        throw new VerifierError(
+          `Reference mismatch: expected "${bookingReference}", but tracking page displays "${observedRef}".`,
+          "REFERENCE_MISMATCH"
+        );
+      }
+
+      // 4. TC4 Invariant: Do not report collected without explicit signed evidence
+      if ((observedStatus === "PICKED_UP" || observedStatus === "COLLECTED") && !isCollected(leg.state)) {
+        // Portal simulated event or downstream update cannot automatically claim pickup on user leg without pickup confirmation
+        throw new VerifierError(
+          `TC4 Invariant Violation: Recycler portal displays "${observedStatus}", but no pickup confirmation evidence exists for this leg.`,
+          "TC4_UNVERIFIED_COLLECTION"
+        );
+      }
+
+      // 5. Extract item rows
+      const observedItems: ObservedConsignmentItem[] = [];
+      const rowCount = await itemRows.count();
+      for (let i = 0; i < rowCount; i++) {
+        const row = itemRows.nth(i);
+        const name = (await row.locator('[data-testid="tracking-item-name"]').textContent())?.trim() || "";
+        const details = (await row.locator('[data-testid="tracking-item-details"]').textContent())?.trim() || "";
+        const qtyMatch = details.match(/Qty:\s*(\d+)/i);
+        const wtMatch = details.match(/Weight:\s*([\d.]+)\s*kg/i);
+        observedItems.push({
+          name,
+          quantity: qtyMatch ? parseInt(qtyMatch[1]!, 10) : undefined,
+          weightKg: wtMatch ? parseFloat(wtMatch[1]!) : undefined,
+        });
+      }
+
+      // 6. Capture verification screenshot evidence
+      const screenshot = await session.captureScreenshot("verification-success");
+
+      // 7. Transition leg state machine to REQUEST_CONFIRMED
+      const trackingEvidence: TrackingLookupEvidence = {
+        bookingReference: observedRef,
+        sessionId: verifyingSessionId,
+        ...(leg.slot ? { slot: leg.slot } : {}),
+      };
+
+      const step = transitionState(leg, "REQUEST_CONFIRMED", trackingEvidence);
+      Object.assign(leg, step.newLeg);
+
+      return {
+        verified: true,
+        bookingReference: observedRef,
+        observedStatus,
+        verifyingSessionId,
+        submittingSessionId,
+        screenshotRef: screenshot.filename,
+        trackingUrl,
+        observedItems,
+        observedFeeText,
+        isSimulatedDownstream,
+        auditEvent: step.auditEvent,
+      };
+    } finally {
+      await session.close().catch(() => {});
+    }
+  }
+}

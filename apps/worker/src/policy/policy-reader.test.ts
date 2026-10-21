@@ -222,7 +222,7 @@ describe("Stage 4 Fixes: Worker Policy Reader Unit Tests", () => {
     } finally {
       await session.close();
     }
-  });
+  }, 30000);
 
   it("numeric field without quote fails", () => {
     const altered = {

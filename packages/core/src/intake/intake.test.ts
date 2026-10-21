@@ -33,6 +33,7 @@ import {
   groupToItemCategory,
   taxonomyCategoryToItemCategory,
   itemCategoryToTaxonomyCategories,
+  getCanonicalItemLabel,
 } from "./taxonomy.js";
 import type { ItemCategory } from "../types.js";
 import { clearFakeFixtures, LlmOutputError } from "@recircuit/llm";
@@ -574,5 +575,47 @@ describe("Stage 3: User Intake + Item Classification Test Suite", () => {
     expect(isCanonicalCategory("")).toBe(false);
     expect(isCanonicalCategory(null)).toBe(false);
     expect(isCanonicalCategory(undefined)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // 22. Canonical Label Normalization & Anti-Collapse Invariant
+  // -------------------------------------------------------------------------
+  it("proves normalization cannot collapse materially different items into the same label and preserves distinctions", () => {
+    // 1. Data-bearing host vs subcomponent accessory distinction
+    const laptopLabel = getCanonicalItemLabel("Dell Inspiron Laptop");
+    const batteryLabel = getCanonicalItemLabel("Dell Laptop Battery");
+    const chargerLabel = getCanonicalItemLabel("Dell Laptop Charger Cable");
+
+    expect(laptopLabel).toBe("Laptop");
+    expect(batteryLabel).toBe("Household Battery");
+    expect(chargerLabel).toBe("Charger / Cable");
+
+    // Must be strictly distinct labels
+    expect(laptopLabel).not.toBe(batteryLabel);
+    expect(laptopLabel).not.toBe(chargerLabel);
+    expect(batteryLabel).not.toBe(chargerLabel);
+
+    // 2. Mobile phone vs phone charger vs phone battery
+    const phoneLabel = getCanonicalItemLabel("Samsung Galaxy Phone");
+    const phoneChargerLabel = getCanonicalItemLabel("USB Phone Charger Wire");
+    const phoneBatteryLabel = getCanonicalItemLabel("Mobile Phone Battery Cell");
+
+    expect(phoneLabel).toBe("Mobile Phone");
+    expect(phoneChargerLabel).toBe("Charger / Cable");
+    expect(phoneBatteryLabel).toBe("Household Battery");
+
+    expect(phoneLabel).not.toBe(phoneChargerLabel);
+    expect(phoneLabel).not.toBe(phoneBatteryLabel);
+
+    // 3. Dry recyclables
+    expect(getCanonicalItemLabel("Old Daily Newspaper (Raddi)")).toBe("Newspaper");
+    expect(getCanonicalItemLabel("Corrugated Cardboard Box")).toBe("Cardboard");
+    expect(getCanonicalItemLabel("Plastic Water Bottles")).toBe("Plastic Scrap");
+    expect(getCanonicalItemLabel("Copper Scrap Wires")).toBe("Charger / Cable");
+    expect(getCanonicalItemLabel("Broken Glass Bottles")).toBe("Glass Scrap");
+
+    // 4. Unknown / ambiguous items preserved verbatim
+    expect(getCanonicalItemLabel("vintage wooden cabinet")).toBe("vintage wooden cabinet");
+    expect(getCanonicalItemLabel("ceramic tile fragments")).toBe("ceramic tile fragments");
   });
 });
