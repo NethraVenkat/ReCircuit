@@ -1,10 +1,29 @@
 /**
  * packages/db/src/index.ts
  *
- * Supabase client and typed query helpers — placeholder for Stage 2.
- * No network I/O is performed here in Stage 1.
+ * ReCircuit Storage & Repository layer:
+ * - FileRepository: Local filesystem persistence (.data/requests, .data/jobs, .data/action-log.jsonl).
+ * - PgRepository: PostgreSQL / PGlite persistence for relational queries and durable transactional jobs.
  */
 
-// Supabase client will be added in Stage 2
-export {};
+import { FileRepository } from "./file-store.js";
+import { PgRepository } from "./pg-store.js";
+import type { IRepository } from "./types.js";
 
+let defaultRepository: IRepository | null = null;
+
+export function getRepository(): IRepository {
+  if (!defaultRepository) {
+    // If DATABASE_URL is explicitly set and not file-based, we can use PgRepository,
+    // otherwise fallback to FileRepository for local offline development and file-based scripts.
+    defaultRepository = new FileRepository();
+  }
+  return defaultRepository;
+}
+
+export function setRepository(repo: IRepository): void {
+  defaultRepository = repo;
+}
+
+export { FileRepository, PgRepository };
+export type * from "./types.js";
