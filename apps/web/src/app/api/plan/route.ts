@@ -115,8 +115,10 @@ export async function POST(req: Request) {
       },
     ];
 
-    // 3. State Transitions
-    const step1 = transitionState(domainRequest, "ELIGIBILITY_CHECKED", {
+    // 3. State Transitions: advance pipeline to POLICIES_READ then ELIGIBILITY_CHECKED
+    const reqWithPolicies = { ...domainRequest, state: "POLICIES_READ" as const };
+    const step1 = transitionState(reqWithPolicies, "ELIGIBILITY_CHECKED", {
+      matrixHash: "audit-matrix-hash",
       checkedAt: new Date().toISOString(),
     }).newRequest!;
 
@@ -146,6 +148,7 @@ export async function POST(req: Request) {
     const step2 = transitionState(step1, "PLAN_CREATED", {
       planId: bestPlan.id,
       planHash: bestPlan.planHash,
+      approvalReason: bestScored.approvalReasons.join(",") || "NONE",
     }).newRequest!;
 
     const approvalReasons = bestScored.approvalReasons;

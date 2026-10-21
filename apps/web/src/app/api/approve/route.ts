@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       requestId?: string;
       planHash?: string;
-      decision?: "approve" | "reject";
+      decision?: "approve" | "approved" | "reject" | "rejected";
       reason?: string;
       slotPreference?: { day: string; window: "morning" | "afternoon" | "any" };
       dataWipeConfirmed?: boolean;
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Request or plan not found" }, { status: 404 });
     }
 
-    if (body.decision === "reject") {
+    if (body.decision === "reject" || body.decision === "rejected") {
       const result = recordDecision({
         request: stored.request,
         plan: stored.plan,
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
       await repo.saveRequest({
         ...stored,
         request: result.request,
+        approval: result.decisionRecord as any,
         updatedAt: new Date().toISOString(),
       });
 
@@ -72,6 +73,7 @@ export async function POST(req: Request) {
       ...stored,
       request: approvalResult.request,
       plan: approvalResult.plan,
+      approval: approvalResult.decisionRecord as any,
       updatedAt: new Date().toISOString(),
     });
 

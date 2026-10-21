@@ -219,7 +219,7 @@ async function runTC4() {
   console.log("Testing state machine invariant: isCollected(state) must remain false");
 
   const uncollectedStates = ["REQUEST_SUBMITTED", "REQUEST_CONFIRMED", "PICKUP_SCHEDULED"];
-  const uncollectedChecks = uncollectedStates.every((st) => !isCollected(st as any));
+  const uncollectedChecks = uncollectedStates.every((st) => !isCollected(st));
 
   let transitionBlockedWithoutProof = false;
   try {
@@ -231,14 +231,14 @@ async function runTC4() {
       recyclerId: "deccan",
       recyclerName: "Deccan E-Cycle Solutions",
       itemIds: ["item-1"],
-      state: preState as any,
+      state: preState,
       estimatedFee: 180,
       estimatedPayout: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     const executeTransition = transitionState;
-    executeTransition(dummyLeg, unverifiedTarget as any, {});
+    executeTransition(dummyLeg, unverifiedTarget, {});
   } catch {
     transitionBlockedWithoutProof = true;
   }

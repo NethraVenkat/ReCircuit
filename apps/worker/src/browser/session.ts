@@ -4,9 +4,15 @@
  * Browser session manager supporting both local Playwright execution (offline dev & CI)
  * and cloud Browserbase sessions.
  *
- * Rules:
- * - If BROWSER_MODE=browserbase and keys are missing, throw ConfigurationError; never silently fallback to local.
- * - Local sessions get a deterministic synthetic session ID prefixed with "local-".
+ * Supported Modes:
+ * - "local": Offline Chromium instance. Session IDs prefixed with "local-".
+ * - "browserbase": Remote cloud browser via CDP. Session IDs prefixed with "bb-".
+ * - "auto": Uses Browserbase if keys exist; defaults to local offline execution.
+ *
+ * Ingress & Cloud Limitations:
+ * - If BROWSER_MODE=browserbase and keys are missing, throws ConfigurationError (never silently falls back).
+ * - Note: Localhost URLs (http://localhost:3101-3103) are physically unreachable from remote cloud Browserbase
+ *   runners without an ngrok/cloudflared public ingress tunnel or publicly deployed portal URLs.
  */
 
 import { randomUUID } from "crypto";
@@ -15,7 +21,7 @@ import path from "path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { guardPortalApi } from "./api-guard.js";
 
-export type BrowserMode = "local" | "browserbase";
+export type BrowserMode = "local" | "browserbase" | "auto";
 
 export class ConfigurationError extends Error {
   constructor(message: string) {
@@ -52,10 +58,10 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
   let browser: Browser;
   let context: BrowserContext;
 
-  if (requestedMode === "browserbase") {
-    const apiKey = process.env.BROWSERBASE_API_KEY;
-    const projectId = process.env.BROWSERBASE_PROJECT_ID;
+  const apiKey = process.env.BROWSERBASE_API_KEY;
+  const projectId = process.env.BROWSERBASE_PROJECT_ID;
 
+  if (requestedMode === "browserbase" || (requestedMode === "auto" && apiKey && projectId)) {
     if (!apiKey || !projectId) {
       throw new ConfigurationError(
         "Missing required Browserbase configuration: BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID must be set when BROWSER_MODE=browserbase. Never fallback silently to local."

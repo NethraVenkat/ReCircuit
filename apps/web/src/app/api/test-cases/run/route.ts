@@ -125,7 +125,7 @@ export async function GET(req: Request) {
 
     if (tc === "2") {
       // TC2: Centre takes paper but not batteries -> batteries rejected
-      const text = "1 stack of newspapers and 2 household AA batteries";
+      const text = "2 batteries and 8 kg newspaper";
       const intake = await parseIntake(text);
       const matrix = buildEligibilityMatrix({
         requestId: "tc2-req",

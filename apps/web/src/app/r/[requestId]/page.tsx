@@ -138,7 +138,7 @@ export default function RequestProofLedgerPage() {
             <span className="text-xs text-slate-400 font-mono">ID: {data.request.id}</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">
-            Traceable Pickup Plan & Proof Ledger
+            Consignment Proof Ledger & Traceable Plan
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Original intake sentence: "{data.request.description}"

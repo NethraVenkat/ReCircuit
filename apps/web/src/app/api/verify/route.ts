@@ -32,6 +32,8 @@ export async function POST(req: Request) {
       plan: stored.plan,
     });
 
+    leg.verifyingSessionId = verificationResult.verifyingSessionId;
+
     await repo.saveRequest({
       ...stored,
       plan: stored.plan,

@@ -47,8 +47,8 @@ export default function HouseholdIntakePage() {
   const router = useRouter();
   const [inputText, setInputText] = useState("I have 1 old Dell laptop and 2 dead AA household batteries");
   const [feeCap, setFeeCap] = useState<string>("500");
-  const [pincode, setPincode] = useState("500033");
-  const [locality, setLocality] = useState("Jubilee Hills");
+  const [pincode, setPincode] = useState("500081");
+  const [locality, setLocality] = useState("Madhapur");
   const [fullName, setFullName] = useState("Ananya Sharma");
   const [phone, setPhone] = useState("9876543210");
   const [addressLine, setAddressLine] = useState("Flat 402, Green Meadows");
@@ -110,7 +110,7 @@ export default function HouseholdIntakePage() {
         body: JSON.stringify({
           requestId,
           planHash: planData.planHash,
-          decision: "approve",
+          decision: "approved",
           slotPreference: { day: slotDay, window: slotWindow },
           dataWipeConfirmed: dataWipeAck,
         }),

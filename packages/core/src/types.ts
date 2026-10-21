@@ -225,6 +225,7 @@ export interface PlanLeg {
   state: LegState;
   /** The session that submitted the booking form (set on SUBMITTING) */
   submittingSessionId?: string;
+  verifyingSessionId?: string;
   /** The booking reference returned after form submission */
   bookingReference?: string;
   /** Idempotency key for this submission attempt */

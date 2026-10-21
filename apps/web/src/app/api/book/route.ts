@@ -36,8 +36,8 @@ export async function POST(req: Request) {
       fullName: body.customer?.fullName || "Ananya Sharma",
       phone: body.customer?.phone || "9876543210",
       addressLine: body.customer?.addressLine || "Flat 402, Green Meadows",
-      locality: body.customer?.locality || "Jubilee Hills",
-      pincode: body.customer?.pincode || "500033",
+      locality: body.customer?.locality || "Madhapur",
+      pincode: body.customer?.pincode || "500081",
     };
 
     const legResults = [];

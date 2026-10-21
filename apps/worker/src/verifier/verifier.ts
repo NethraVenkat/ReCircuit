@@ -142,8 +142,12 @@ export class Verifier {
         ...(leg.slot ? { slot: leg.slot } : {}),
       };
 
-      const step = transitionState(leg, "REQUEST_CONFIRMED", trackingEvidence);
-      Object.assign(leg, step.newLeg);
+      let auditEvent = undefined;
+      if (leg.state !== "REQUEST_CONFIRMED") {
+        const step = transitionState(leg, "REQUEST_CONFIRMED", trackingEvidence);
+        Object.assign(leg, step.newLeg);
+        auditEvent = step.auditEvent;
+      }
 
       return {
         verified: true,
@@ -156,7 +160,7 @@ export class Verifier {
         observedItems,
         observedFeeText,
         isSimulatedDownstream,
-        auditEvent: step.auditEvent,
+        ...(auditEvent ? { auditEvent } : {}),
       };
     } finally {
       await session.close().catch(() => {});

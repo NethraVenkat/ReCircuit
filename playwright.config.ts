@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-process.env.CAPTCHA_SECRET = "playwright-only-captcha-secret";
+process.env.CAPTCHA_SECRET = process.env.CAPTCHA_SECRET || "test-captcha-secret-key-32chars!!";
 
 export default defineConfig({
   testDir: "./tests/e2e",

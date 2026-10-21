@@ -57,7 +57,8 @@ PORTALS.forEach(({ id, name, port, color }) => {
     PORT: String(port),
     RECYCLER_ID: id,
     NEXT_DIST_DIR: `.next-${port}`,
-    ...(process.env.ADMIN_TOKEN ? { ADMIN_TOKEN: process.env.ADMIN_TOKEN } : {}),
+    ADMIN_TOKEN: process.env.ADMIN_TOKEN || "test-admin-secret-token",
+    CAPTCHA_SECRET: process.env.CAPTCHA_SECRET || "test-captcha-secret-key-32chars!!",
   };
 
   const cmd = `${npmCmd} run dev -- -p ${port}`;
