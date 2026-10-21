@@ -27,11 +27,12 @@ module.exports = {
     "tests/",
     "scripts/",
     ".next*",
-    "apps/portals/.next*"
+    "apps/portals/.next*",
+    "apps/web/.next*"
   ],
   overrides: [
     {
-      files: ["apps/portals/**/*.{ts,tsx}"],
+      files: ["apps/portals/**/*.{ts,tsx}", "apps/web/**/*.{ts,tsx}"],
       rules: {
         "@typescript-eslint/no-explicit-any": "off",
         "@typescript-eslint/no-unsafe-assignment": "off",
