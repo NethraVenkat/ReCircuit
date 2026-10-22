@@ -7,7 +7,24 @@ import { RECYCLER_CONFIGS, getAvailableSlots } from "@/lib/config";
 
 function AdminPageContent(): JSX.Element {
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") || "";
+  const initialToken = searchParams.get("token") || "";
+  const [token, setToken] = useState<string>(() => {
+    if (initialToken) {
+      if (typeof window !== "undefined") sessionStorage.setItem("rc_admin_token", initialToken);
+      return initialToken;
+    }
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("rc_admin_token") || "";
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    if (initialToken && initialToken !== token) {
+      setToken(initialToken);
+      if (typeof window !== "undefined") sessionStorage.setItem("rc_admin_token", initialToken);
+    }
+  }, [initialToken]);
 
   const [recyclerId, setRecyclerId] = useState<RecyclerId>("deccan");
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -29,9 +46,12 @@ function AdminPageContent(): JSX.Element {
 
   const loadData = useCallback(async (): Promise<void> => {
     setLoading(true);
+    const activeToken = token || (typeof window !== "undefined" ? sessionStorage.getItem("rc_admin_token") || "" : "");
     try {
-      const url = token ? `/api/admin?token=${encodeURIComponent(token)}` : "/api/admin";
-      const res = await fetch(url);
+      const url = activeToken ? `/api/admin?token=${encodeURIComponent(activeToken)}` : "/api/admin";
+      const res = await fetch(url, {
+        headers: activeToken ? { "x-admin-token": activeToken } : {},
+      });
       if (res.status === 503) {
         setAdminDisabled(true);
         setLoading(false);
@@ -65,10 +85,15 @@ function AdminPageContent(): JSX.Element {
 
   const handleAction = async (action: string, reference: string, extra: Record<string, unknown> = {}): Promise<void> => {
     setActionMessage("");
+    const activeToken = token || (typeof window !== "undefined" ? sessionStorage.getItem("rc_admin_token") || "" : "");
     try {
-      const res = await fetch(`/api/admin?token=${encodeURIComponent(token)}`, {
+      const url = activeToken ? `/api/admin?token=${encodeURIComponent(activeToken)}` : "/api/admin";
+      const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(activeToken ? { "x-admin-token": activeToken } : {}),
+        },
         body: JSON.stringify({ action, reference, ...extra }),
       });
       const data = await res.json();
@@ -100,10 +125,15 @@ function AdminPageContent(): JSX.Element {
 
   const handleToggleSwitch = async (switchName: keyof FailureSwitches): Promise<void> => {
     const nextVal = !switches[switchName];
+    const activeToken = token || (typeof window !== "undefined" ? sessionStorage.getItem("rc_admin_token") || "" : "");
     try {
-      const res = await fetch(`/api/admin?token=${encodeURIComponent(token)}`, {
+      const url = activeToken ? `/api/admin?token=${encodeURIComponent(activeToken)}` : "/api/admin";
+      const res = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(activeToken ? { "x-admin-token": activeToken } : {}),
+        },
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "toggle_switch", switchName, value: nextVal }),
       });
       const data = await res.json();

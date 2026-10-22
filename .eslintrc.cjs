@@ -9,7 +9,8 @@ module.exports = {
   ],
   parserOptions: {
     project: ["./tsconfig.json", "./packages/*/tsconfig.json", "./apps/*/tsconfig.json"],
-    tsconfigRootDir: __dirname
+    tsconfigRootDir: __dirname,
+    warnOnUnsupportedTypeScriptVersion: false
   },
   rules: {
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],

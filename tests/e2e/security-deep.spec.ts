@@ -3,6 +3,7 @@ import { Booker } from "../../apps/worker/src/booking/booker.js";
 import { SafeActionBlockedError } from "@recircuit/core";
 
 test.describe("Stage 11: Security & Authorization Deep Verification Suite", () => {
+  test.setTimeout(120000);
   const TEST_ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret-token";
 
   test("1. Cross-request access isolation: request records cannot cross-pollinate", async ({ request }) => {

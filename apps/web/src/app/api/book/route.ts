@@ -32,7 +32,9 @@ export async function POST(req: Request) {
           stored.auditEvents.push(...result.auditEvents.map(e => ({ ...e, requestId: stored.request.id })));
           if (result.result.needsHuman) stored.household = { ...stored.household, handoff: "Human verification is required. This household interface cannot resume the worker browser session. No automatic retry was submitted." };
         } catch (err) {
-          stored.household = { ...stored.household, bookingError: "Booking could not be confirmed. Refresh to inspect the saved state; do not submit a new request until the outcome is reconciled." };
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error("[API/BOOK ERROR]", err);
+          stored.household = { ...stored.household, bookingError: `Booking could not be confirmed (${errMsg}). Refresh to inspect the saved state; do not submit a new request until the outcome is reconciled.` };
           throw err;
         } finally { await repo.saveRequest({ ...stored, plan, updatedAt: new Date().toISOString() }); }
       }

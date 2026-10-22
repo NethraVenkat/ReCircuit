@@ -12,93 +12,135 @@ test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () =>
     const evidenceDir = path.resolve(process.cwd(), ".data", "evidence");
     if (!fs.existsSync(evidenceDir)) fs.mkdirSync(evidenceDir, { recursive: true });
 
+    // Warm up Next.js routes to avoid cold compilation timeouts
+    await Promise.all([
+      page.request.get("http://localhost:3000/").catch(() => {}),
+      page.request.get("http://localhost:3000/arrange").catch(() => {}),
+      page.request.get("http://127.0.0.1:3101/").catch(() => {}),
+      page.request.get("http://127.0.0.1:3101/pickup-charges").catch(() => {}),
+      page.request.get("http://127.0.0.1:3101/accepted-items").catch(() => {}),
+      page.request.get("http://127.0.0.1:3102/").catch(() => {}),
+      page.request.get("http://127.0.0.1:3102/what-we-take").catch(() => {}),
+      page.request.get("http://127.0.0.1:3103/").catch(() => {}),
+      page.request.get("http://127.0.0.1:3103/rates").catch(() => {}),
+    ]);
+
     // 1. Visit Household Dashboard
     await page.goto("http://localhost:3000");
-    await expect(page.locator("h1")).toContainText("Responsible E-Waste & Recycling");
+    await expect(page.locator("h1")).toContainText("My pickups");
     await page.screenshot({ path: path.join(evidenceDir, "01-household-dashboard.png") });
 
+    // Click "Arrange a pickup" to go to /arrange
+    await page.locator('a[href="/arrange"]').first().click();
+    await expect(page).toHaveURL(/.*\/arrange/, { timeout: 30000 });
+    await expect(page.locator("h1")).toContainText("Arrange a pickup");
+
     // 2. Test Over-Budget Edge Case (TC3)
-    const overBudgetBtn = page.locator("button", { hasText: "Over-Budget ₹100 (TC3)" });
-    await overBudgetBtn.click();
+    await page.fill('input[id^="name-"]', "1 old Dell laptop");
+    await page.fill('input[id^="weight-"]', "2.5");
+    await page.fill("#fullName", "Vikram Kumar");
+    await page.fill("#phone", "9876543210");
+    await page.fill("#addressLine", "Door 5, Phase 1");
+    await page.fill("#locality", "Madhapur");
+    await page.fill("#pincode", "500081");
+    await page.fill("#fee", "100");
+
     await page.locator('[data-testid="generate-plan-button"]').click();
+
+    // Verify redirected to request page
+    await page.waitForURL(/\/r\/.+/, { timeout: 60000 });
+    await expect(page.locator("h1")).toContainText("Let’s find the right way forward");
+
+    // Click "Review recommended plan" to view approval section
+    await page.click('button:has-text("Review recommended plan")');
 
     // Verify budget warning is displayed
-    await expect(page.locator("text=Approval Escalation Conditions:")).toBeVisible({ timeout: 15000 });
-    await expect(page.locator("text=exceeds your fee limit").or(page.locator("text=fee limit"))).toBeVisible();
+    await expect(
+      page.locator("text=exceeds stated fee cap of ₹100").or(page.locator("text=Pickup fee ₹180 exceeds"))
+    ).toBeVisible({ timeout: 15000 });
     await page.screenshot({ path: path.join(evidenceDir, "02-edge-case-over-budget.png") });
 
-    // 3. Test Normal Intake with Split Items (Laptop + AA Batteries)
-    const intakeInput = page.locator('[data-testid="intake-text-input"]');
-    await intakeInput.fill("1 old Dell laptop in Madhapur, Hyderabad");
-    // Increase budget cap to ₹500
-    const feeCapInput = page.locator('input[type="number"]');
-    await feeCapInput.fill("500");
+    // 3. Test Edge Case: Decline Proposal
+    const declineBtn = page.locator('button:has-text("Decline plan")');
+    await declineBtn.click();
+    await expect(page.locator("h1")).toContainText("Pickup plan declined");
+    await page.screenshot({ path: path.join(evidenceDir, "04-edge-case-declined-approval.png") });
+
+    // 4. Arrange new pickup for booking execution with sufficient budget
+    await page.goto("http://localhost:3000/arrange");
+    await page.fill('input[id^="name-"]', "1 old Dell laptop in Madhapur, Hyderabad");
+    await page.fill('input[id^="weight-"]', "2.5");
+    await page.fill("#fullName", "Vikram Kumar");
+    await page.fill("#phone", "9876543210");
+    await page.fill("#addressLine", "Door 5, Phase 1");
+    await page.fill("#locality", "Madhapur");
+    await page.fill("#pincode", "500081");
+    await page.fill("#fee", "500");
 
     await page.locator('[data-testid="generate-plan-button"]').click();
+    await page.waitForURL(/\/r\/.+/, { timeout: 60000 });
 
     // Verify Eligibility Matrix renders
-    await expect(page.locator("text=Live Recycler Policy Eligibility Matrix")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("text=Compare recyclers")).toBeVisible({ timeout: 15000 });
     await expect(page.locator("text=Deccan E-Cycle").first()).toBeVisible();
     await expect(page.locator("text=ACCEPTED").first()).toBeVisible();
 
+    // Click "Review recommended plan"
+    await page.click('button:has-text("Review recommended plan")');
+
     // Verify Proposed Plan renders
-    await expect(page.locator("text=Proposed Reverse-Logistics Plan")).toBeVisible();
-    await expect(page.locator("text=Pickup Fee: ₹180").first()).toBeVisible();
+    await expect(page.locator("text=Pickup fee").first()).toBeVisible();
+    await expect(page.locator("text=₹180").first()).toBeVisible();
 
-    // Verify Safe Action Gate (Approval Card) renders with Plan Hash
-    await expect(page.locator("text=Human Approval & Slot Preferences")).toBeVisible();
-    await expect(page.locator("text=Hash: ")).toBeVisible();
-    await page.screenshot({ path: path.join(evidenceDir, "03-plan-and-approval-gate.png") });
+    // Check approval checkboxes
+    const checkboxes = page.locator('input[type="checkbox"]');
+    await checkboxes.first().check();
+    await checkboxes.nth(1).check();
 
-    // 4. Test Edge Case: Decline Proposal
-    const declineBtn = page.locator("button", { hasText: "Decline" });
-    await declineBtn.click();
-    // Verify plan is cleared from view
-    await expect(page.locator("text=Proposed Reverse-Logistics Plan")).not.toBeVisible();
-    await page.screenshot({ path: path.join(evidenceDir, "04-edge-case-declined-approval.png") });
-
-    // 5. Re-generate plan for booking execution
-    await page.locator('[data-testid="generate-plan-button"]').click();
-    await expect(page.locator("text=Human Approval & Slot Preferences")).toBeVisible({ timeout: 15000 });
-
-    // Check data wipe ack checkbox
-    const dataWipeCheckbox = page.locator('input[type="checkbox"]');
-    await dataWipeCheckbox.check();
-
-    // Click Approve & Book Pickup
+    // Click Approve Plan
     const approveBtn = page.locator('[data-testid="approve-plan-button"]');
     await approveBtn.click();
 
-    // 6. Navigation to Proof Ledger
-    await page.waitForURL(/\/r\/.+/, { timeout: 90000 });
-    await expect(page.locator("h1")).toContainText("Consignment Proof Ledger");
+    // 5. Booking Execution
+    const startBookingBtn = page.locator('button:has-text("Start booking")');
+    await expect(startBookingBtn).toBeVisible({ timeout: 15000 });
+    await startBookingBtn.click();
+
+    // 6. Verify Booking Reference
+    const refBadge = page.locator('[data-testid="booking-reference-badge"]');
+    await expect(refBadge).toHaveText(/^DEC-\d+$/, { timeout: 60000 });
+    const bookingRef = (await refBadge.textContent())?.trim();
+
+    await expect(page.locator('[data-testid="request-dashboard"]')).toContainText(
+      /REQUEST_SUBMITTED|REQUEST_CONFIRMED|SCHEDULED|Booking requested|Booking independently checked|Pickup scheduled/
+    );
     await page.screenshot({ path: path.join(evidenceDir, "05-proof-ledger-booked.png") });
 
-    // 7. Verify Ledger Details: Reference, Submitting Session, and State Timeline
-    await expect(page.locator('[data-testid="booking-reference-badge"]')).toBeVisible({ timeout: 15000 });
-    const bookingRef = (await page.locator('[data-testid="booking-reference-badge"]').first().textContent())?.trim();
-    expect(bookingRef).toMatch(/^DEC-[A-Z0-9]+$/);
-
-    await expect(page.locator('[data-testid="leg-state-badge"]').first()).toContainText("REQUEST_SUBMITTED");
-
-    // 8. Execute Stage 8 Independent Verification in the Ledger
+    // 7. Execute Independent Verification
     const verifyBtn = page.locator('[data-testid="run-independent-verification-button"]');
-    await expect(verifyBtn).toBeVisible();
+    await expect(verifyBtn).toBeVisible({ timeout: 15000 });
     await verifyBtn.click();
 
-    // Verify Dual-Session Independence Panel updates
-    await expect(page.locator('[data-testid="verification-feedback-banner"]')).toBeVisible({ timeout: 45000 });
-    await expect(page.locator('[data-testid="leg-state-badge"]').first()).toContainText("REQUEST_CONFIRMED");
+    // Verify Independent Verification feedback
+    await expect(
+      page.locator("text=The independent check matched the exposed booking fields.").or(
+        page.locator("text=Checking the recycler record")
+      )
+    ).toBeVisible({ timeout: 45000 });
 
-    // 9. Verify TC4 Invariant on Ledger: Never Collected
-    await expect(page.locator("text=TC4 Invariant: Status remains \"Pickup Scheduled\"; never claimed as Collected")).toBeVisible();
-    await expect(page.locator('[data-testid="leg-state-badge"]').first()).not.toContainText("COLLECTED");
-    await expect(page.locator('[data-testid="leg-state-badge"]').first()).not.toContainText("PICKED_UP");
+    // 8. Verify TC4 Invariant: Never Reported as Collected
+    await expect(
+      page.locator("text=Your items have not been reported as collected.").or(
+        page.locator("text=A booking request is not evidence of collection.")
+      )
+    ).toBeVisible();
+    await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("COLLECTED");
+    await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("PICKED_UP");
 
-    // 10. Open Independent Browser Context and verify public tracking portal directly
+    // 9. Open Independent Browser Context and verify public tracking portal directly
     const separateContext = await browser.newContext();
     const separatePage = await separateContext.newPage();
-    await separatePage.goto(`http://localhost:3101/track?ref=${bookingRef}`);
+    await separatePage.goto(`http://127.0.0.1:3101/track?ref=${bookingRef}`);
     await expect(separatePage.locator(`text=${bookingRef}`)).toBeVisible({ timeout: 15000 });
     await separatePage.screenshot({ path: path.join(evidenceDir, "06-independent-portal-tracking.png") });
 

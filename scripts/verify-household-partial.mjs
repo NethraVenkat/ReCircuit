@@ -1,18 +1,19 @@
-import { chromium, expect } from "@playwright/test";
+import "./redesign-reporting.mjs";
+import { chromium, expect as baseExpect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import fs from "node:fs";
+const expect=baseExpect.configure({timeout:30000});
 import assert from "node:assert/strict";
 const base="http://localhost:3200";const browser=await chromium.launch();const context=await browser.newContext({viewport:{width:390,height:844}});const page=await context.newPage();const checks=[];
 const post=async(route,body)=>{const r=await context.request.post(`${base}/api/${route}`,{data:body,timeout:180000});const data=await r.json();assert.equal(r.status(),200,JSON.stringify(data));return data;};
 const customer={fullName:"Partial Source Fixture",phone:"9000000002",addressLine:"Fictional long address, ".repeat(12),locality:"Madhapur",pincode:"500081"};
 const item=(category,weight)=>({id:crypto.randomUUID(),rawText:`Fictional ${category}`,category,quantity:1,declaredWeightKg:weight,weightSource:"user_declared",hazardClass:"none",confidence:1});
-const admin={"x-admin-token":"isolated-local-reviewer-admin"};let oldSwitch;
+const admin={"x-admin-token":"isolated-local-reviewer-admin"};const oldSwitches=[];
 try{
  let result=await post("plan",{customer,items:[item("other",1)]});assert.equal(result.plan.legs.length,0);await page.goto(`${base}/r/${result.requestId}`);await expect(page.getByRole("heading",{name:"No eligible pickup yet"})).toBeVisible();await page.screenshot({path:"docs/redesign/screenshots/13-no-match-mobile.png",fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push("no-match and long-address mobile reflow");
- const current=await (await context.request.get("http://localhost:3101/api/admin",{headers:admin})).json();assert(current.ok);oldSwitch=current.switches.hideFeeInfo;
- await context.request.post("http://localhost:3101/api/admin",{headers:admin,data:{action:"toggle_switch",switchName:"hide_fee_info",value:true}});
+ for(const port of [3101,3103]){const url=`http://localhost:${port}/api/admin`;const current=await (await context.request.get(url,{headers:admin})).json();assert(current.ok);oldSwitches.push([url,current.switches.hideFeeInfo]);await context.request.post(url,{headers:admin,data:{action:"toggle_switch",switchName:"hide_fee_info",value:true}});}
  result=await post("plan",{customer,items:[item("laptop",2.5),item("newspaper",8)]});assert(result.scoredPlans[0].isPartial);assert(result.scoredPlans[0].unroutedItemIds.length>0);assert(result.plan.legs.some(l=>l.recyclerId==="paperplus"));await page.goto(`${base}/r/${result.requestId}`);await expect(page.getByRole("heading",{name:"Items without a pickup"})).toBeVisible();await page.screenshot({path:"docs/redesign/screenshots/14-partial-discovery-mobile.png",fullPage:true});checks.push("hidden-fee source remains unknown and usable partial allocation survives");
  await page.getByRole("button",{name:"Sources & evidence"}).click();await expect(page.getByRole("dialog")).toBeVisible();await page.screenshot({path:"docs/redesign/screenshots/15-partial-source-drawer.png",fullPage:true});const scan=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze();assert.equal(scan.violations.length,0);await page.keyboard.press("Escape");checks.push("partial evidence drawer accessibility");
  await page.goto(`${base}/arrange`);await page.keyboard.press("Tab");await expect(page.getByRole("link",{name:"Skip to content"})).toBeFocused();await page.getByRole("button",{name:"Try an example",exact:true}).click();for(let n=0;n<20;n++){await page.keyboard.press("Tab");assert(await page.evaluate(()=>document.querySelector("dialog").contains(document.activeElement)));}await page.keyboard.press("Escape");await expect(page.getByRole("button",{name:"Try an example",exact:true})).toBeFocused();checks.push("keyboard skip link, dialog trap, Escape and focus return");
-}finally{if(oldSwitch!==undefined)await context.request.post("http://localhost:3101/api/admin",{headers:admin,data:{action:"toggle_switch",switchName:"hide_fee_info",value:oldSwitch}});fs.writeFileSync("docs/redesign/partial-results.json",JSON.stringify({completed:checks},null,2));await browser.close();}
+}finally{for(const [url,value] of oldSwitches)await context.request.post(url,{headers:admin,data:{action:"toggle_switch",switchName:"hide_fee_info",value}});fs.writeFileSync("docs/redesign/partial-results.json",JSON.stringify({completed:checks},null,2));await browser.close();}
 console.log(checks.map(c=>`PASS ${c}`).join("\n"));

@@ -30,10 +30,12 @@ function checkAuth(request: Request): { status: 200; setCookieToken?: string } |
   const cookieToken = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
 
   const url = new URL(request.url);
-  const queryToken = url.searchParams.get("token");
-  const headerToken = request.headers.get("x-admin-token");
+  const rawQueryToken = url.searchParams.get("token");
+  const queryToken = rawQueryToken && rawQueryToken.trim() ? rawQueryToken.trim() : null;
+  const rawHeaderToken = request.headers.get("x-admin-token");
+  const headerToken = rawHeaderToken && rawHeaderToken.trim() ? rawHeaderToken.trim() : null;
 
-  const candidate = cookieToken || queryToken || headerToken;
+  const candidate = queryToken || headerToken || cookieToken;
   if (!candidate || !safeTokenMatch(candidate, adminToken)) {
     return {
       status: 401,
@@ -41,7 +43,7 @@ function checkAuth(request: Request): { status: 200; setCookieToken?: string } |
     };
   }
 
-  return { status: 200, setCookieToken: queryToken ? adminToken : undefined };
+  return { status: 200, setCookieToken: queryToken || headerToken || adminToken };
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
@@ -67,6 +69,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   });
 
   if (auth.setCookieToken) {
+    response.cookies.set("admin_token", auth.setCookieToken, { path: "/", httpOnly: true, sameSite: "lax" });
     response.headers.set(
       "Set-Cookie",
       `admin_token=${encodeURIComponent(auth.setCookieToken)}; Path=/; HttpOnly; SameSite=Lax`

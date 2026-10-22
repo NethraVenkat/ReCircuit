@@ -74,8 +74,10 @@ test.describe("Stage 8: Independent Verifier Deep Verification Suite", () => {
     expect(result.verifyingSessionId).not.toBe("local-submitting-sess-original");
     expect(result.verifyingSessionId.startsWith("local-") || result.verifyingSessionId.startsWith("bb-")).toBe(true);
 
-    const proofFile = path.resolve(process.cwd(), ".data", "verifications", `${bookingRef}.json`);
-    expect(fs.existsSync(proofFile)).toBe(true);
+    const baseDataDir = process.env.RECIRCUIT_DATA_DIR || path.resolve(process.cwd(), ".data");
+    const proofFile = path.resolve(baseDataDir, "verifications", `${bookingRef}.json`);
+    const fallbackProofFile = path.resolve(process.cwd(), ".data", "verifications", `${bookingRef}.json`);
+    expect(fs.existsSync(proofFile) || fs.existsSync(fallbackProofFile)).toBe(true);
   });
 
   test("Negative Case 1: Unknown booking reference throws CONSIGNMENT_NOT_FOUND", async () => {

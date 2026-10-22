@@ -1,0 +1,15 @@
+{
+  "completed": [
+    "quantity edit clears approval and blocks both stale sessions after reload",
+    "weight edit clears approval and blocks both stale sessions after reload",
+    "item identity edit clears approval and blocks both stale sessions after reload",
+    "fee cap edit clears approval and blocks both stale sessions after reload",
+    "pickup address edit clears approval and blocks both stale sessions after reload",
+    "requested slot edit clears approval and blocks both stale sessions after reload",
+    "5 kg threshold and total-row semantics without quantity multiplication",
+    "same-type items retain distinct IDs and allocation",
+    "runtime schema rejects duplicate identities, invalid quantities, fee precision and zero weight",
+    "reviewer examples leave persisted requests unchanged",
+    "cross-origin mutation rejected"
+  ]
+}
