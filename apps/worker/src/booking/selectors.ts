@@ -108,7 +108,8 @@ export function getPortalBookingUrl(recyclerId: string, customBaseUrl?: string):
   const path = route ? route.bookPath : "/book";
   try {
     const url = new URL(base);
-    url.pathname = path;
+    const basePath = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
+    url.pathname = `${basePath}${path}`;
     return url.toString();
   } catch {
     return `${base}${path}`;
@@ -121,7 +122,8 @@ export function getPortalTrackingUrl(recyclerId: string, customBaseUrl?: string,
   const path = route ? route.trackPath : "/track";
   try {
     const url = new URL(base);
-    url.pathname = path;
+    const basePath = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
+    url.pathname = `${basePath}${path}`;
     if (ref) url.searchParams.set("ref", ref);
     return url.toString();
   } catch {

@@ -55,7 +55,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const slots = getAvailableSlots();
 
   useEffect(() => {
-    fetch(`/api/fee?weight=${totalWeight}`)
+    fetch(`/portal/${recyclerId}/api/fee?weight=${totalWeight}`, {
+      headers: { "x-recycler-id": recyclerId },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (typeof data.fee === "number") {
@@ -79,7 +81,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
     // Initialize CAPTCHA for PaperPlus
     if (recyclerId === "paperplus") {
-      fetch("/api/captcha")
+      fetch(`/portal/${recyclerId}/api/captcha`, {
+        headers: { "x-recycler-id": recyclerId },
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data.sessionId) setCaptchaSessionId(data.sessionId);
@@ -89,7 +93,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   }, [recyclerId]);
 
   const refreshCaptcha = (): void => {
-    fetch("/api/captcha")
+    fetch(`/portal/${recyclerId}/api/captcha`, {
+      headers: { "x-recycler-id": recyclerId },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.sessionId) {
@@ -148,11 +154,12 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
     };
 
     try {
-      const res = await fetch("/api/bookings", {
+      const res = await fetch(`/portal/${recyclerId}/api/bookings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-captcha-session": captchaSessionId,
+          "x-recycler-id": recyclerId,
         },
         body: JSON.stringify(payload),
       });
@@ -176,7 +183,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
       // Successful booking -> navigate to confirmation page
       const ref = data.omitReference ? "" : data.booking?.bookingReference || "";
-      const confirmPath = `${config.routes.confirmation}?ref=${encodeURIComponent(ref)}${
+      const isPrefixed = typeof window !== "undefined" && window.location.pathname.startsWith("/portal/");
+      const pathPrefix = isPrefixed ? `/portal/${recyclerId}` : "";
+      const confirmPath = `${pathPrefix}${config.routes.confirmation}?ref=${encodeURIComponent(ref)}${
         data.isDuplicate ? "&dup=true" : ""
       }`;
       router.push(confirmPath);

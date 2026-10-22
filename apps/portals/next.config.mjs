@@ -5,6 +5,14 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: "/portal/:tenant/:path*",
+        destination: "/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

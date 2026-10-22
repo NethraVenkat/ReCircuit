@@ -10,7 +10,7 @@ interface TrackingViewProps {
 }
 
 export function TrackingView({
-  recyclerId: _recyclerId,
+  recyclerId,
   initialReference = "",
   initialClientRequestId = "",
 }: TrackingViewProps): JSX.Element {
@@ -27,10 +27,17 @@ export function TrackingView({
     setSearched(true);
 
     try {
+      let effectiveTenant = recyclerId;
+      if (ref.trim().toUpperCase().startsWith("DEC-")) effectiveTenant = "deccan";
+      else if (ref.trim().toUpperCase().startsWith("PPK-")) effectiveTenant = "paperplus";
+      else if (ref.trim().toUpperCase().startsWith("QSH-")) effectiveTenant = "quickscrap";
+      const apiPrefix = `/portal/${effectiveTenant}`;
       const url = ref.trim()
-        ? `/api/bookings?ref=${encodeURIComponent(ref.trim())}`
-        : `/api/bookings?client=${encodeURIComponent(clientId.trim())}`;
-      const res = await fetch(url);
+        ? `${apiPrefix}/api/bookings?ref=${encodeURIComponent(ref.trim())}`
+        : `${apiPrefix}/api/bookings?client=${encodeURIComponent(clientId.trim())}`;
+      const res = await fetch(url, {
+        headers: { "x-recycler-id": effectiveTenant },
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.booking) {

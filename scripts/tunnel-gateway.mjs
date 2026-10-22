@@ -14,41 +14,39 @@
  * 4. Strict Route Blocking with Normalization:
  *    Decodes and normalizes URI path (resolving '.', '..', duplicate slashes, trailing slashes).
  *    Blocks /admin, /api/admin, /api/reset (and all variations/subpaths) with 403 Forbidden.
- * 5. Public Route Allowlist:
- *    Only explicit portal pages, shared public APIs, and Next.js assets are forwarded.
- * 6. Deterministic Recycler Tenant Identity (No Authoritative Referer):
- *    Tenant identity is resolved hierarchically through durable, validated mechanisms:
- *    - Path Prefix: /portal/deccan, /portal/paperplus, /portal/quickscrap (or /deccan/*, etc.)
- *    - Distinct Canonical Routes: (/book-pickup, /schedule, /pickup, /what-we-take, /rates, etc.)
- *    - Reference Prefixes: (DEC-*, PPK-*, QSH-*)
- *    - Subdomain / Host Match: (deccan.*, paperplus.*, quickscrap.*)
- *    - Durable Tenant Cookie: recircuit_tenant=deccan|paperplus|quickscrap
- *    - Explicit Header: x-recycler-id: deccan|paperplus|quickscrap
- *    - Landing Query Parameter: ?portal=deccan|paperplus|quickscrap
- *    When a tenant is resolved, the gateway sets 'Set-Cookie: recircuit_tenant=<tenant>; Path=/; SameSite=Lax; HttpOnly'
- *    so all subsequent shared /api/*, /_next/*, redirects, reloads, and form actions inherit that tenant identity.
- * 7. Fail Closed:
- *    Any ambiguous request (e.g. naked / or naked /api/fee without tenant cookie/header/path)
- *    fails closed with HTTP 400 / 421. Zero silent fallback to Deccan.
+ * 5. Portal Route Validation:
+ *    Validates /portal/:tenant against exact known tenants (deccan, paperplus, quickscrap).
+ *    Unknown tenant -> 404 Not Found.
+ *    Validates subpaths against allowed routes for that tenant. Cross-tenant routes -> 400 Bad Request.
+ * 6. Explicit Tenant Selector Conflict Detection:
+ *    Detects any conflicting explicit selectors (path prefix, canonical route, x-recycler-id header, ?ref=, ?portal=).
+ *    If conflicting explicit selectors are detected, fails closed with 400 Bad Request (ConflictingTenantSelectors).
+ * 7. Durable Multi-Tenant Routing (No Multi-Tab Cookie Collisions):
+ *    Tenant identity is resolved deterministically from explicit selectors.
+ *    Direct API requests (/api/fee, /api/bookings, etc.) must specify tenant explicitly (via path /portal/:tenant/api/... or x-recycler-id header).
+ *    Naked API requests without explicit tenant fail closed (400 Bad Request) rather than relying on shared cookies that could be clobbered by another tab.
+ *    Cookies set on /portal/:tenant are scoped with Path=/portal/:tenant.
+ * 8. Graceful Process Teardown:
+ *    Provides clean socket draining, server shutdown, and SIGINT/SIGTERM handlers.
  */
 
 import http from "http";
 import path from "path";
 import { URL } from "url";
 
-const GATEWAY_PORT = parseInt(process.env.GATEWAY_PORT || "3100", 10);
-const GATEWAY_HOST = "127.0.0.1"; // Bound strictly to loopback
+export const GATEWAY_PORT = parseInt(process.env.GATEWAY_PORT || "3100", 10);
+export const GATEWAY_HOST = "127.0.0.1"; // Bound strictly to loopback
 
-const UPSTREAMS = {
+export const UPSTREAMS = {
   deccan: { host: "127.0.0.1", port: 3101, name: "Deccan E-Cycle" },
   paperplus: { host: "127.0.0.1", port: 3102, name: "PaperPlus Kabadi" },
   quickscrap: { host: "127.0.0.1", port: 3103, name: "QuickScrap Hyd" },
 };
 
-const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]);
+export const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]);
 
 // Canonical routes belonging to each recycler
-const CANONICAL_ROUTES = {
+export const CANONICAL_ROUTES = {
   deccan: [
     "/accepted-items",
     "/pickup-charges",
@@ -70,12 +68,47 @@ const CANONICAL_ROUTES = {
   ],
 };
 
-const SHARED_PUBLIC_APIS = new Set([
+export const SHARED_PUBLIC_APIS = new Set([
   "/api/bookings",
   "/api/fee",
   "/api/captcha",
   "/api/health",
 ]);
+
+export const TENANT_ALLOWED_SUBPATHS = {
+  deccan: new Set([
+    "/",
+    "/book-pickup",
+    "/accepted-items",
+    "/pickup-charges",
+    "/track",
+    "/book-pickup/confirmation",
+    "/api/bookings",
+    "/api/fee",
+    "/api/health",
+  ]),
+  paperplus: new Set([
+    "/",
+    "/schedule",
+    "/what-we-take",
+    "/status",
+    "/schedule/done",
+    "/api/bookings",
+    "/api/fee",
+    "/api/captcha",
+    "/api/health",
+  ]),
+  quickscrap: new Set([
+    "/",
+    "/pickup",
+    "/rates",
+    "/track-order",
+    "/pickup/thanks",
+    "/api/bookings",
+    "/api/fee",
+    "/api/health",
+  ]),
+};
 
 /**
  * Normalizes request path:
@@ -86,11 +119,8 @@ const SHARED_PUBLIC_APIS = new Set([
 export function normalizePath(rawPath) {
   try {
     const decoded = decodeURIComponent(rawPath);
-    // Remove query string if present
     const clean = decoded.split("?")[0].replace(/\\/g, "/");
-    // Resolve path navigation
     const normalized = path.posix.normalize(clean);
-    // Strip trailing slash unless root
     if (normalized.length > 1 && normalized.endsWith("/")) {
       return normalized.slice(0, -1);
     }
@@ -116,9 +146,72 @@ export function isBlockedRoute(normPath) {
 }
 
 /**
+ * Validates /portal/:tenant/:subpath routes:
+ * - Ensures :tenant is in UPSTREAMS
+ * - Blocks administrative routes
+ * - Verifies :subpath is allowed for that tenant
+ */
+export function validatePortalRoute(normPath) {
+  const match = normPath.match(/^\/portal\/([^/]+)(\/.*)?$/i);
+  if (!match) return { isPortal: false };
+
+  const rawTenant = match[1].toLowerCase();
+  const subpath = match[2] || "/";
+
+  if (!UPSTREAMS[rawTenant]) {
+    return {
+      isPortal: true,
+      valid: false,
+      status: 404,
+      error: "UnknownTenant",
+      message: `Tenant '${rawTenant}' is not a recognized recycler portal. Expected one of: ${Object.keys(UPSTREAMS).join(", ")}.`,
+    };
+  }
+
+  if (isBlockedRoute(subpath) || isBlockedRoute(normPath)) {
+    return {
+      isPortal: true,
+      valid: false,
+      status: 403,
+      error: "Forbidden",
+      message: "Access to administrative and reset endpoints is strictly prohibited over public tunnels.",
+    };
+  }
+
+  const allowed = TENANT_ALLOWED_SUBPATHS[rawTenant];
+  const isAllowedSubpath =
+    allowed.has(subpath) ||
+    subpath.startsWith("/_next/") ||
+    subpath.startsWith("/api/bookings") ||
+    subpath.startsWith("/api/fee") ||
+    subpath.startsWith("/api/captcha") ||
+    subpath === "/favicon.ico" ||
+    (rawTenant === "deccan" && subpath.startsWith("/book-pickup/confirmation")) ||
+    (rawTenant === "paperplus" && subpath.startsWith("/schedule/done")) ||
+    (rawTenant === "quickscrap" && subpath.startsWith("/pickup/thanks"));
+
+  if (!isAllowedSubpath) {
+    return {
+      isPortal: true,
+      valid: false,
+      status: 400,
+      error: "RouteNotPermittedForTenant",
+      message: `Route '${subpath}' is not permitted on the ${UPSTREAMS[rawTenant].name} portal.`,
+    };
+  }
+
+  return {
+    isPortal: true,
+    valid: true,
+    tenant: rawTenant,
+    subpath,
+  };
+}
+
+/**
  * Parse cookies from request header
  */
-function parseCookies(cookieHeader) {
+export function parseCookies(cookieHeader) {
   const cookies = {};
   if (!cookieHeader) return cookies;
   const parts = cookieHeader.split(";");
@@ -134,96 +227,172 @@ function parseCookies(cookieHeader) {
 }
 
 /**
- * Resolves tenant identity deterministically.
- * Returns { recyclerId, rewritePath, setCookie } or null if ambiguous.
+ * Detects any conflicting explicit tenant selectors.
  */
-export function resolveTenant(req, normPath, parsedUrl) {
+export function detectTenantConflicts(req, normPath, parsedUrl) {
   const headers = req.headers || {};
   const queryPortal = parsedUrl.searchParams.get("portal")?.toLowerCase();
+  const queryTenant = parsedUrl.searchParams.get("tenant")?.toLowerCase();
   const queryRef = parsedUrl.searchParams.get("ref")?.toUpperCase() || "";
   const headerRecycler = headers["x-recycler-id"]?.toLowerCase();
   const host = (headers["host"] || "").toLowerCase();
-  const cookies = parseCookies(headers["cookie"]);
-  const cookieTenant = cookies["recircuit_tenant"]?.toLowerCase();
 
-  // 1. Explicit path prefix: /portal/:tenant or /portal/:tenant/*
-  const portalPrefixMatch = normPath.match(/^\/portal\/(deccan|paperplus|quickscrap)(\/.*)?$/i);
-  if (portalPrefixMatch) {
-    const tenant = portalPrefixMatch[1].toLowerCase();
-    const subpath = portalPrefixMatch[2] || "/";
-    return {
-      recyclerId: tenant,
-      rewritePath: subpath + (parsedUrl.search || ""),
-      setCookie: tenant,
-      source: "path-prefix",
-    };
+  const selectors = [];
+
+  // 1. Path prefix: /portal/:tenant/* or /:tenant/*
+  const portalMatch = normPath.match(/^\/portal\/([^/]+)(\/.*)?$/i);
+  if (portalMatch && UPSTREAMS[portalMatch[1].toLowerCase()]) {
+    selectors.push({ source: "path-prefix", tenant: portalMatch[1].toLowerCase() });
+  }
+  const directMatch = normPath.match(/^\/(deccan|paperplus|quickscrap)(\/.*)?$/i);
+  if (directMatch && UPSTREAMS[directMatch[1].toLowerCase()]) {
+    selectors.push({ source: "path-prefix", tenant: directMatch[1].toLowerCase() });
   }
 
-  // Path prefix /:tenant/*
-  const directPrefixMatch = normPath.match(/^\/(deccan|paperplus|quickscrap)(\/.*)?$/i);
-  if (directPrefixMatch) {
-    const tenant = directPrefixMatch[1].toLowerCase();
-    const subpath = directPrefixMatch[2] || "/";
-    return {
-      recyclerId: tenant,
-      rewritePath: subpath + (parsedUrl.search || ""),
-      setCookie: tenant,
-      source: "path-prefix",
-    };
-  }
-
-  // 2. Canonical distinct routes
-  for (const [tenant, routes] of Object.entries(CANONICAL_ROUTES)) {
+  // 2. Canonical route
+  const pathToCheck = portalMatch ? portalMatch[2] || "/" : normPath;
+  for (const [t, routes] of Object.entries(CANONICAL_ROUTES)) {
     for (const r of routes) {
-      if (normPath === r || normPath.startsWith(`${r}/`)) {
-        return {
-          recyclerId: tenant,
-          rewritePath: req.url,
-          setCookie: tenant,
-          source: "canonical-route",
-        };
+      if (pathToCheck === r || pathToCheck.startsWith(`${r}/`)) {
+        selectors.push({ source: "canonical-route", tenant: t });
       }
     }
   }
 
-  // 3. Tracking reference prefix in URL params
-  if (queryRef.startsWith("DEC-")) {
-    return { recyclerId: "deccan", rewritePath: req.url, setCookie: "deccan", source: "ref-prefix" };
-  }
-  if (queryRef.startsWith("PPK-")) {
-    return { recyclerId: "paperplus", rewritePath: req.url, setCookie: "paperplus", source: "ref-prefix" };
-  }
-  if (queryRef.startsWith("QSH-")) {
-    return { recyclerId: "quickscrap", rewritePath: req.url, setCookie: "quickscrap", source: "ref-prefix" };
-  }
-
-  // 4. Host header subdomain match (e.g. deccan.example.com)
-  if (host.includes("deccan.") || host.startsWith("deccan-")) {
-    return { recyclerId: "deccan", rewritePath: req.url, setCookie: "deccan", source: "host-header" };
-  }
-  if (host.includes("paperplus.") || host.startsWith("paperplus-")) {
-    return { recyclerId: "paperplus", rewritePath: req.url, setCookie: "paperplus", source: "host-header" };
-  }
-  if (host.includes("quickscrap.") || host.startsWith("quickscrap-")) {
-    return { recyclerId: "quickscrap", rewritePath: req.url, setCookie: "quickscrap", source: "host-header" };
-  }
-
-  // 5. Explicit HTTP header x-recycler-id
+  // 3. Header x-recycler-id
   if (headerRecycler && UPSTREAMS[headerRecycler]) {
-    return { recyclerId: headerRecycler, rewritePath: req.url, setCookie: headerRecycler, source: "header" };
+    selectors.push({ source: "header", tenant: headerRecycler });
   }
 
-  // 6. Explicit landing query param ?portal=:tenant
-  if (queryPortal && UPSTREAMS[queryPortal]) {
-    return { recyclerId: queryPortal, rewritePath: req.url, setCookie: queryPortal, source: "query-param" };
+  // 4. Query param ?portal= or ?tenant=
+  const explicitQuery = queryPortal || queryTenant;
+  if (explicitQuery && UPSTREAMS[explicitQuery]) {
+    selectors.push({ source: "query-param", tenant: explicitQuery });
   }
 
-  // 7. Durable Session Cookie recircuit_tenant
+  // 5. Tracking ref prefix
+  if (queryRef.startsWith("DEC-")) {
+    selectors.push({ source: "ref-prefix", tenant: "deccan" });
+  } else if (queryRef.startsWith("PPK-")) {
+    selectors.push({ source: "ref-prefix", tenant: "paperplus" });
+  } else if (queryRef.startsWith("QSH-")) {
+    selectors.push({ source: "ref-prefix", tenant: "quickscrap" });
+  }
+
+  // 6. Host header subdomain match
+  for (const t of Object.keys(UPSTREAMS)) {
+    if (host.includes(`${t}.`) || host.startsWith(`${t}-`)) {
+      selectors.push({ source: "host-header", tenant: t });
+    }
+  }
+
+  // Check for conflict
+  const distinctTenants = new Set(selectors.map((s) => s.tenant));
+  if (distinctTenants.size > 1) {
+    return {
+      hasConflict: true,
+      selectors,
+      message: `Conflicting explicit tenant selectors detected: ${selectors.map((s) => `${s.source}='${s.tenant}'`).join(" vs ")}`,
+    };
+  }
+
+  return {
+    hasConflict: false,
+    resolvedTenant: distinctTenants.size === 1 ? Array.from(distinctTenants)[0] : null,
+    source: selectors[0]?.source || null,
+  };
+}
+
+/**
+ * Resolves tenant identity deterministically.
+ * Returns { recyclerId, rewritePath, setCookie, source } or { conflict, message } or null if ambiguous.
+ */
+export function resolveTenant(req, normPath, parsedUrl) {
+  // 1. Conflict detection
+  const conflictCheck = detectTenantConflicts(req, normPath, parsedUrl);
+  if (conflictCheck.hasConflict) {
+    return { conflict: true, message: conflictCheck.message };
+  }
+
+  // 2. Explicit selector resolved
+  if (conflictCheck.resolvedTenant) {
+    const tenant = conflictCheck.resolvedTenant;
+    const portalMatch = normPath.match(/^\/portal\/([^/]+)(\/.*)?$/i);
+    const directMatch = normPath.match(/^\/(deccan|paperplus|quickscrap)(\/.*)?$/i);
+
+    let rewritePath = req.url;
+    if (portalMatch) {
+      rewritePath = (portalMatch[2] || "/") + (parsedUrl.search || "");
+    } else if (directMatch) {
+      rewritePath = (directMatch[2] || "/") + (parsedUrl.search || "");
+    }
+
+    return {
+      recyclerId: tenant,
+      rewritePath,
+      setCookie: tenant,
+      source: conflictCheck.source,
+    };
+  }
+
+  // 3. Static assets & Next.js internals: route to the matching upstream
+  if (normPath.startsWith("/_next/") || normPath === "/favicon.ico") {
+    // A. Check if chunk path contains a canonical route name (e.g. /app/schedule/page.js -> paperplus)
+    for (const [t, routes] of Object.entries(CANONICAL_ROUTES)) {
+      for (const r of routes) {
+        const clean = r.replace(/^\//, "");
+        if (normPath.includes(`/${clean}/`) || normPath.includes(`/${clean}.`)) {
+          return { recyclerId: t, rewritePath: req.url, setCookie: null, source: "asset-route-match" };
+        }
+      }
+    }
+
+    // B. Check Referer header if present
+    const referer = req.headers["referer"] || "";
+    for (const t of Object.keys(UPSTREAMS)) {
+      if (referer.includes(`/portal/${t}`) || referer.includes(`/${t}/`)) {
+        return { recyclerId: t, rewritePath: req.url, setCookie: null, source: "asset-referer" };
+      }
+    }
+    for (const [t, routes] of Object.entries(CANONICAL_ROUTES)) {
+      for (const r of routes) {
+        if (referer.includes(r)) {
+          return { recyclerId: t, rewritePath: req.url, setCookie: null, source: "asset-referer" };
+        }
+      }
+    }
+
+    // C. Cookie fallback or default to deccan
+    const cookies = parseCookies(req.headers["cookie"]);
+    const cookieTenant = cookies["recircuit_tenant"]?.toLowerCase();
+    const assetTenant = cookieTenant && UPSTREAMS[cookieTenant] ? cookieTenant : "deccan";
+    return {
+      recyclerId: assetTenant,
+      rewritePath: req.url,
+      setCookie: null,
+      source: "static-asset",
+    };
+  }
+
+  // 4. For naked shared APIs without explicit tenant:
+  // DO NOT fall back to shared cookie! Direct API calls must specify tenant explicitly.
+  if (SHARED_PUBLIC_APIS.has(normPath)) {
+    return null;
+  }
+
+  // 4. For page navigation or static assets, check cookie as fallback
+  const cookies = parseCookies(req.headers["cookie"]);
+  const cookieTenant = cookies["recircuit_tenant"]?.toLowerCase();
   if (cookieTenant && UPSTREAMS[cookieTenant]) {
-    return { recyclerId: cookieTenant, rewritePath: req.url, setCookie: null, source: "cookie" };
+    return {
+      recyclerId: cookieTenant,
+      rewritePath: req.url,
+      setCookie: null,
+      source: "cookie",
+    };
   }
 
-  // 8. Fail Closed: Cannot determine tenant unambiguously
+  // 5. Fail closed
   return null;
 }
 
@@ -242,7 +411,6 @@ export function isAllowedPublicRoute(normPath) {
     }
   }
 
-  // Prefixed versions (/deccan/..., etc.)
   for (const tenant of Object.keys(UPSTREAMS)) {
     if (normPath === `/${tenant}` || normPath.startsWith(`/${tenant}/`)) return true;
   }
@@ -251,6 +419,8 @@ export function isAllowedPublicRoute(normPath) {
 }
 
 export function createGatewayServer() {
+  const activeSockets = new Set();
+
   const server = http.createServer((clientReq, clientRes) => {
     // 1. Method Allowlist Enforcement
     const method = (clientReq.method || "GET").toUpperCase();
@@ -277,7 +447,21 @@ export function createGatewayServer() {
       return;
     }
 
-    // 3. Public Route Allowlist Enforcement
+    // 3. /portal/:tenant Route Validation
+    const portalValidation = validatePortalRoute(normPath);
+    if (portalValidation.isPortal && !portalValidation.valid) {
+      clientRes.writeHead(portalValidation.status, { "Content-Type": "application/json" });
+      clientRes.end(
+        JSON.stringify({
+          error: portalValidation.error,
+          message: portalValidation.message,
+          status: portalValidation.status,
+        })
+      );
+      return;
+    }
+
+    // 4. Public Route Allowlist Enforcement
     if (!isAllowedPublicRoute(normPath)) {
       clientRes.writeHead(404, { "Content-Type": "application/json" });
       clientRes.end(
@@ -290,17 +474,30 @@ export function createGatewayServer() {
       return;
     }
 
-    // 4. Deterministic Recycler Routing Resolution
+    // 5. Deterministic Recycler Routing Resolution
     const routing = resolveTenant(clientReq, normPath, parsedUrl);
 
-    // If ambiguous, FAIL CLOSED
+    // If conflicting explicit selectors detected -> 400 Bad Request
+    if (routing && routing.conflict) {
+      clientRes.writeHead(400, { "Content-Type": "application/json" });
+      clientRes.end(
+        JSON.stringify({
+          error: "ConflictingTenantSelectors",
+          message: routing.message,
+          status: 400,
+        })
+      );
+      return;
+    }
+
+    // If ambiguous -> FAIL CLOSED
     if (!routing) {
       clientRes.writeHead(400, { "Content-Type": "application/json" });
       clientRes.end(
         JSON.stringify({
           error: "AmbiguousTenantRouting",
           message:
-            "Tenant identity cannot be determined. Request must specify tenant via path prefix (/portal/<tenant>), distinct route, recircuit_tenant cookie, or x-recycler-id header.",
+            "Tenant identity cannot be determined. Request must specify tenant via path prefix (/portal/<tenant>), distinct route, or x-recycler-id header.",
           status: 400,
         })
       );
@@ -318,13 +515,7 @@ export function createGatewayServer() {
     headers["x-forwarded-for"] = clientReq.socket.remoteAddress || "127.0.0.1";
     headers["x-forwarded-proto"] = clientReq.headers["x-forwarded-proto"] || "http";
     headers["x-gateway-tenant"] = recyclerId;
-
-    // Attach recircuit_tenant cookie if not already in Cookie header
-    if (!headers["cookie"] || !headers["cookie"].includes("recircuit_tenant=")) {
-      headers["cookie"] = headers["cookie"]
-        ? `${headers["cookie"]}; recircuit_tenant=${recyclerId}`
-        : `recircuit_tenant=${recyclerId}`;
-    }
+    headers["x-recycler-id"] = recyclerId;
 
     const proxyReq = http.request(
       {
@@ -337,9 +528,9 @@ export function createGatewayServer() {
       (proxyRes) => {
         const resHeaders = { ...proxyRes.headers };
 
-        // Attach Set-Cookie if tenant was resolved or changed
+        // Attach Path-Scoped Set-Cookie
         if (setCookie) {
-          const cookieStr = `recircuit_tenant=${setCookie}; Path=/; SameSite=Lax; HttpOnly`;
+          const cookieStr = `recircuit_tenant=${setCookie}; Path=/portal/${setCookie}; SameSite=Lax; HttpOnly`;
           const existingSetCookie = resHeaders["set-cookie"];
           if (!existingSetCookie) {
             resHeaders["set-cookie"] = [cookieStr];
@@ -351,50 +542,70 @@ export function createGatewayServer() {
         }
 
         clientRes.writeHead(proxyRes.statusCode || 200, resHeaders);
-        proxyRes.pipe(clientRes);
+        proxyRes.pipe(clientRes, { end: true });
       }
     );
 
     proxyReq.on("error", (err) => {
-      console.error(`[GATEWAY ERROR] Failed to connect to ${target.name} (port ${target.port}):`, err.message);
+      console.error(`[GATEWAY ERROR] Failed to proxy to ${recyclerId} (${target.port}):`, err.message);
       if (!clientRes.headersSent) {
         clientRes.writeHead(502, { "Content-Type": "application/json" });
         clientRes.end(
           JSON.stringify({
             error: "Bad Gateway",
-            message: `Mock portal upstream for ${recyclerId} on port ${target.port} is unreachable. Ensure start-portals is active.`,
+            message: `Failed to connect to upstream recycler portal: ${target.name}`,
             status: 502,
           })
         );
       }
     });
 
-    clientReq.pipe(proxyReq);
+    clientReq.pipe(proxyReq, { end: true });
   });
+
+  server.on("connection", (socket) => {
+    activeSockets.add(socket);
+    socket.on("close", () => activeSockets.delete(socket));
+  });
+
+  server.closeGracefully = function () {
+    return new Promise((resolve) => {
+      server.close(() => resolve());
+      for (const socket of activeSockets) {
+        socket.destroy();
+      }
+      activeSockets.clear();
+    });
+  };
 
   return server;
 }
 
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, "/")}`) {
+export function startGateway() {
   const server = createGatewayServer();
   server.listen(GATEWAY_PORT, GATEWAY_HOST, () => {
     console.log("==================================================================");
-    console.log(`🚀 Secure Multi-Tenant Tunnel Gateway listening on http://${GATEWAY_HOST}:${GATEWAY_PORT}`);
-    console.log("==================================================================");
-    console.log(`- Loopback binding strictly enforced: ${GATEWAY_HOST}`);
-    console.log(`- Upstream routing targets:`);
-    console.log(`  * Deccan:     ${UPSTREAMS.deccan.host}:${UPSTREAMS.deccan.port}`);
-    console.log(`  * PaperPlus:  ${UPSTREAMS.paperplus.host}:${UPSTREAMS.paperplus.port}`);
-    console.log(`  * QuickScrap: ${UPSTREAMS.quickscrap.host}:${UPSTREAMS.quickscrap.port}`);
-    console.log(`- Security: /admin, /api/admin, /api/reset strictly BLOCKED (403 Forbidden)`);
-    console.log(`- Routing: Durable cookie recircuit_tenant & canonical path matching enforced`);
-    console.log(`- Fail Closed: Ambiguous requests rejected with 400 Bad Request`);
+    console.log(`🔒 ReCircuit Hardened Loopback Gateway Active`);
+    console.log(`- Listening strictly on: http://${GATEWAY_HOST}:${GATEWAY_PORT}`);
+    console.log(`- Upstreams:`);
+    for (const [id, up] of Object.entries(UPSTREAMS)) {
+      console.log(`  * ${up.name}: http://${up.host}:${up.port} (/portal/${id}/*)`);
+    }
+    console.log("==================================================================\n");
   });
 
-  const cleanup = () => {
-    console.log("\n🛑 Stopping Gateway...");
-    server.close(() => process.exit(0));
+  const cleanup = async () => {
+    console.log("\n🛑 Stopping Gateway gracefully...");
+    await server.closeGracefully();
+    process.exit(0);
   };
+
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
+
+  return server;
+}
+
+if (process.argv[1] && process.argv[1].endsWith("tunnel-gateway.mjs")) {
+  startGateway();
 }

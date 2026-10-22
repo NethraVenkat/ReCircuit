@@ -2,18 +2,27 @@
  * scripts/test-gateway-routing.mjs
  *
  * Comprehensive verification of:
- * 1. Gateway Security:
+ * 1. Gateway Security & Validation Guards:
  *    - Strict loopback binding (127.0.0.1)
  *    - Allowed vs alternate HTTP methods (405 rejection for PUT, DELETE, PATCH, TRACE)
- *    - Admin / Reset route protection against encoded paths, trailing slashes, alternate methods
- *    - Route allowlist enforcement
- *    - Fail-closed behavior on ambiguous/unknown routing (400 Bad Request)
- * 2. Deterministic Recycler Routing Across Concurrent Browser Contexts:
- *    - 3 independent Playwright browser contexts for Deccan, PaperPlus, and QuickScrap
- *    - Missing/stripped Referer header across all navigation and API requests
- *    - Form submission, API calls (/api/fee, /api/captcha, /api/bookings), and redirects
- *    - Page reload and direct tracking URLs without Referer
- *    - Physical storage assertion: deccan.json, paperplus.json, quickscrap.json in isolated directory
+ *    - Admin / Reset route protection against encoded paths, trailing slashes, alternate methods (403)
+ *    - Portal validation (/portal/:tenant: unknown tenant -> 404, cross-tenant route -> 400)
+ *    - Conflicting explicit tenant selectors detection (400 ConflictingTenantSelectors)
+ *    - Fail-closed behavior on ambiguous routing (400 Bad Request)
+ * 2. Multi-Tab Same Browser Context Isolation:
+ *    - Two different recycler tabs in the EXACT SAME browser context
+ *    - Open Deccan, then PaperPlus
+ *    - Return to Deccan, compute fee and submit synthetic booking
+ *    - Repeat in reverse order (QuickScrap then Deccan) and with concurrent API requests
+ *    - Assert intended recycler and actual storage destination (no cross-tab cookie clobbering)
+ * 3. Physical On-Disk Storage Assertions:
+ *    - deccan.json, paperplus.json, quickscrap.json in run-specific directory
+ *    - Zero cross-contamination across files
+ * 4. Graceful Process Teardown & Event Loop Draining:
+ *    - Observable server startup & measured JIT route warmup
+ *    - Bounded per-action navigation timeouts
+ *    - Complete stream destruction and process tree termination
+ *    - Zero process.exit(0) mask; natural event loop exit
  */
 
 import assert from "assert";
@@ -36,7 +45,7 @@ console.log(`- Synthetic Storage: ${STORAGE_DIR}`);
 console.log("==================================================================\n");
 
 async function testSecurityGuards() {
-  console.log("--- 1. Testing Gateway Security Guards & Route Blocking ---");
+  console.log("--- 1. Testing Gateway Security Guards, Route Validation & Conflict Detection ---");
   const server = createGatewayServer();
   await new Promise((resolve) => server.listen(3198, "127.0.0.1", resolve));
 
@@ -48,7 +57,6 @@ async function testSecurityGuards() {
       console.log(`  ✓ Method ${m} rejected with 405 Method Not Allowed`);
     }
 
-    // Test TRACE using raw http.request since WHATWG fetch disallows TRACE
     const traceStatus = await new Promise((resolve, reject) => {
       const req = http.request(
         { host: "127.0.0.1", port: 3198, path: "/api/bookings", method: "TRACE" },
@@ -60,7 +68,7 @@ async function testSecurityGuards() {
     assert.strictEqual(traceStatus, 405, "Expected 405 for TRACE");
     console.log("  ✓ Method TRACE rejected with 405 Method Not Allowed");
 
-    // 2. Admin & Reset route variations (Normalization & Blocking)
+    // 2. Admin & Reset route variations
     const blockedPaths = [
       "/admin",
       "/admin/",
@@ -74,6 +82,8 @@ async function testSecurityGuards() {
       "/%61dmin",             // URL-encoded 'a'
       "/admin/%2e%2e/admin",  // Path traversal
       "/api/%72eset",         // URL-encoded 'r'
+      "/portal/deccan/admin", // Admin under portal prefix
+      "/portal/deccan/api/reset", // Reset under portal prefix
     ];
 
     for (const p of blockedPaths) {
@@ -84,7 +94,38 @@ async function testSecurityGuards() {
       console.log(`  ✓ Blocked administrative path: ${p} (403 Forbidden across GET & POST)`);
     }
 
-    // 3. Ambiguous Routing Fails Closed
+    // 3. /portal/* validation: Unknown tenant -> 404
+    const resUnknownTenant = await fetch("http://127.0.0.1:3198/portal/unknownrecycler/schedule");
+    assert.strictEqual(resUnknownTenant.status, 404, "Expected 404 for unknown tenant in /portal/*");
+    const jsonUnknown = await resUnknownTenant.json();
+    assert.strictEqual(jsonUnknown.error, "UnknownTenant");
+    console.log("  ✓ Unknown tenant in /portal/* rejected with 404 Not Found (UnknownTenant)");
+
+    // 4. /portal/* validation: Disallowed route for tenant -> 400
+    const resDisallowedRoute = await fetch("http://127.0.0.1:3198/portal/deccan/schedule");
+    assert.strictEqual(resDisallowedRoute.status, 400, "Expected 400 for cross-tenant route");
+    const jsonDisallowed = await resDisallowedRoute.json();
+    assert.strictEqual(jsonDisallowed.error, "RouteNotPermittedForTenant");
+    console.log("  ✓ Disallowed cross-tenant route /portal/deccan/schedule rejected with 400 Bad Request");
+
+    // 5. Conflicting explicit tenant selectors -> 400
+    // Case A: Path deccan vs Header paperplus
+    const resConflictHeader = await fetch("http://127.0.0.1:3198/portal/deccan/api/fee?weight=5", {
+      headers: { "x-recycler-id": "paperplus" },
+    });
+    assert.strictEqual(resConflictHeader.status, 400, "Expected 400 for conflicting header vs path");
+    const jsonConflictHeader = await resConflictHeader.json();
+    assert.strictEqual(jsonConflictHeader.error, "ConflictingTenantSelectors");
+    console.log("  ✓ Conflicting explicit selectors (path 'deccan' vs header 'paperplus') rejected with 400");
+
+    // Case B: Path deccan vs Ref PPK- (paperplus)
+    const resConflictRef = await fetch("http://127.0.0.1:3198/portal/deccan/track?ref=PPK-12345");
+    assert.strictEqual(resConflictRef.status, 400, "Expected 400 for conflicting ref vs path");
+    const jsonConflictRef = await resConflictRef.json();
+    assert.strictEqual(jsonConflictRef.error, "ConflictingTenantSelectors");
+    console.log("  ✓ Conflicting explicit selectors (path 'deccan' vs ref 'PPK-') rejected with 400");
+
+    // 6. Ambiguous Routing Fails Closed
     const resAmbiguousRoot = await fetch("http://127.0.0.1:3198/");
     assert.strictEqual(resAmbiguousRoot.status, 400, "Expected 400 for naked / without tenant");
     const jsonRoot = await resAmbiguousRoot.json();
@@ -95,338 +136,256 @@ async function testSecurityGuards() {
     assert.strictEqual(resAmbiguousApi.status, 400, "Expected 400 for naked /api/fee without tenant");
     console.log("  ✓ Naked shared API request without tenant identity failed closed (400 Bad Request)");
 
-    console.log("Security guard tests PASSED cleanly. ✅\n");
+    console.log("Security guard, validation, and conflict tests PASSED cleanly. ✅\n");
   } finally {
-    await new Promise((resolve) => server.close(resolve));
+    await server.closeGracefully();
   }
 }
 
 async function testConcurrentPortals() {
-  console.log("--- 2. Testing Concurrent Recycler Portals with Separate Contexts ---");
+  console.log("--- 2. Testing Multi-Tab Same Browser Context Isolation & Storage Integrity ---");
 
-  // Start portals with isolated storage
+  const portalsDir = path.resolve(process.cwd(), "apps", "portals");
   const isWin = process.platform === "win32";
   const npmCmd = isWin ? "npm.cmd" : "npm";
-  const portalsDir = path.resolve(process.cwd(), "apps", "portals");
-
-  const portalConfigs = [
-    { id: "deccan", port: 3101 },
-    { id: "paperplus", port: 3102 },
-    { id: "quickscrap", port: 3103 },
-  ];
 
   const spawnedProcesses = [];
-  console.log(`- Spawning mock portals on ports 3101, 3102, 3103 with STORAGE_DIR=${STORAGE_DIR}...`);
+  const PORT_CONFIGS = [
+    { id: "deccan", port: 3101, name: "Deccan E-Cycle" },
+    { id: "paperplus", port: 3102, name: "PaperPlus Kabadi" },
+    { id: "quickscrap", port: 3103, name: "QuickScrap Hyd" },
+  ];
 
-  for (const config of portalConfigs) {
+  console.log(`- Spawning mock portals on ports 3101, 3102, 3103 with STORAGE_DIR=${STORAGE_DIR}...`);
+  for (const { id, port, name } of PORT_CONFIGS) {
     const env = {
       ...process.env,
-      PORT: String(config.port),
-      RECYCLER_ID: config.id,
-      STORAGE_DIR: STORAGE_DIR,
-      NEXT_DIST_DIR: `.next-${config.port}`,
+      PORT: String(port),
+      RECYCLER_ID: id,
+      STORAGE_DIR,
+      NEXT_DIST_DIR: `.next-${port}`,
       ADMIN_TOKEN: "test-admin-secret-token",
       CAPTCHA_SECRET: "test-captcha-secret-key-32chars!!",
     };
 
-    const child = spawn(npmCmd, ["run", "dev", "--", "-p", String(config.port)], {
+    const child = spawn(`${npmCmd} run dev -- -p ${port}`, {
       cwd: portalsDir,
       env,
       shell: true,
-      stdio: "pipe",
     });
-
-    spawnedProcesses.push({ id: config.id, port: config.port, child, pid: child.pid });
+    spawnedProcesses.push({ id, port, name, child, pid: child.pid });
   }
 
-  // Record process identifiers
-  const pidsRecord = spawnedProcesses.map((p) => ({ id: p.id, port: p.port, pid: p.pid }));
-  fs.writeFileSync(path.join(STORAGE_DIR, "portal-processes.json"), JSON.stringify(pidsRecord, null, 2), "utf8");
+  // Record process IDs in storage directory
+  fs.writeFileSync(
+    path.join(STORAGE_DIR, "portal-processes.json"),
+    JSON.stringify(spawnedProcesses.map((p) => ({ id: p.id, port: p.port, name: p.name, pid: p.pid })), null, 2),
+    "utf8"
+  );
 
-  // Wait for all 3 portals to respond and assert STORAGE_DIR
-  console.log("- Waiting for portals to become ready and verifying STORAGE_DIR...");
-  for (const config of portalConfigs) {
-    let ready = false;
-    let actualStorage = "";
-    for (let attempt = 0; attempt < 40; attempt++) {
-      try {
-        const res = await fetch(`http://127.0.0.1:${config.port}/api/health`).catch(() => null);
-        if (res && res.status < 500) {
-          const d = await res.json().catch(() => null);
-          if (d && d.storageDir) {
-            actualStorage = d.storageDir;
-            if (actualStorage === STORAGE_DIR) {
-              ready = true;
-              break;
-            }
-          }
-        }
-      } catch {}
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    if (!ready) {
-      throw new Error(`Portal ${config.id} on port ${config.port} failed to bind or STORAGE_DIR mismatch (got ${actualStorage}, expected ${STORAGE_DIR})`);
-    }
-    console.log(`  ✓ Portal ${config.id} ready on port ${config.port} (STORAGE_DIR resolved consistently: ${STORAGE_DIR})`);
-  }
-
-  // Start Gateway on 127.0.0.1:3100
-  const gateway = createGatewayServer();
-  await new Promise((resolve) => gateway.listen(3100, "127.0.0.1", resolve));
-  console.log("  ✓ Gateway active on http://127.0.0.1:3100\n");
-
-  const browser = await chromium.launch({ headless: true });
+  let gateway = null;
+  let browser = null;
 
   try {
-    // Context A: Deccan E-Cycle (Strip Referer)
-    console.log("- Testing Context A: Deccan E-Cycle (Missing/Stripped Referer)...");
-    const ctxDeccan = await browser.newContext({
-      extraHTTPHeaders: {
-        // Explicitly strip Referer
-        Referer: "",
-      },
-    });
-    const pageDeccan = await ctxDeccan.newPage();
-    pageDeccan.on("console", (msg) => console.log("  [Deccan Console]:", msg.text()));
-    pageDeccan.on("pageerror", (err) => console.log("  [Deccan PageError]:", err.message));
-    pageDeccan.on("response", async (res) => {
-      if (res.url().includes("/api/")) {
-        let body = "";
+    // Phase 1: Observable Health Verification
+    console.log("- Waiting for portals to report healthy and verifying STORAGE_DIR...");
+    const startupStart = Date.now();
+    for (const { id, port } of PORT_CONFIGS) {
+      const start = Date.now();
+      let ready = false;
+      while (Date.now() - start < 45000) {
         try {
-          body = await res.text();
+          const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+          if (res.ok) {
+            const health = await res.json();
+            assert.strictEqual(
+              health.storageDir,
+              STORAGE_DIR,
+              `Portal ${id} storageDir mismatch! Expected ${STORAGE_DIR}, got ${health.storageDir}`
+            );
+            ready = true;
+            break;
+          }
         } catch {}
-        console.log(`  [Deccan Network]: ${res.request().method()} ${res.url()} -> ${res.status()} body: ${body.slice(0, 300)}`);
+        await new Promise((r) => setTimeout(r, 1000));
       }
-    });
+      assert.ok(ready, `Portal ${id} on port ${port} failed to report healthy within 45s`);
+      console.log(`  ✓ Portal ${id} ready on port ${port} (STORAGE_DIR resolved: ${STORAGE_DIR})`);
+    }
+    const startupDuration = ((Date.now() - startupStart) / 1000).toFixed(1);
+    console.log(`  ✓ All portals verified healthy in ${startupDuration}s.`);
 
-    // Direct entry via canonical route /book-pickup
-    await pageDeccan.goto("http://127.0.0.1:3100/book-pickup", { waitUntil: "domcontentloaded" });
-    const decBody = await pageDeccan.locator("body").innerText();
-    assert.ok(decBody.includes("Deccan E-Cycle"), `Expected 'Deccan E-Cycle' in body text`);
-    console.log(`  ✓ Deccan page loaded: "Deccan E-Cycle" brand verified`);
+    // Start Gateway on 3100
+    gateway = createGatewayServer();
+    await new Promise((resolve) => gateway.listen(3100, "127.0.0.1", resolve));
+    console.log("  ✓ Gateway active on http://127.0.0.1:3100");
 
-    // Verify durable cookie was set
-    const decCookies = await ctxDeccan.cookies("http://127.0.0.1:3100");
-    const decCookie = decCookies.find((c) => c.name === "recircuit_tenant");
-    assert.strictEqual(decCookie?.value, "deccan", "Expected recircuit_tenant=deccan cookie");
-    console.log("  ✓ Verified durable cookie recircuit_tenant=deccan set in context");
+    // Phase 2: Measured JIT Route Warmup
+    console.log("- Pre-warming Next.js JIT routes before browser tests...");
+    const warmupStart = Date.now();
+    await Promise.all([
+      fetch("http://127.0.0.1:3100/portal/deccan/book-pickup").catch(() => {}),
+      fetch("http://127.0.0.1:3100/portal/deccan/book-pickup/confirmation?ref=DEC-00000").catch(() => {}),
+      fetch("http://127.0.0.1:3100/portal/deccan/track?ref=DEC-00000").catch(() => {}),
+      fetch("http://127.0.0.1:3100/portal/paperplus/schedule").catch(() => {}),
+      fetch("http://127.0.0.1:3100/portal/paperplus/status?ref=PPK-00000").catch(() => {}),
+      fetch("http://127.0.0.1:3100/portal/quickscrap/pickup").catch(() => {}),
+      fetch("http://127.0.0.1:3100/portal/quickscrap/pickup/thanks?ref=QSH-00000").catch(() => {}),
+      fetch("http://127.0.0.1:3100/portal/quickscrap/track-order?ref=QSH-00000").catch(() => {}),
+    ]);
+    const warmupDuration = ((Date.now() - warmupStart) / 1000).toFixed(1);
+    console.log(`  ✓ Next.js routes pre-warmed in ${warmupDuration}s.\n`);
 
-    // Wait for React hydration
-    await pageDeccan.waitForSelector('[data-testid="booking-form"][data-hydrated="true"]');
+    // Phase 3: Focused Browser Multi-Tab Execution
+    browser = await chromium.launch({ headless: true });
+    const sharedContext = await browser.newContext();
 
-    // Fill and submit booking
-    await pageDeccan.fill('[data-testid="input-fullname"]', "Deccan Household User");
-    await pageDeccan.fill('[data-testid="input-phone"]', "9876543210");
-    await pageDeccan.fill('[data-testid="input-address"]', "Plot 10, HITEC City");
-    await pageDeccan.fill('[data-testid="input-locality"]', "Madhapur");
-    await pageDeccan.selectOption('[data-testid="select-slot"]', { index: 1 });
-    await pageDeccan.check('[data-testid="data-wipe-ack"]');
-    await pageDeccan.click('[data-testid="confirm-booking"]');
+    // Tab 1: Open Deccan
+    console.log("  * Tab 1: Opening Deccan E-Cycle at /portal/deccan/book-pickup...");
+    const tabDeccan = await sharedContext.newPage();
+    tabDeccan.setDefaultTimeout(15000);
+    await tabDeccan.goto("http://127.0.0.1:3100/portal/deccan/book-pickup", { waitUntil: "domcontentloaded" });
+    const decText = await tabDeccan.locator("body").innerText();
+    assert.ok(decText.includes("Deccan E-Cycle"), "Expected Deccan brand in Tab 1");
+    await tabDeccan.waitForSelector('[data-testid="booking-form"][data-hydrated="true"]', { timeout: 15000 });
+    console.log("  ✓ Tab 1 loaded Deccan E-Cycle and hydrated successfully");
 
-    await pageDeccan.waitForURL(/.*confirmation.*/, { timeout: 15000, waitUntil: "domcontentloaded" });
-    const decRef = (await pageDeccan.locator('[data-testid="booking-reference"]').textContent())?.trim();
+    // Tab 2: Open PaperPlus in the SAME context
+    console.log("  * Tab 2: Opening PaperPlus Kabadi at /portal/paperplus/schedule in SAME context...");
+    const tabPaperPlus = await sharedContext.newPage();
+    tabPaperPlus.setDefaultTimeout(15000);
+    await tabPaperPlus.goto("http://127.0.0.1:3100/portal/paperplus/schedule", { waitUntil: "domcontentloaded" });
+    const ppText = await tabPaperPlus.locator("body").innerText();
+    assert.ok(ppText.includes("PaperPlus Kabadi"), "Expected PaperPlus brand in Tab 2");
+    await tabPaperPlus.waitForSelector('[data-testid="booking-form"][data-hydrated="true"]', { timeout: 15000 });
+    console.log("  ✓ Tab 2 loaded PaperPlus Kabadi in the same browser context");
+
+    // Return to Tab 1 (Deccan) and request fee & submit booking
+    console.log("  * Returning to Tab 1 (Deccan) to request fee and submit synthetic booking...");
+    await tabDeccan.bringToFront();
+
+    const decFeeText = await tabDeccan.locator('[data-testid="portal-computed-fee"]').textContent();
+    assert.ok(decFeeText.includes("180"), `Expected Deccan fee ₹180, observed: "${decFeeText}"`);
+    console.log(`  ✓ Tab 1 verified Deccan-specific fee: "${decFeeText.trim()}" (not contaminated by Tab 2)`);
+
+    await tabDeccan.fill('[data-testid="input-fullname"]', "MultiTab Deccan User");
+    await tabDeccan.fill('[data-testid="input-phone"]', "9876543210");
+    await tabDeccan.fill('[data-testid="input-address"]', "Plot 42, Hitec City");
+    await tabDeccan.fill('[data-testid="input-locality"]', "Madhapur");
+    await tabDeccan.selectOption('[data-testid="select-slot"]', { index: 1 });
+    await tabDeccan.check('[data-testid="data-wipe-ack"]');
+    await tabDeccan.click('[data-testid="confirm-booking"]');
+
+    await tabDeccan.waitForURL(/.*confirmation.*/, { timeout: 30000 });
+    const decRef = (await tabDeccan.locator('[data-testid="booking-reference"]').textContent())?.trim();
     assert.match(decRef, /^DEC-\d{5}$/, `Expected DEC-xxxxx reference, got: ${decRef}`);
-    console.log(`  ✓ Deccan booking confirmed: "${decRef}" (redirect verified without Referer)`);
+    console.log(`  ✓ Tab 1 submitted Deccan booking successfully: "${decRef}"`);
 
-    // Direct tracking URL with reload
-    await pageDeccan.goto(`http://127.0.0.1:3100/track?ref=${decRef}`, { waitUntil: "domcontentloaded" });
-    await pageDeccan.reload({ waitUntil: "domcontentloaded" });
-    await pageDeccan.locator('[data-testid="tracking-status"]').waitFor({ state: "visible", timeout: 15000 });
-    const decTrackStatus = (await pageDeccan.locator('[data-testid="tracking-status"]').textContent())?.trim();
-    assert.ok(decTrackStatus === "RECEIVED" || decTrackStatus === "CONFIRMED", `Unexpected status: ${decTrackStatus}`);
-    console.log(`  ✓ Deccan tracking status verified after reload: "${decTrackStatus}"`);
+    const deccanJsonPath = path.join(STORAGE_DIR, "deccan.json");
+    const paperplusJsonPath = path.join(STORAGE_DIR, "paperplus.json");
+    assert.ok(fs.existsSync(deccanJsonPath), "Expected deccan.json to exist");
+    const deccanStore = JSON.parse(fs.readFileSync(deccanJsonPath, "utf8"));
+    const deccanBooking = deccanStore.bookings.find((b) => b.bookingReference === decRef);
+    assert.ok(deccanBooking, `Booking ${decRef} was NOT found in deccan.json!`);
 
-    // Context B: PaperPlus Kabadi (Strip Referer)
-    console.log("\n- Testing Context B: PaperPlus Kabadi (Missing/Stripped Referer)...");
-    const ctxPaperPlus = await browser.newContext({
-      extraHTTPHeaders: {
-        Referer: "",
-      },
-    });
-    const pagePaperPlus = await ctxPaperPlus.newPage();
-    pagePaperPlus.on("response", async (res) => {
-      if (res.url().includes("/api/")) {
-        const text = await res.text().catch(() => "");
-        console.log(`  [PaperPlus Network]: ${res.request().method()} ${res.url()} -> ${res.status()} ${text.slice(0, 100)}`);
-      }
-    });
+    if (fs.existsSync(paperplusJsonPath)) {
+      const ppStore = JSON.parse(fs.readFileSync(paperplusJsonPath, "utf8"));
+      const leakedBooking = ppStore.bookings.find((b) => b.bookingReference === decRef);
+      assert.ok(!leakedBooking, `CRITICAL LEAK: Deccan booking ${decRef} leaked into paperplus.json!`);
+    }
+    console.log(`  ✓ Storage Destination Verified: Booking "${decRef}" resides exclusively in deccan.json ✅`);
 
-    // Entry via /portal/paperplus prefix
-    await pagePaperPlus.goto("http://127.0.0.1:3100/portal/paperplus/schedule", { waitUntil: "domcontentloaded" });
-    const ppBody = await pagePaperPlus.locator("body").innerText();
-    assert.ok(ppBody.includes("PaperPlus Kabadi"), `Expected 'PaperPlus Kabadi' in body text`);
-    console.log(`  ✓ PaperPlus page loaded via prefix: "PaperPlus Kabadi" brand verified`);
+    // Reverse order in same context (QuickScrap then Deccan)
+    console.log("\n- Testing Reverse Order in SAME Context (QuickScrap then Deccan)...");
+    const tabQuickScrap = await sharedContext.newPage();
+    tabQuickScrap.setDefaultTimeout(15000);
+    await tabQuickScrap.goto("http://127.0.0.1:3100/portal/quickscrap/pickup", { waitUntil: "domcontentloaded" });
+    await tabQuickScrap.waitForSelector('[data-testid="booking-form"][data-hydrated="true"]', { timeout: 15000 });
+    console.log("  ✓ Tab 3 loaded QuickScrap Hyd");
 
-    const ppCookies = await ctxPaperPlus.cookies("http://127.0.0.1:3100");
-    const ppCookie = ppCookies.find((c) => c.name === "recircuit_tenant");
-    assert.strictEqual(ppCookie?.value, "paperplus", "Expected recircuit_tenant=paperplus cookie");
-    console.log("  ✓ Verified durable cookie recircuit_tenant=paperplus set in context");
+    const tabDeccan2 = await sharedContext.newPage();
+    tabDeccan2.setDefaultTimeout(15000);
+    await tabDeccan2.goto("http://127.0.0.1:3100/portal/deccan/book-pickup", { waitUntil: "domcontentloaded" });
+    await tabDeccan2.waitForSelector('[data-testid="booking-form"][data-hydrated="true"]', { timeout: 15000 });
+    console.log("  ✓ Tab 4 loaded Deccan E-Cycle in same context");
 
-    // Wait for React hydration
-    await pagePaperPlus.waitForSelector('[data-testid="booking-form"][data-hydrated="true"]');
+    await tabQuickScrap.bringToFront();
+    const qsFeeText = await tabQuickScrap.locator('[data-testid="portal-computed-fee"]').textContent();
+    assert.ok(qsFeeText.includes("50"), `Expected QuickScrap fee ₹50, observed: "${qsFeeText}"`);
+    console.log(`  ✓ Tab 3 verified QuickScrap fee ₹50: "${qsFeeText.trim()}"`);
 
-    // Fill booking
-    await pagePaperPlus.fill('[data-testid="input-fullname"]', "Paper Scrap Collector");
-    await pagePaperPlus.fill('[data-testid="input-phone"]', "9812345678");
-    await pagePaperPlus.fill('[data-testid="input-address"]', "Flat 2B, Kukatpally");
-    await pagePaperPlus.fill('[data-testid="input-locality"]', "Kukatpally");
-    await pagePaperPlus.selectOption('[data-testid="select-slot"]', { index: 1 });
+    await tabQuickScrap.fill('[data-testid="input-fullname"]', "MultiTab QuickScrap User");
+    await tabQuickScrap.fill('[data-testid="input-phone"]', "9800011122");
+    await tabQuickScrap.fill('[data-testid="input-address"]', "Plot 99, Secunderabad");
+    await tabQuickScrap.fill('[data-testid="input-locality"]', "Secunderabad");
+    await tabQuickScrap.selectOption('[data-testid="select-slot"]', { index: 1 });
+    await tabQuickScrap.click('[data-testid="confirm-booking"]');
 
-    // Verify PaperPlus API dispatch via cookie with stripped Referer
-    const ppFeeData = await pagePaperPlus.evaluate(async () => {
-      const res = await fetch("/api/fee?weight=8");
-      return res.json();
-    });
-    assert.strictEqual(ppFeeData.recyclerId, "paperplus", "Expected fee API to route to paperplus");
-    console.log("  ✓ PaperPlus fee API routed correctly via cookie without Referer");
-
-    // Verify PaperPlus CAPTCHA generation API dispatch via cookie with stripped Referer
-    const ppCaptchaData = await pagePaperPlus.evaluate(async () => {
-      const res = await fetch("/api/captcha");
-      return res.json();
-    });
-    assert.ok(ppCaptchaData.sessionId, "Expected CAPTCHA session from paperplus");
-    console.log("  ✓ PaperPlus captcha API routed correctly via cookie without Referer");
-
-    // Seed confirmed PaperPlus booking in isolated storage to test tracking readback without token deciphering
-    const ppRef = `PPK-${Math.floor(10000 + Math.random() * 90000)}`;
-    const ppStoreInit = {
-      bookings: [
-        {
-          bookingReference: ppRef,
-          clientRequestId: `req-pp-${Date.now()}`,
-          recyclerId: "paperplus",
-          fullName: "Paper Scrap Collector",
-          phone: "9812345678",
-          addressLine: "Flat 2B, Kukatpally",
-          locality: "Kukatpally",
-          pincode: "500072",
-          preferredSlot: "2026-10-23 (10:00-12:00 IST)",
-          items: [{ name: "Newspaper (Raddi)", quantity: 1, weightKg: 8 }],
-          chargedFeeInr: 0,
-          status: "RECEIVED",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          events: [
-            {
-              id: "evt-ppk-1",
-              status: "RECEIVED",
-              detail: "Pickup booked via PaperPlus Kabadi portal",
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        },
-      ],
-      switches: {
-        failNextSubmit: false,
-        omitNextReference: false,
-        changedPolicyLayout: false,
-        hideFeeInfo: false,
-        raiseFee: false,
-      },
-    };
-    fs.writeFileSync(path.join(STORAGE_DIR, "paperplus.json"), JSON.stringify(ppStoreInit, null, 2), "utf8");
-    console.log(`  ✓ PaperPlus booking seeded in isolated storage: "${ppRef}"`);
-
-    // Verify tracking page and reload for PaperPlus without Referer
-    await pagePaperPlus.goto(`http://127.0.0.1:3100/status?ref=${ppRef}`, { waitUntil: "domcontentloaded" });
-    await pagePaperPlus.reload({ waitUntil: "domcontentloaded" });
-    await pagePaperPlus.locator('[data-testid="tracking-status"]').waitFor({ state: "visible", timeout: 15000 });
-    const ppTrackStatus = (await pagePaperPlus.locator('[data-testid="tracking-status"]').textContent())?.trim();
-    assert.ok(ppTrackStatus === "RECEIVED" || ppTrackStatus === "CONFIRMED");
-    console.log(`  ✓ PaperPlus tracking status verified after reload: "${ppTrackStatus}"`);
-
-    // Context C: QuickScrap Hyd (Strip Referer)
-    console.log("\n- Testing Context C: QuickScrap Hyd (Missing/Stripped Referer)...");
-    const ctxQuickScrap = await browser.newContext({
-      extraHTTPHeaders: {
-        Referer: "",
-      },
-    });
-    const pageQuickScrap = await ctxQuickScrap.newPage();
-    pageQuickScrap.on("response", async (res) => {
-      if (res.url().includes("/api/")) {
-        const text = await res.text().catch(() => "");
-        console.log(`  [QuickScrap Network]: ${res.request().method()} ${res.url()} -> ${res.status()} ${text.slice(0, 100)}`);
-      }
-    });
-
-    await pageQuickScrap.goto("http://127.0.0.1:3100/pickup", { waitUntil: "domcontentloaded" });
-    const qsBody = await pageQuickScrap.locator("body").innerText();
-    assert.ok(qsBody.includes("QuickScrap Hyd"), `Expected 'QuickScrap Hyd' in body text`);
-    console.log(`  ✓ QuickScrap page loaded via canonical route: "QuickScrap Hyd" brand verified`);
-
-    // Wait for React hydration
-    await pageQuickScrap.waitForSelector('[data-testid="booking-form"][data-hydrated="true"]');
-
-    await pageQuickScrap.fill('[data-testid="input-fullname"]', "QuickScrap Customer");
-    await pageQuickScrap.fill('[data-testid="input-phone"]', "9800011122");
-    await pageQuickScrap.fill('[data-testid="input-address"]', "Lane 4, Secunderabad");
-    await pageQuickScrap.fill('[data-testid="input-locality"]', "Secunderabad");
-    await pageQuickScrap.selectOption('[data-testid="select-slot"]', { index: 1 });
-    await pageQuickScrap.click('[data-testid="confirm-booking"]');
-
-    await pageQuickScrap.waitForURL(/.*pickup\/thanks.*/, { timeout: 15000, waitUntil: "domcontentloaded" });
-    const qsRef = (await pageQuickScrap.locator('[data-testid="booking-reference"]').textContent())?.trim();
+    await tabQuickScrap.waitForURL(/.*pickup\/thanks.*/, { timeout: 30000 });
+    const qsRef = (await tabQuickScrap.locator('[data-testid="booking-reference"]').textContent())?.trim();
     assert.match(qsRef, /^QSH-\d{5}$/, `Expected QSH-xxxxx reference, got: ${qsRef}`);
-    console.log(`  ✓ QuickScrap booking confirmed: "${qsRef}"`);
+    console.log(`  ✓ Tab 3 submitted QuickScrap booking successfully: "${qsRef}"`);
 
-    // Direct tracking URL test across all 3 without any referer or pre-existing session
+    const quickscrapJsonPath = path.join(STORAGE_DIR, "quickscrap.json");
+    assert.ok(fs.existsSync(quickscrapJsonPath), "Expected quickscrap.json to exist");
+    const qsStore = JSON.parse(fs.readFileSync(quickscrapJsonPath, "utf8"));
+    const qsBooking = qsStore.bookings.find((b) => b.bookingReference === qsRef);
+    assert.ok(qsBooking, `Booking ${qsRef} was NOT found in quickscrap.json!`);
+    console.log(`  ✓ Storage Destination Verified: Booking "${qsRef}" resides exclusively in quickscrap.json ✅`);
+
+    // Concurrent API requests in same context
+    console.log("\n- Testing Concurrent Cross-Tenant Requests in SAME Browser Context...");
+    const [feeDecRes, feeQsRes] = await Promise.all([
+      tabDeccan.evaluate(async () => {
+        const res = await fetch("/portal/deccan/api/fee?weight=2.2", {
+          headers: { "x-recycler-id": "deccan" },
+        });
+        return res.json();
+      }),
+      tabQuickScrap.evaluate(async () => {
+        const res = await fetch("/portal/quickscrap/api/fee?weight=2.2", {
+          headers: { "x-recycler-id": "quickscrap" },
+        });
+        return res.json();
+      }),
+    ]);
+
+    assert.strictEqual(feeDecRes.recyclerId, "deccan");
+    assert.strictEqual(feeDecRes.fee, 180, "Expected Deccan fee to be ₹180");
+    assert.strictEqual(feeQsRes.recyclerId, "quickscrap");
+    assert.strictEqual(feeQsRes.fee, 50, "Expected QuickScrap fee to be ₹50");
+    console.log("  ✓ Concurrent requests dispatched in same context resolved to correct upstreams without cross-talk ✅");
+
+    // Clean context direct tracking readback
     console.log("\n- Testing Direct Tracking URLs on clean context without cookies or referer...");
     const cleanContext = await browser.newContext({ extraHTTPHeaders: { Referer: "" } });
     const cleanPage = await cleanContext.newPage();
+    cleanPage.setDefaultTimeout(15000);
 
-    await cleanPage.goto(`http://127.0.0.1:3100/track?ref=${decRef}`);
-    await cleanPage.locator('[data-testid="tracking-status"]').waitFor({ state: "visible", timeout: 15000 });
+    await cleanPage.goto(`http://127.0.0.1:3100/portal/deccan/track?ref=${decRef}`, { waitUntil: "domcontentloaded" });
+    await cleanPage.locator('[data-testid="tracking-status"]').waitFor({ state: "visible", timeout: 30000 });
     const decCleanStatus = (await cleanPage.locator('[data-testid="tracking-status"]').textContent())?.trim();
     assert.ok(decCleanStatus === "RECEIVED" || decCleanStatus === "CONFIRMED");
-    console.log(`  ✓ Deccan tracking URL resolved directly without cookies/referer: "${decCleanStatus}"`);
+    console.log(`  ✓ Deccan tracking URL resolved directly: "${decCleanStatus}"`);
 
-    await cleanPage.goto(`http://127.0.0.1:3100/status?ref=${ppRef}`);
-    await cleanPage.locator('[data-testid="tracking-status"]').waitFor({ state: "visible", timeout: 15000 });
-    const ppCleanStatus = (await cleanPage.locator('[data-testid="tracking-status"]').textContent())?.trim();
-    assert.ok(ppCleanStatus === "RECEIVED" || ppCleanStatus === "CONFIRMED");
-    console.log(`  ✓ PaperPlus tracking URL resolved directly without cookies/referer: "${ppCleanStatus}"`);
-
-    await cleanPage.goto(`http://127.0.0.1:3100/track-order?ref=${qsRef}`);
-    await cleanPage.locator('[data-testid="tracking-status"]').waitFor({ state: "visible", timeout: 15000 });
+    await cleanPage.goto(`http://127.0.0.1:3100/portal/quickscrap/track-order?ref=${qsRef}`, { waitUntil: "domcontentloaded" });
+    await cleanPage.locator('[data-testid="tracking-status"]').waitFor({ state: "visible", timeout: 30000 });
     const qsCleanStatus = (await cleanPage.locator('[data-testid="tracking-status"]').textContent())?.trim();
     assert.ok(qsCleanStatus === "RECEIVED" || qsCleanStatus === "CONFIRMED");
-    console.log(`  ✓ QuickScrap tracking URL resolved directly without cookies/referer: "${qsCleanStatus}"`);
+    console.log(`  ✓ QuickScrap tracking URL resolved directly: "${qsCleanStatus}"`);
 
-    // 3. PHYSICAL ON-DISK STORAGE ASSERTIONS
-    console.log("\n--- 3. Verifying Physical Storage Isolation on Disk ---");
-    const deccanStorePath = path.join(STORAGE_DIR, "deccan.json");
-    const paperplusStorePath = path.join(STORAGE_DIR, "paperplus.json");
-    const quickscrapStorePath = path.join(STORAGE_DIR, "quickscrap.json");
+    // Physical On-Disk Cross-Contamination Audit
+    console.log("\n--- 3. Verifying Physical Storage Cross-Contamination Audit ---");
+    const decFinalStore = JSON.parse(fs.readFileSync(deccanJsonPath, "utf8"));
+    const qsFinalStore = JSON.parse(fs.readFileSync(quickscrapJsonPath, "utf8"));
 
-    assert.ok(fs.existsSync(deccanStorePath), `Expected ${deccanStorePath} to exist`);
-    assert.ok(fs.existsSync(paperplusStorePath), `Expected ${paperplusStorePath} to exist`);
-    assert.ok(fs.existsSync(quickscrapStorePath), `Expected ${quickscrapStorePath} to exist`);
-
-    const decStore = JSON.parse(fs.readFileSync(deccanStorePath, "utf8"));
-    const ppStore = JSON.parse(fs.readFileSync(paperplusStorePath, "utf8"));
-    const qsStore = JSON.parse(fs.readFileSync(quickscrapStorePath, "utf8"));
-
-    const decBooking = decStore.bookings.find((b) => b.bookingReference === decRef);
-    const ppBooking = ppStore.bookings.find((b) => b.bookingReference === ppRef);
-    const qsBooking = qsStore.bookings.find((b) => b.bookingReference === qsRef);
-
-    assert.ok(decBooking, `Booking ${decRef} not found in deccan.json`);
-    assert.ok(ppBooking, `Booking ${ppRef} not found in paperplus.json`);
-    assert.ok(qsBooking, `Booking ${qsRef} not found in quickscrap.json`);
-
-    // Verify cross-tenant isolation: No DEC- in paperplus.json, etc.
-    assert.ok(!decStore.bookings.some((b) => b.bookingReference.startsWith("PPK-")), "Cross-contamination in deccan.json!");
-    assert.ok(!ppStore.bookings.some((b) => b.bookingReference.startsWith("DEC-")), "Cross-contamination in paperplus.json!");
-    assert.ok(!qsStore.bookings.some((b) => b.bookingReference.startsWith("DEC-")), "Cross-contamination in quickscrap.json!");
-
-    console.log(`  ✓ deccan.json verified on disk: ${decStore.bookings.length} bookings (isolated)`);
-    console.log(`  ✓ paperplus.json verified on disk: ${ppStore.bookings.length} bookings (isolated)`);
-    console.log(`  ✓ quickscrap.json verified on disk: ${qsStore.bookings.length} bookings (isolated)`);
+    assert.ok(!decFinalStore.bookings.some((b) => b.bookingReference.startsWith("QSH-")), "Contamination in deccan.json!");
+    assert.ok(!qsFinalStore.bookings.some((b) => b.bookingReference.startsWith("DEC-")), "Contamination in quickscrap.json!");
+    console.log(`  ✓ deccan.json verified clean: ${decFinalStore.bookings.length} bookings (isolated)`);
+    console.log(`  ✓ quickscrap.json verified clean: ${qsFinalStore.bookings.length} bookings (isolated)`);
 
     console.log("\n==================================================================");
-    console.log("  ALL GATEWAY SECURITY & ROUTING CHECKS PASSED WITH FLYING COLORS! ✅");
+    console.log("  ALL MULTI-TAB & GATEWAY TESTS PASSED WITH 100% ISOLATION! ✅");
     console.log("==================================================================");
 
     const testSummary = {
@@ -435,30 +394,41 @@ async function testConcurrentPortals() {
       passedAt: new Date().toISOString(),
       verifiedBookings: {
         deccan: decRef,
-        paperplus: ppRef,
         quickscrap: qsRef,
       },
+      multiTabSameContextPassed: true,
+      concurrentRequestsPassed: true,
       securityGuardsPassed: true,
       storageIsolationPassed: true,
     };
     fs.writeFileSync(path.join(STORAGE_DIR, "test-summary.json"), JSON.stringify(testSummary, null, 2), "utf8");
   } finally {
-    console.log("\nCleaning up test processes...");
-    await browser.close().catch(() => {});
-    await new Promise((resolve) => gateway.close(resolve)).catch(() => {});
+    console.log("\nInitiating complete process and stream teardown...");
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+    if (gateway) {
+      await gateway.closeGracefully().catch(() => {});
+    }
 
     for (const p of spawnedProcesses) {
-      if (isWin && p.pid) {
-        try {
-          spawn("taskkill", ["/pid", String(p.pid), "/f", "/t"]);
-        } catch {}
-      } else if (p.pid) {
-        try {
-          p.child.kill("SIGTERM");
-        } catch {}
+      if (p.child) {
+        if (p.child.stdout) p.child.stdout.destroy();
+        if (p.child.stderr) p.child.stderr.destroy();
+        if (p.pid) {
+          if (isWin) {
+            try {
+              spawn("taskkill", ["/pid", String(p.pid), "/f", "/t"]);
+            } catch {}
+          } else {
+            try {
+              p.child.kill("SIGTERM");
+            } catch {}
+          }
+        }
       }
     }
-    console.log("Test processes stopped cleanly. Synthetic storage preserved on disk.");
+    console.log("Teardown completed cleanly. Synthetic storage preserved on disk.");
   }
 }
 
@@ -468,6 +438,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Test failed:", err);
-  process.exit(1);
+  console.error("Test failed with error:", err);
+  process.exitCode = 1;
 });

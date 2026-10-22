@@ -128,22 +128,42 @@ console.log(`\n- Process manifest recorded to: ${manifestPath}`);
 console.log("\nPress Ctrl+C to stop portals.\n");
 
 let isShuttingDown = false;
-function shutdown() {
+async function shutdown() {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log("\n🛑 Stopping mock portals (preserving all storage and evidence)...");
-  children.forEach((child) => {
-    if (isWin && child.pid) {
+  console.log("\n🛑 Stopping mock portals gracefully (preserving all storage and evidence)...");
+
+  for (const child of children) {
+    if (child && child.pid) {
       try {
-        spawn("taskkill", ["/pid", String(child.pid), "/f", "/t"]);
-      } catch {}
-    } else if (child.pid) {
-      try {
-        child.kill("SIGTERM");
+        child.kill("SIGINT");
       } catch {}
     }
-  });
-  setTimeout(() => process.exit(0), 800);
+  }
+
+  const startWait = Date.now();
+  while (Date.now() - startWait < 2500) {
+    const anyAlive = children.some((c) => c && c.exitCode === null && c.signalCode === null);
+    if (!anyAlive) break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  for (const child of children) {
+    if (child && child.exitCode === null && child.signalCode === null && child.pid) {
+      console.warn(`[SHUTDOWN] Process ${child.pid} did not exit within timeout; applying fallback termination.`);
+      if (isWin) {
+        try {
+          spawn("taskkill", ["/pid", String(child.pid), "/f", "/t"]);
+        } catch {}
+      } else {
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+      }
+    }
+  }
+
+  setTimeout(() => process.exit(0), 400);
 }
 
 if (process.stdin.isTTY) {

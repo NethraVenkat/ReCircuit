@@ -199,7 +199,10 @@ export const RECYCLER_ALLOWED_ROUTES: Record<RecyclerId, string[]> = {
 
 export function isRouteAllowedForRecycler(pathname: string, recyclerId: RecyclerId): boolean {
   const allowed = RECYCLER_ALLOWED_ROUTES[recyclerId];
-  return Boolean(allowed && allowed.includes(pathname));
+  let cleanPath = pathname;
+  const m = cleanPath.match(/^\/portal\/[^/]+(\/.*)?$/);
+  if (m) cleanPath = m[1] || "/";
+  return Boolean(allowed && allowed.includes(cleanPath));
 }
 
 /**
