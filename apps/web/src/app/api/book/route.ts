@@ -1,84 +1,42 @@
 import { NextResponse } from "next/server";
 import { BookingRunner } from "@recircuit/worker";
+import { hashPlan, type DecisionRecord } from "@recircuit/core";
 import { getRepository } from "@recircuit/db";
+import { z } from "zod";
+import { owned, locked, sameOrigin, failure, customerSchema } from "../../../lib/household";
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as {
-      requestId?: string;
-      customer?: {
-        fullName?: string;
-        phone?: string;
-        addressLine?: string;
-        locality?: string;
-        pincode?: string;
-      };
-    };
-
-    if (!body.requestId) {
-      return NextResponse.json({ error: "requestId is required" }, { status: 400 });
-    }
-
-    const repo = getRepository();
-    const stored = await repo.getRequest(body.requestId);
-    if (!stored || !stored.plan) {
-      return NextResponse.json({ error: "Request or plan not found" }, { status: 404 });
-    }
-
-    if (stored.request.state !== "APPROVED") {
-      return NextResponse.json(
-        { error: `Cannot book plan: request must be APPROVED (current state: ${stored.request.state})` },
-        { status: 400 }
-      );
-    }
-
-    const customer = {
-      fullName: body.customer?.fullName || "Ananya Sharma",
-      phone: body.customer?.phone || "9876543210",
-      addressLine: body.customer?.addressLine || "Flat 402, Green Meadows",
-      locality: body.customer?.locality || "Madhapur",
-      pincode: body.customer?.pincode || "500081",
-    };
-
-    const legResults = [];
-    for (const leg of stored.plan.legs) {
-      if (leg.state === "APPROVED") {
-        const legContext = {
-          leg,
-          plan: stored.plan,
-          request: stored.request,
-          approval: stored.approval || undefined,
-          customer,
-          items: leg.items || stored.items.map((it) => ({
-            id: it.id,
-            name: it.description,
-            quantity: it.quantity,
-            estimatedWeightKg: it.estimatedWeightKg,
-          })),
-          dataWipeAck: true,
-        };
-
-        const legRes = await BookingRunner.bookLegWithTransitions(legContext as any, {
-          headless: true,
-        });
-        Object.assign(leg, legRes.updatedLeg);
-        legResults.push(legRes);
+    sameOrigin(req);
+    const body = z.object({ requestId: z.string().uuid(), planHash: z.string().optional() }).parse(await req.json());
+    return await locked(body.requestId, async () => {
+      const stored = await owned(body.requestId);
+      const plan = stored.plan;
+      const approval = stored.approval as DecisionRecord | null;
+      if (!plan || stored.request.state !== "APPROVED" || approval?.decision !== "approved") {
+        throw new Error(`Cannot book plan: request must be APPROVED (current state: ${stored?.request?.state || "UNKNOWN"}). Approve the current plan before booking.`);
       }
-    }
-
-    await repo.saveRequest({
-      ...stored,
-      plan: stored.plan,
-      updatedAt: new Date().toISOString(),
+      if (body.planHash && (body.planHash !== hashPlan(plan) || approval.planHash !== hashPlan(plan))) {
+        throw new Error("STALE: Approval no longer matches this plan. Review again.");
+      }
+      const customer = customerSchema.parse(stored.household?.customer);
+      const repo = getRepository();
+      for (const leg of plan.legs) {
+        if (leg.state !== "APPROVED") continue;
+        leg.state = "SUBMITTING";
+        leg.updatedAt = new Date().toISOString();
+        await repo.saveRequest({ ...stored, plan, updatedAt: leg.updatedAt });
+        try {
+          const result = await BookingRunner.bookLegWithTransitions({ leg, plan, request: stored.request, approval, customer, items: leg.items || [], dataWipeAck: plan.dataWipeConfirmedByUser }, { headless: true });
+          Object.assign(leg, result.updatedLeg);
+          stored.auditEvents.push(...result.auditEvents.map(e => ({ ...e, requestId: stored.request.id })));
+          if (result.result.needsHuman) stored.household = { ...stored.household, handoff: "Human verification is required. This household interface cannot resume the worker browser session. No automatic retry was submitted." };
+        } catch (err) {
+          stored.household = { ...stored.household, bookingError: "Booking could not be confirmed. Refresh to inspect the saved state; do not submit a new request until the outcome is reconciled." };
+          throw err;
+        } finally { await repo.saveRequest({ ...stored, plan, updatedAt: new Date().toISOString() }); }
+      }
+      return NextResponse.json({ success: true, plan });
     });
-
-    return NextResponse.json({
-      success: true,
-      plan: stored.plan,
-      legResults,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  } catch (err) { const f = failure(err); return NextResponse.json(f.body, { status: f.status }); }
 }

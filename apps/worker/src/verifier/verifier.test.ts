@@ -312,7 +312,7 @@ describe("Stage 8: Independent Verifier Unit Tests", () => {
     const result = await VerificationRunner.verifyLegWithAudit(context);
     expect(result.verified).toBe(true);
 
-    const savedFile = `.data/verifications/${result.bookingReference}.json`;
+    const savedFile = `${process.env.RECIRCUIT_DATA_DIR || ".data"}/verifications/${result.bookingReference}.json`;
     expect(fs.existsSync(savedFile)).toBe(true);
     const parsed = JSON.parse(fs.readFileSync(savedFile, "utf-8")) as {
       bookingReference: string;

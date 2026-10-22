@@ -1,6 +1,7 @@
 import type { Request, Item, Plan, StatusEvent, UserApprovalEvidence, UserDecisionEvidence } from "@recircuit/core";
 
 export interface RequestRecord {
+  household?: Record<string, unknown>;
   request: Request;
   items: Item[];
   plan?: Plan | null;

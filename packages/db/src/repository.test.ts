@@ -19,6 +19,14 @@ describe("packages/db Repository Test Suite", () => {
   describe("FileRepository", () => {
     const repo = new FileRepository(path.relative(process.cwd(), testDataDir));
 
+    it("keeps safe-action attempts out of state-transition timelines", async () => {
+      fs.appendFileSync(path.join(testDataDir, "action-log.jsonl"), JSON.stringify({ id: "attempt", requestId: "mixed-fixture", allowed: true }) + "\n");
+      await repo.appendAudit({ id: randomUUID(), requestId: "mixed-fixture", previousState: "APPROVED", newState: "SUBMITTING", evidenceType: "test", evidenceReference: "fixture", observedAt: new Date().toISOString() });
+      const events = await repo.getAudits({ requestId: "mixed-fixture" });
+      expect(events).toHaveLength(1);
+      expect(events[0]?.newState).toBe("SUBMITTING");
+    });
+
     it("saves and retrieves a request record", async () => {
       const requestId = randomUUID();
       const mockItems = [

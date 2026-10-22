@@ -101,7 +101,7 @@ export class Verifier {
 
       const observedRef = (await refEl.textContent())?.trim() || "";
       const observedStatus = (await statusEl.textContent())?.trim() || "";
-      const observedFeeText = (await feeEl.textContent())?.trim() || "";
+      const observedFeeText = (await feeEl.textContent().catch(() => null))?.trim() || "";
       const isSimulatedDownstream = (await simulatedBadge.count()) > 0;
 
       // Verify reference matches expected submitted reference
@@ -120,6 +120,15 @@ export class Verifier {
           "TC4_UNVERIFIED_COLLECTION"
         );
       }
+
+      const feeMatch = observedFeeText.replace(/,/g, "").match(/(?:₹|INR|Rs\.?)[\s]*([0-9]+(?:\.[0-9]+)?)/i);
+      if (!feeMatch || !submittingSessionId || !observedStatus || !["RECEIVED", "CONFIRMED", "SCHEDULED", "REQUEST_SUBMITTED", "REQUEST_CONFIRMED", "PICKUP_SCHEDULED"].includes(observedStatus)) {
+        return { verified: false, isUncertain: true, verificationQuality: "INCOMPLETE_FIELDS", errorCode: "TRACKING_FIELDS_INCOMPLETE", error: "Fee, status or submitting-session provenance is missing or unsupported", bookingReference: observedRef, observedStatus, verifyingSessionId, submittingSessionId, trackingUrl, observedItems: [], observedFeeText };
+      }
+      if (Number(feeMatch[1]) !== leg.estimatedFee) {
+        throw new VerifierError("Tracking fee differs from the approved pickup fee", "FEE_MISMATCH");
+      }
+
 
       // 5. Extract item rows
       const observedItems: ObservedConsignmentItem[] = [];

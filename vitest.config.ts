@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   test: {
-    env: { CAPTCHA_SECRET: "vitest-only-captcha-secret" },
+    env: { CAPTCHA_SECRET: "vitest-only-captcha-secret", RECIRCUIT_DATA_DIR: path.resolve(__dirname, ".data", "unit-isolated-" + Date.now()) },
     globals: true,
     environment: "node",
     include: ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts"],

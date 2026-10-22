@@ -5,6 +5,7 @@ import type { IRepository, RequestRecord, JobRecord } from "./types.js";
 import type { StatusEvent, Request, Item, Plan, UserApprovalEvidence, UserDecisionEvidence } from "@recircuit/core";
 
 interface SerializedRequestRecord {
+  household?: Record<string, unknown>;
   request: Request;
   items?: Item[];
   plan?: Plan | null;
@@ -59,9 +60,10 @@ export class FileRepository implements IRepository {
     const payload = {
       ...existingData,
       request: record.request,
+      ...(record.household ? { household: record.household } : {}),
       items: record.items,
-      ...(record.plan ? { plan: record.plan } : {}),
-      ...(record.approval ? { approval: record.approval } : {}),
+      ...(record.plan !== undefined ? { plan: record.plan } : {}),
+      ...(record.approval !== undefined ? { approval: record.approval } : {}),
       auditEvents: record.auditEvents,
       updatedAt: record.updatedAt || new Date().toISOString(),
     };
@@ -78,6 +80,7 @@ export class FileRepository implements IRepository {
       const data = JSON.parse(raw) as SerializedRequestRecord;
       const items = data.items || data.intakeResult?.items || [];
       return {
+        ...(data.household ? { household: data.household } : {}),
         request: {
           ...data.request,
           items,
@@ -204,6 +207,9 @@ export class FileRepository implements IRepository {
     for (const line of lines) {
       try {
         const ev = JSON.parse(line) as StatusEvent;
+        // The shared append-only log also contains safe-action attempts and verifier
+        // metadata. Only state-transition events belong in a household timeline.
+        if (typeof ev.newState !== "string" || typeof ev.previousState !== "string" || typeof ev.observedAt !== "string") continue;
         if (filter?.requestId && ev.requestId !== filter.requestId) continue;
         if (filter?.legId && ev.legId !== filter.legId) continue;
         events.push(ev);

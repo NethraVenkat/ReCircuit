@@ -649,6 +649,13 @@ describe("Stage 7: Browser Booking Agent (Booker) Suite", () => {
   // 6. Stage 7 Review Step, Recovery Engine, and Slot/Data-Wipe Guards
   // -------------------------------------------------------------------------
   describe("Stage 7 Review Step & Recovery Engine", () => {
+    it("treats the supported any-time preference as unrestricted", async () => {
+      const customer = { ...sampleCustomer, preferredSlot: "" };
+      const mockSession = createMockSession({ defaultCustomer: customer, slotOptions: ["Morning (10:00–12:00 IST)"] });
+      const plan = { ...samplePlan, slotPreference: { day: "earliest", window: "any" as const } };
+      const result = await Booker.bookLeg({ leg: sampleLeg, plan, approval: { ...sampleApproval, planHash: hashPlan(plan) }, customer, items: [] }, {}, mockSession);
+      expect(result.success).toBe(true);
+    });
     it("fee change on review step throws FeeChangedReapprovalRequiredError and rolls request back to AWAITING_APPROVAL", async () => {
       // QuickScrap plan approved with fee ₹50; portal review step shows ₹90 (e.g. raise_fee switch)
       const mockSession = createMockSession({

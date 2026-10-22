@@ -49,7 +49,7 @@ const inMemoryActionLogs: ActionAttemptLog[] = [];
 export function getActionLogEntries(): ActionAttemptLog[] {
   const logs = [...inMemoryActionLogs];
   try {
-    const logFile = path.resolve(process.cwd(), ".data", "action-log.jsonl");
+    const logFile = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "action-log.jsonl");
     if (fs.existsSync(logFile)) {
       const content = fs.readFileSync(logFile, "utf-8");
       const lines = content.split("\n").filter(Boolean);
@@ -76,7 +76,7 @@ export function getActionLogEntries(): ActionAttemptLog[] {
 export function clearActionLogs(): void {
   inMemoryActionLogs.length = 0;
   try {
-    const logFile = path.resolve(process.cwd(), ".data", "action-log.jsonl");
+    const logFile = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "action-log.jsonl");
     if (fs.existsSync(logFile)) {
       fs.writeFileSync(logFile, "", "utf-8");
     }
@@ -96,7 +96,7 @@ export function getUsedIdempotencyKeysFromStore(): Set<string> {
     }
   }
   try {
-    const logFile = path.resolve(process.cwd(), ".data", "action-log.jsonl");
+    const logFile = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "action-log.jsonl");
     if (fs.existsSync(logFile)) {
       const content = fs.readFileSync(logFile, "utf-8");
       const lines = content.split("\n").filter(Boolean);
@@ -123,7 +123,7 @@ export function getUsedIdempotencyKeysFromStore(): Set<string> {
 function recordActionAttempt(attempt: ActionAttemptLog): void {
   inMemoryActionLogs.push(attempt);
   try {
-    const logDir = path.resolve(process.cwd(), ".data");
+    const logDir = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"));
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true });
     }

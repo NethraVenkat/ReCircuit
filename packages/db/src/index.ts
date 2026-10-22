@@ -16,7 +16,7 @@ export function getRepository(): IRepository {
   if (!defaultRepository) {
     // If DATABASE_URL is explicitly set and not file-based, we can use PgRepository,
     // otherwise fallback to FileRepository for local offline development and file-based scripts.
-    defaultRepository = new FileRepository();
+    defaultRepository = new FileRepository(process.env.RECIRCUIT_DATA_DIR || ".data");
   }
   return defaultRepository;
 }

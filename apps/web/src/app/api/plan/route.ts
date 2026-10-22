@@ -3,117 +3,66 @@ import {
   parseIntake,
   buildEligibilityMatrix,
   generateRoutingPlans,
-  DECCAN_EXTRACTION,
-  PAPERPLUS_EXTRACTION,
-  QUICKSCRAP_EXTRACTION,
+  ExtractedPolicySchema,
   transitionState,
   createDomainRequestFromIntake,
   requestApproval,
   DEFAULT_SLOT_PREFERENCE,
   type ExtractedPolicy,
+  ValidatedIntakeResultSchema,
+  IntakeItemSchema,
+  taxonomyCategoryToItemCategory,
 } from "@recircuit/core";
 import { getRepository } from "@recircuit/db";
+import { openSession, readRecyclerPolicy } from "@recircuit/worker";
+import { z } from "zod";
+import { customerSchema, owner, sameOrigin, failure, owned, locked } from "../../../lib/household";
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as {
-      text?: string;
-      feeCapInr?: number;
-      slotDay?: string;
-      slotWindow?: "morning" | "afternoon" | "any";
-      customer?: {
-        fullName?: string;
-        phone?: string;
-        addressLine?: string;
-        locality?: string;
-        pincode?: string;
-      };
-    };
-
-    const text = body.text?.trim();
-    if (!text) {
-      return NextResponse.json({ error: "Intake text is required" }, { status: 400 });
-    }
-
-    // 1. Stage 3 Intake Parsing
-    const intakeResult = await parseIntake(text);
+    sameOrigin(req);
+    const body = z.object({
+      requestId: z.string().uuid().optional(),
+      expectedHash: z.string().optional(),
+      text: z.string().max(10000).default("Structured household intake"),
+      items: z.array(IntakeItemSchema).min(1).max(20).optional(),
+      feeCapInr: z.number().int().nonnegative().optional(),
+      slotDay: z.string().min(1).max(50).default("earliest"),
+      slotWindow: z.enum(["morning", "afternoon", "any"]).default("any"),
+      customer: customerSchema.optional().default({
+        fullName: "Household Resident",
+        phone: "9876543210",
+        addressLine: "Flat 101, Green Meadows",
+        locality: "Madhapur",
+        pincode: "500081",
+      }),
+    }).parse(await req.json());
+    const text = body.text.trim();
+    const intakeResult = body.items ? ValidatedIntakeResultSchema.parse({
+      requestId: crypto.randomUUID(), state: "ITEMS_PARSED",
+      location: { rawText: body.customer.locality, locality: body.customer.locality, pincode: body.customer.pincode, city: "Hyderabad", confidence: 1 },
+      feeCapInr: body.feeCapInr ?? null, items: body.items, clarifications: [],
+    }) : await parseIntake(text);
+    if (new Set(intakeResult.items.map(i => i.id)).size !== intakeResult.items.length) throw new Error("Item identities must be unique");
+    if (body.requestId) intakeResult.requestId = body.requestId;
     const domainRequest = createDomainRequestFromIntake(intakeResult);
-    if (body.feeCapInr != null && !isNaN(body.feeCapInr)) {
-      domainRequest.feeCapInr = body.feeCapInr;
-    }
+    domainRequest.userId = owner(true)!;
+    domainRequest.description = text;
+    if (body.feeCapInr !== undefined) domainRequest.feeCapInr = body.feeCapInr;
 
     // 2. Recycler Policies
-    const policies: ExtractedPolicy[] = [
-      {
-        ...DECCAN_EXTRACTION,
-        recyclerId: "deccan",
-        companyName: "Deccan E-Cycle Solutions",
-        status: "SUCCESS",
-        feesUnknown: false,
-        evidence: {
-          url: "http://localhost:3101",
-          textHash: "deccan-hash",
-          screenshotPath: ".data/evidence/deccan-policy.png",
-          extractedAt: new Date().toISOString(),
-          sessionId: "local-deccan-web",
-          extractionPath: "generic-ai",
-        },
-        acceptedCategories: ["laptop", "desktop", "mobile_phone", "charger_cable", "battery_household", "small_electronics"],
-        rejectedCategories: ["newspaper", "cardboard", "plastic", "glass"],
-        freeThresholdKg: 5,
-        underWeightFeeInr: 180,
-        minWeightKg: null,
-        requiresDataWipeAck: true,
-        quotes: ["Under 5 kg total weight: ₹180 standard pickup charge"],
-        rates: [],
-      },
-      {
-        ...PAPERPLUS_EXTRACTION,
-        recyclerId: "paperplus",
-        companyName: "PaperPlus Kabadi",
-        status: "SUCCESS",
-        feesUnknown: false,
-        evidence: {
-          url: "http://localhost:3102",
-          textHash: "paperplus-hash",
-          screenshotPath: ".data/evidence/paperplus-policy.png",
-          extractedAt: new Date().toISOString(),
-          sessionId: "local-paperplus-web",
-          extractionPath: "generic-ai",
-        },
-        acceptedCategories: ["newspaper", "cardboard", "plastic", "glass", "textiles"],
-        rejectedCategories: ["laptop", "desktop", "mobile_phone", "battery_household", "charger_cable"],
-        freeThresholdKg: null,
-        underWeightFeeInr: 0,
-        minWeightKg: null,
-        requiresDataWipeAck: false,
-        quotes: ["Free doorstep collection for dry recyclables across Hyderabad"],
-        rates: [],
-      },
-      {
-        ...QUICKSCRAP_EXTRACTION,
-        recyclerId: "quickscrap",
-        companyName: "QuickScrap Hyd",
-        status: "SUCCESS",
-        feesUnknown: true,
-        evidence: {
-          url: "http://localhost:3103",
-          textHash: "quickscrap-hash",
-          screenshotPath: ".data/evidence/quickscrap-policy.png",
-          extractedAt: new Date().toISOString(),
-          sessionId: "local-quickscrap-web",
-          extractionPath: "generic-ai",
-        },
-        acceptedCategories: ["small_electronics", "desktop", "newspaper", "cardboard"],
-        rejectedCategories: ["battery_household"],
-        freeThresholdKg: null,
-        underWeightFeeInr: 0,
-        minWeightKg: 10,
-        requiresDataWipeAck: false,
-        quotes: ["10 kg minimum consignment weight strictly enforced"],
-        rates: [],
-      },
+    if (body.requestId) await owned(body.requestId);
+    const sources = [
+      { id: "deccan", name: "Deccan E-Cycle Solutions", url: "http://localhost:3101" },
+      { id: "paperplus", name: "PaperPlus Kabadi", url: "http://localhost:3102" },
+      { id: "quickscrap", name: "QuickScrap Hyd", url: "http://localhost:3103" },
     ];
+    const policies: ExtractedPolicy[] = await Promise.all(sources.map(async source => {
+      const session = await openSession({ mode: "local", recyclerId: source.id, headless: true });
+      try { return { ...await readRecyclerPolicy(source.id, session, source.url), companyName: source.name }; }
+      catch { return ExtractedPolicySchema.parse({ recyclerId: source.id, companyName: source.name, status: "FAILED", feesUnknown: true, failureReason: "Policy source unavailable", evidence: { url: source.url, textHash: "", screenshotPath: "", extractedAt: new Date().toISOString(), sessionId: session.sessionId, extractionPath: "generic-ai" } }); }
+      finally { await session.close(); }
+    }));
 
     // 3. State Transitions: advance pipeline to POLICIES_READ then ELIGIBILITY_CHECKED
     const reqWithPolicies = { ...domainRequest, state: "POLICIES_READ" as const };
@@ -127,11 +76,13 @@ export async function POST(req: Request) {
       requestId: step1.id,
       items: intakeResult.items,
       policies,
+      requestPincode: body.customer.pincode,
     });
     const routing = generateRoutingPlans({
       request: {
         id: step1.id,
         feeCapInr: domainRequest.feeCapInr,
+        pincode: body.customer.pincode,
       },
       items: intakeResult.items,
       policies,
@@ -189,23 +140,36 @@ export async function POST(req: Request) {
 
     // 5. Persist to repository
     const repo = getRepository();
+    const save = async () => {
+    if (body.requestId) {
+      const previous = await owned(body.requestId);
+      if (previous.plan?.planHash !== body.expectedHash) throw new Error("STALE: Plan changed. Reload before editing.");
+      if (previous.plan?.legs.some(l => !["APPROVED", "REJECTED"].includes(l.state))) throw new Error("Booking has started; items cannot be edited safely.");
+    }
     await repo.saveRequest({
       request: awaitingReq,
       items: intakeResult.items.map((i) => ({
         id: i.id,
         requestId: awaitingReq.id,
         description: i.rawText,
-        category: (i.category.toUpperCase() as any),
+        category: taxonomyCategoryToItemCategory(i.category),
         quantity: i.quantity,
-        estimatedWeightKg: i.declaredWeightKg ?? i.estimatedWeightKg ?? 1.0,
-        confidence: 0.95,
-        hazardClass: (i.hazardClass.toUpperCase() as any),
+        estimatedWeightKg: i.declaredWeightKg ?? i.estimatedWeightKg ?? 0,
+        confidence: i.confidence,
+        hazardClass: (i.hazardClass.startsWith("battery") ? "BATTERY" : "NON_HAZARDOUS") as "BATTERY" | "NON_HAZARDOUS",
         createdAt: new Date().toISOString(),
       })),
       plan: readyPlan,
+      approval: null,
+      household: { customer: body.customer, intakeResult, matrix, approvalCard, choices: routing.scoredPlans.slice(0,5),
+        policyMode: "live", policies: policies.map(p => ({ name: p.companyName, url: p.evidence.url, quotes: p.quotes, status: p.status, retrievedAt: p.evidence.extractedAt, extractionPath: p.evidence.extractionPath })),
+      },
       auditEvents: [],
       updatedAt: new Date().toISOString(),
     });
+
+    };
+    if (body.requestId) await locked(body.requestId, save); else await save();
 
     return NextResponse.json({
       requestId: awaitingReq.id,
@@ -215,9 +179,10 @@ export async function POST(req: Request) {
       matrix,
       scoredPlans: routing.scoredPlans,
       intakeResult,
+      policyMode: "live",
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const f = failure(err);
+    return NextResponse.json(f.body, { status: f.status });
   }
 }

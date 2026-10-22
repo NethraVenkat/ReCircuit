@@ -465,7 +465,7 @@ export class Booker {
 
       const desiredSlotPref = (
         customer.preferredSlot ||
-        planSlotWindow ||
+        (planSlotWindow === "any" ? "" : planSlotWindow) ||
         ""
       ).toLowerCase().trim();
 

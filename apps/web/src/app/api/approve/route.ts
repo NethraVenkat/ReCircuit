@@ -1,91 +1,49 @@
 import { NextResponse } from "next/server";
-import { recordDecision, hashPlan } from "@recircuit/core";
+import { recordDecision, hashPlan, type DecisionRecord } from "@recircuit/core";
 import { getRepository } from "@recircuit/db";
+import { z } from "zod";
+import { owned, locked, failure, sameOrigin } from "../../../lib/household";
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as {
-      requestId?: string;
-      planHash?: string;
-      decision?: "approve" | "approved" | "reject" | "rejected";
-      reason?: string;
-      slotPreference?: { day: string; window: "morning" | "afternoon" | "any" };
-      dataWipeConfirmed?: boolean;
-    };
-
-    if (!body.requestId) {
-      return NextResponse.json({ error: "requestId is required" }, { status: 400 });
-    }
-
-    const repo = getRepository();
-    const stored = await repo.getRequest(body.requestId);
-    if (!stored || !stored.plan) {
-      return NextResponse.json({ error: "Request or plan not found" }, { status: 404 });
-    }
-
-    if (body.decision === "reject" || body.decision === "rejected") {
+    sameOrigin(req);
+    const body = z.object({
+      requestId: z.string().uuid(),
+      planHash: z.string(),
+      decision: z.enum(["approve", "approved", "reject", "rejected"]),
+      dataWipeConfirmed: z.boolean().optional(),
+      reason: z.string().max(500).optional(),
+    }).parse(await req.json());
+    return await locked(body.requestId, async () => {
+      const stored = await owned(body.requestId);
+      if (!stored.plan) throw new Error("No plan available");
+      if (body.planHash !== hashPlan(stored.plan)) {
+        throw new Error("Stale approval rejected: plan has changed. Reload and review it again.");
+      }
+      const decision = body.decision.startsWith("approve") ? "approved" : "rejected";
+      if (stored.request.state === "APPROVED" && decision === "approved") {
+        return NextResponse.json({ success: true, request: stored.request, plan: stored.plan });
+      }
       const result = recordDecision({
         request: stored.request,
         plan: stored.plan,
-        decision: "rejected",
-        decidedBy: "household-user",
-        reason: body.reason || "Rejected by user",
+        decision,
+        decidedBy: stored.request.userId,
+        dataWipeConfirmedByUser: body.dataWipeConfirmed,
+        reason: body.reason,
+        priorDecision: stored.approval as DecisionRecord | null,
       });
-
-      await repo.saveRequest({
+      await getRepository().saveRequest({
         ...stored,
         request: result.request,
-        approval: result.decisionRecord as any,
+        plan: result.plan,
+        approval: result.decisionRecord,
         updatedAt: new Date().toISOString(),
       });
-
-      return NextResponse.json({
-        success: true,
-        decision: "rejected",
-        request: result.request,
-        plan: result.plan,
-      });
-    }
-
-    // Default: Approve
-    if (!body.planHash) {
-      return NextResponse.json({ error: "planHash is required for approval" }, { status: 400 });
-    }
-
-    // Guard against stale approvals
-    const currentHash = hashPlan(stored.plan);
-    if (body.planHash !== currentHash && body.planHash !== stored.plan.planHash) {
-      return NextResponse.json(
-        { error: `Stale approval rejected: plan has changed. Expected hash ${stored.plan.planHash}, got ${body.planHash}` },
-        { status: 400 }
-      );
-    }
-
-    const approvalResult = recordDecision({
-      request: stored.request,
-      plan: stored.plan,
-      decision: "approved",
-      decidedBy: "household-user",
-      dataWipeConfirmedByUser: body.dataWipeConfirmed,
-    });
-
-    await repo.saveRequest({
-      ...stored,
-      request: approvalResult.request,
-      plan: approvalResult.plan,
-      approval: approvalResult.decisionRecord as any,
-      updatedAt: new Date().toISOString(),
-    });
-
-    return NextResponse.json({
-      success: true,
-      decision: "approved",
-      request: approvalResult.request,
-      plan: approvalResult.plan,
-      legs: approvalResult.legs,
+      return NextResponse.json({ success: true, decision, request: result.request, plan: result.plan });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 400 });
+    const f = failure(err);
+    return NextResponse.json(f.body, { status: f.status });
   }
 }

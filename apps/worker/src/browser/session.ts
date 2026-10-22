@@ -99,7 +99,7 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
   const page = await context.newPage();
   await guardPortalApi(page);
 
-  const evidenceDir = path.resolve(process.cwd(), ".data", "evidence");
+  const evidenceDir = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "evidence");
   if (!fs.existsSync(evidenceDir)) {
     fs.mkdirSync(evidenceDir, { recursive: true });
   }

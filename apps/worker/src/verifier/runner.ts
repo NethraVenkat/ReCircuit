@@ -16,13 +16,13 @@ export class VerificationRunner {
 
     // Persist verification proof to disk
     try {
-      const dataDir = path.resolve(process.cwd(), ".data", "verifications");
+      const dataDir = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "verifications");
       fs.mkdirSync(dataDir, { recursive: true });
       const filename = path.join(dataDir, `${result.bookingReference}.json`);
       fs.writeFileSync(filename, JSON.stringify(result, null, 2), "utf-8");
 
       // Append verification event to action log
-      const actionLogPath = path.resolve(process.cwd(), ".data", "action-log.jsonl");
+      const actionLogPath = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "action-log.jsonl");
       const logEntry = {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
