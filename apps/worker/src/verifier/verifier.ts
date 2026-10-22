@@ -1,6 +1,6 @@
 import type { TrackingLookupEvidence } from "@recircuit/core";
 import { transitionState, isCollected } from "@recircuit/core";
-import { openSession } from "../browser/session.js";
+import { openSession, type BrowserSession } from "../browser/session.js";
 import { getPortalTrackingUrl, isValidBookingReference } from "../booking/selectors.js";
 import { isWeightEquivalent } from "../booking/booker.js";
 import { getCanonicalItemLabel } from "@recircuit/core";
@@ -20,7 +20,8 @@ export class Verifier {
    */
   public static async verifyLeg(
     context: LegVerificationContext,
-    options: VerifierOptions = {}
+    options: VerifierOptions = {},
+    existingSession?: BrowserSession
   ): Promise<VerifierResult> {
     const { leg } = context;
     const recyclerId = leg.recyclerId;
@@ -41,11 +42,13 @@ export class Verifier {
     }
 
     // 1. Open an INDEPENDENT, distinct browser session
-    const session = await openSession({
-      mode: (process.env.BROWSER_MODE as "local" | "browserbase") || "local",
-      headless: options.headless !== false,
-      recyclerId,
-    });
+    const session =
+      existingSession ||
+      (await openSession({
+        mode: (process.env.BROWSER_MODE as "local" | "browserbase") || "local",
+        headless: options.headless !== false,
+        recyclerId,
+      }));
 
     const submittingSessionId = leg.submittingSessionId || "";
     const verifyingSessionId = session.sessionId;
