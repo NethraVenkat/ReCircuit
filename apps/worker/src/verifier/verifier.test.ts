@@ -192,7 +192,7 @@ describe("Stage 8: Independent Verifier Unit Tests", () => {
 
     vi.mocked(openSession).mockResolvedValueOnce(mockSession as unknown as BrowserSession);
 
-    const testLeg = { ...mockLeg };
+    const testLeg = { ...mockLeg, items: [] };
     const context: LegVerificationContext = {
       leg: testLeg,
       plan: mockPlan,
@@ -277,7 +277,22 @@ describe("Stage 8: Independent Verifier Unit Tests", () => {
         if (selector === '[data-testid="tracking-status"]') return { textContent: vi.fn().mockResolvedValue("RECEIVED") };
         if (selector === '[data-testid="tracking-fee"]') return { textContent: vi.fn().mockResolvedValue("Pickup fee: ₹180") };
         if (selector === '[data-testid="simulated-event-badge"]') return { count: vi.fn().mockResolvedValue(0) };
-        if (selector === '[data-testid="tracking-item-row"]') return { count: vi.fn().mockResolvedValue(0) };
+        if (selector === '[data-testid="tracking-item-row"]') {
+          return {
+            count: vi.fn().mockResolvedValue(1),
+            nth: vi.fn().mockReturnValue({
+              locator: vi.fn().mockImplementation((subSel: string) => {
+                if (subSel === '[data-testid="tracking-item-name"]') {
+                  return { textContent: vi.fn().mockResolvedValue("Dell Laptop") };
+                }
+                if (subSel === '[data-testid="tracking-item-details"]') {
+                  return { textContent: vi.fn().mockResolvedValue("Qty: 1 · Weight: 2.2 kg") };
+                }
+                return { textContent: vi.fn().mockResolvedValue("") };
+              }),
+            }),
+          };
+        }
         return { isVisible: vi.fn().mockResolvedValue(false), count: vi.fn().mockResolvedValue(0) };
       }),
     };

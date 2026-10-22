@@ -2,6 +2,8 @@ import type { TrackingLookupEvidence } from "@recircuit/core";
 import { transitionState, isCollected } from "@recircuit/core";
 import { openSession } from "../browser/session.js";
 import { getPortalTrackingUrl, isValidBookingReference } from "../booking/selectors.js";
+import { isWeightEquivalent } from "../booking/booker.js";
+import { getCanonicalItemLabel } from "@recircuit/core";
 import type { LegVerificationContext, VerifierOptions, VerifierResult, ObservedConsignmentItem } from "./types.js";
 
 export class VerifierError extends Error {
@@ -130,6 +132,95 @@ export class Verifier {
           quantity: qtyMatch ? parseInt(qtyMatch[1]!, 10) : undefined,
           weightKg: wtMatch ? parseFloat(wtMatch[1]!) : undefined,
         });
+      }
+
+      // Strict Item Fidelity Check: verify quantity, weight, and identity match approved plan leg
+      const expectedLegItems = leg.items || [];
+      if (expectedLegItems.length > 0) {
+        // If tracking page has no item rows rendered, return incomplete/uncertain verification
+        if (observedItems.length === 0) {
+          const ss = await session.captureScreenshot("verification-incomplete");
+          return {
+            verified: false,
+            isUncertain: true,
+            verificationQuality: "INCOMPLETE_FIELDS",
+            errorCode: "TRACKING_FIELDS_INCOMPLETE",
+            error: "Tracking page is missing consignment item rows",
+            bookingReference: observedRef,
+            observedStatus,
+            verifyingSessionId,
+            submittingSessionId,
+            screenshotRef: ss.filename,
+            trackingUrl,
+            observedItems,
+            observedFeeText,
+            isSimulatedDownstream,
+          };
+        }
+
+        if (observedItems.length !== expectedLegItems.length) {
+          throw new VerifierError(
+            `Item count mismatch: expected ${expectedLegItems.length} item(s), but tracking page displays ${observedItems.length} item(s).`,
+            "ITEM_COUNT_MISMATCH"
+          );
+        }
+
+        for (let i = 0; i < expectedLegItems.length; i++) {
+          const exp = expectedLegItems[i]!;
+          const obs = observedItems[i]!;
+
+          // Check if expected tracking fields are missing on the tracking page item row
+          const expWeight = exp.estimatedWeightKg ?? ((exp as unknown as Record<string, unknown>).weightKg as number | undefined);
+          if ((exp.quantity !== undefined && obs.quantity === undefined) || (expWeight !== undefined && obs.weightKg === undefined)) {
+            const ss = await session.captureScreenshot("verification-incomplete");
+            return {
+              verified: false,
+              isUncertain: true,
+              verificationQuality: "INCOMPLETE_FIELDS",
+              errorCode: "TRACKING_FIELDS_INCOMPLETE",
+              error: `Tracking page item ${i + 1} is missing required fields (quantity or weight)`,
+              bookingReference: observedRef,
+              observedStatus,
+              verifyingSessionId,
+              submittingSessionId,
+              screenshotRef: ss.filename,
+              trackingUrl,
+              observedItems,
+              observedFeeText,
+              isSimulatedDownstream,
+            };
+          }
+
+          // Identity check
+          const expCanon = getCanonicalItemLabel(exp.name || exp.description || (exp.category ? String(exp.category) : "") || "");
+          const obsCanon = getCanonicalItemLabel(obs.name);
+          if (expCanon && obsCanon && expCanon.toLowerCase() !== obsCanon.toLowerCase()) {
+            throw new VerifierError(
+              `Item identity mismatch for item ${i + 1}: expected "${expCanon}", but tracking page displays "${obsCanon}".`,
+              "ITEM_IDENTITY_MISMATCH"
+            );
+          }
+
+          // Quantity check
+          if (exp.quantity !== undefined && obs.quantity !== undefined) {
+            if (obs.quantity !== exp.quantity) {
+              throw new VerifierError(
+                `Item quantity mismatch for item ${i + 1} (${exp.name || exp.id}): expected ${exp.quantity}, but tracking page displays ${obs.quantity}.`,
+                "ITEM_QUANTITY_MISMATCH"
+              );
+            }
+          }
+
+          // Weight check (using isWeightEquivalent with threshold guard)
+          if (typeof expWeight === "number" && typeof obs.weightKg === "number") {
+            if (!isWeightEquivalent(obs.weightKg, expWeight, recyclerId)) {
+              throw new VerifierError(
+                `Item weight mismatch for item ${i + 1} (${exp.name || exp.id}): expected ${expWeight} kg, but tracking page displays ${obs.weightKg} kg.`,
+                "ITEM_WEIGHT_MISMATCH"
+              );
+            }
+          }
+        }
       }
 
       // 6. Capture verification screenshot evidence

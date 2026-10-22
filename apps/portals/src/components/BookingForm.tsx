@@ -9,6 +9,13 @@ interface BookingFormProps {
   recyclerId: RecyclerId;
 }
 
+function getApiPrefix(recyclerId: RecyclerId): string {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/portal/")) {
+    return `/portal/${recyclerId}`;
+  }
+  return "";
+}
+
 export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const router = useRouter();
   const config = RECYCLER_CONFIGS[recyclerId];
@@ -55,7 +62,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const slots = getAvailableSlots();
 
   useEffect(() => {
-    fetch(`/portal/${recyclerId}/api/fee?weight=${totalWeight}`, {
+    const apiPrefix = getApiPrefix(recyclerId);
+    fetch(`${apiPrefix}/api/fee?weight=${totalWeight}`, {
       headers: { "x-recycler-id": recyclerId },
     })
       .then((res) => res.json())
@@ -81,7 +89,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
     // Initialize CAPTCHA for PaperPlus
     if (recyclerId === "paperplus") {
-      fetch(`/portal/${recyclerId}/api/captcha`, {
+      const apiPrefix = getApiPrefix(recyclerId);
+      fetch(`${apiPrefix}/api/captcha`, {
         headers: { "x-recycler-id": recyclerId },
       })
         .then((res) => res.json())
@@ -93,7 +102,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   }, [recyclerId]);
 
   const refreshCaptcha = (): void => {
-    fetch(`/portal/${recyclerId}/api/captcha`, {
+    const apiPrefix = getApiPrefix(recyclerId);
+    fetch(`${apiPrefix}/api/captcha`, {
       headers: { "x-recycler-id": recyclerId },
     })
       .then((res) => res.json())
@@ -154,7 +164,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
     };
 
     try {
-      const res = await fetch(`/portal/${recyclerId}/api/bookings`, {
+      const apiPrefix = getApiPrefix(recyclerId);
+      const res = await fetch(`${apiPrefix}/api/bookings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -183,8 +194,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
       // Successful booking -> navigate to confirmation page
       const ref = data.omitReference ? "" : data.booking?.bookingReference || "";
-      const isPrefixed = typeof window !== "undefined" && window.location.pathname.startsWith("/portal/");
-      const pathPrefix = isPrefixed ? `/portal/${recyclerId}` : "";
+
+      const pathPrefix = apiPrefix;
       const confirmPath = `${pathPrefix}${config.routes.confirmation}?ref=${encodeURIComponent(ref)}${
         data.isDuplicate ? "&dup=true" : ""
       }`;
@@ -472,7 +483,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
                 {/* Image has no code text in the DOM or source! */}
                 <img
                   key={captchaKey}
-                  src={`/api/captcha?sid=${captchaSessionId}&t=${captchaKey}`}
+                  src={`${getApiPrefix(recyclerId)}/api/captcha?sid=${captchaSessionId}&t=${captchaKey}`}
                   alt="Security verification code"
                   data-testid="captcha-image"
                   className="h-16 w-52 object-contain"

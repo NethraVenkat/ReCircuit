@@ -25,6 +25,8 @@ export interface VerifierResult {
   observedFeeText?: string | undefined;
   pickupOtp?: string | undefined;
   isSimulatedDownstream?: boolean | undefined;
+  isUncertain?: boolean | undefined;
+  verificationQuality?: "COMPLETE" | "INCOMPLETE_FIELDS" | "UNCERTAIN" | undefined;
   error?: string | undefined;
   errorCode?: string | undefined;
   auditEvent?: StatusEvent | undefined;

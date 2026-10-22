@@ -37,6 +37,7 @@ import {
 import type {
   BookerOptions,
   BookerResult,
+  BookingItemInput,
   BrowserActionLog,
   LegBookingContext,
 } from "./types.js";
@@ -71,6 +72,23 @@ async function waitForEnter(timeoutMs = 300000): Promise<void> {
       resolve();
     });
   });
+}
+
+/**
+ * Compares two weights with a 0.01 kg tolerance for floating-point/display precision,
+ * while strictly guarding fee-tier and minimum-weight threshold boundaries.
+ */
+export function isWeightEquivalent(w1: number, w2: number, recyclerId?: string): boolean {
+  if (!Number.isFinite(w1) || !Number.isFinite(w2)) return false;
+  if (Math.abs(w1 - w2) > 0.01) return false;
+  // Threshold boundary guard: ensure 0.01 kg tolerance cannot cross fee brackets or minimums
+  // For Deccan and PaperPlus, < 5.0 kg vs >= 5.0 kg represent distinct pricing/acceptance tiers.
+  if (recyclerId === "deccan" || recyclerId === "paperplus") {
+    const isUnder5_1 = w1 < 5.0;
+    const isUnder5_2 = w2 < 5.0;
+    if (isUnder5_1 !== isUnder5_2) return false;
+  }
+  return true;
 }
 
 export class Booker {
@@ -155,6 +173,104 @@ export class Booker {
           idempotencyKey,
         }
       );
+    }
+
+    // 1b. Item Equivalence Pre-Check: context.items cannot override approved leg.items
+    if (leg.items && leg.items.length > 0 && context.items && context.items.length > 0) {
+      if (context.items.length !== leg.items.length) {
+        throw new SafeActionBlockedError(
+          `Action "submit_booking" blocked: context.items count (${context.items.length}) does not match approved leg.items count (${leg.items.length})`,
+          "CONTEXT_ITEMS_OVERRIDE_DISALLOWED",
+          {
+            id: idempotencyKey,
+            timestamp: new Date().toISOString(),
+            requestId: plan.requestId,
+            legId: leg.id,
+            recyclerId: leg.recyclerId,
+            planHash: currentPlanHash,
+            action: "submit_booking",
+            allowed: false,
+            blockReason: "context.items count does not match approved leg.items count",
+            approvedFeeInr: leg.estimatedFee,
+            observedFeeInr: leg.estimatedFee,
+            idempotencyKey,
+          }
+        );
+      }
+
+      for (let i = 0; i < leg.items.length; i++) {
+        const legItem = leg.items[i]!;
+        const ctxItem = context.items[i]!;
+        const legCanon = getCanonicalItemLabel(legItem.name || legItem.description || (legItem.category ? String(legItem.category) : "") || "Recyclable Item");
+        const ctxCanon = getCanonicalItemLabel(ctxItem.name || ctxItem.description || (ctxItem.category ? String(ctxItem.category) : "") || "Recyclable Item");
+
+        if (legCanon.toLowerCase() !== ctxCanon.toLowerCase()) {
+          throw new SafeActionBlockedError(
+            `Action "submit_booking" blocked: item identity mismatch for item ${i + 1} (context: "${ctxCanon}", approved: "${legCanon}")`,
+            "CONTEXT_ITEMS_OVERRIDE_DISALLOWED",
+            {
+              id: idempotencyKey,
+              timestamp: new Date().toISOString(),
+              requestId: plan.requestId,
+              legId: leg.id,
+              recyclerId: leg.recyclerId,
+              planHash: currentPlanHash,
+              action: "submit_booking",
+              allowed: false,
+              blockReason: `context.items[${i}] identity mismatch: "${ctxCanon}" vs approved "${legCanon}"`,
+              approvedFeeInr: leg.estimatedFee,
+              observedFeeInr: leg.estimatedFee,
+              idempotencyKey,
+            }
+          );
+        }
+
+        if (legItem.quantity !== undefined && ctxItem.quantity !== undefined && legItem.quantity !== ctxItem.quantity) {
+          throw new SafeActionBlockedError(
+            `Action "submit_booking" blocked: item quantity mismatch for item ${i + 1} (context: ${ctxItem.quantity}, approved: ${legItem.quantity})`,
+            "CONTEXT_ITEMS_OVERRIDE_DISALLOWED",
+            {
+              id: idempotencyKey,
+              timestamp: new Date().toISOString(),
+              requestId: plan.requestId,
+              legId: leg.id,
+              recyclerId: leg.recyclerId,
+              planHash: currentPlanHash,
+              action: "submit_booking",
+              allowed: false,
+              blockReason: `context.items[${i}] quantity mismatch: ${ctxItem.quantity} vs approved ${legItem.quantity}`,
+              approvedFeeInr: leg.estimatedFee,
+              observedFeeInr: leg.estimatedFee,
+              idempotencyKey,
+            }
+          );
+        }
+
+        const legWt = legItem.estimatedWeightKg ?? ((legItem as unknown as Record<string, unknown>).weightKg as number | undefined);
+        const ctxWt = ctxItem.weightKg ?? ctxItem.estimatedWeightKg;
+        if (typeof legWt === "number" && typeof ctxWt === "number") {
+          if (!isWeightEquivalent(ctxWt, legWt, recyclerId)) {
+            throw new SafeActionBlockedError(
+              `Action "submit_booking" blocked: item weight mismatch for item ${i + 1} (context: ${ctxWt} kg, approved: ${legWt} kg)`,
+              "CONTEXT_ITEMS_OVERRIDE_DISALLOWED",
+              {
+                id: idempotencyKey,
+                timestamp: new Date().toISOString(),
+                requestId: plan.requestId,
+                legId: leg.id,
+                recyclerId: leg.recyclerId,
+                planHash: currentPlanHash,
+                action: "submit_booking",
+                allowed: false,
+                blockReason: `context.items[${i}] weight mismatch: ${ctxWt} kg vs approved ${legWt} kg`,
+                approvedFeeInr: leg.estimatedFee,
+                observedFeeInr: leg.estimatedFee,
+                idempotencyKey,
+              }
+            );
+          }
+        }
+      }
     }
 
     // Check data-wipe requirement for data-bearing electronic items
@@ -464,8 +580,15 @@ export class Booker {
         await page.locator(PORTAL_SELECTORS.itemRow).first().waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
       }
 
-      if (context.items && context.items.length > 0) {
-        for (const item of context.items) {
+      const resolvedItems: BookingItemInput[] =
+        context.items !== undefined
+          ? context.items
+          : leg.items && leg.items.length > 0
+            ? leg.items
+            : [];
+
+      if (resolvedItems.length > 0) {
+        for (const item of resolvedItems) {
           if ((await nameInput.count()) && (await addBtn.count())) {
             const canonicalName = getCanonicalItemLabel(item.name || item.description || item.category || "Recyclable Item");
             await nameInput.fill(canonicalName);
@@ -485,10 +608,10 @@ export class Booker {
       }
 
       // Observable verification: item count must match expected items
-      if (context.items && context.items.length > 0) {
+      if (resolvedItems.length > 0) {
         const renderedCount = await page.locator(PORTAL_SELECTORS.itemRow).count();
-        if (renderedCount !== context.items.length) {
-          throw new DomReadbackMismatchError("items.count", String(context.items.length), String(renderedCount));
+        if (renderedCount !== resolvedItems.length) {
+          throw new DomReadbackMismatchError("items.count", String(resolvedItems.length), String(renderedCount));
         }
       }
 
@@ -567,7 +690,12 @@ export class Booker {
 
       // Verify full item list
       const renderedItemRows = await page.locator(PORTAL_SELECTORS.itemRow).all();
-      const expectedItems = context.items || [];
+      const expectedItems =
+        context.items !== undefined
+          ? context.items
+          : leg.items && leg.items.length > 0
+            ? leg.items
+            : [];
       if (renderedItemRows.length !== expectedItems.length) {
         throw new DomReadbackMismatchError(
           "items.count",
@@ -596,11 +724,11 @@ export class Booker {
           }
         }
 
-        const expWeight = expItem.weightKg ?? expItem.estimatedWeightKg;
-        if (expWeight !== undefined && expWeight > 0) {
+        const expWeight = ((expItem as unknown as Record<string, unknown>).weightKg as number | undefined) ?? expItem.estimatedWeightKg;
+        if (typeof expWeight === "number" && expWeight > 0) {
           const wtMatch = rowWeightText.match(/[\d.]+/);
           const obsWt = wtMatch ? parseFloat(wtMatch[0]) : undefined;
-          if (obsWt !== expWeight) {
+          if (obsWt === undefined || !isWeightEquivalent(obsWt, expWeight, recyclerId)) {
             throw new DomReadbackMismatchError(`items[${idx}].weightKg`, String(expWeight), String(obsWt));
           }
         }
@@ -761,10 +889,11 @@ export class Booker {
       const errorBanner = page.locator(PORTAL_SELECTORS.formErrorBanner);
       const missingRefEl = page.locator(PORTAL_SELECTORS.bookingReferenceMissing);
 
+      const confirmWaitTimeout = options.timeoutMs ?? 25000;
       await Promise.race([
-        refEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
-        errorBanner.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
-        missingRefEl.waitFor({ state: "visible", timeout: 8000 }).catch(() => {}),
+        refEl.waitFor({ state: "visible", timeout: confirmWaitTimeout }).catch(() => {}),
+        errorBanner.waitFor({ state: "visible", timeout: confirmWaitTimeout }).catch(() => {}),
+        missingRefEl.waitFor({ state: "visible", timeout: confirmWaitTimeout }).catch(() => {}),
       ]);
 
       const isErrorVisible = await errorBanner.isVisible().catch(() => false);

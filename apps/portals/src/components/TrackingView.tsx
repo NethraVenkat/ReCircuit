@@ -31,7 +31,8 @@ export function TrackingView({
       if (ref.trim().toUpperCase().startsWith("DEC-")) effectiveTenant = "deccan";
       else if (ref.trim().toUpperCase().startsWith("PPK-")) effectiveTenant = "paperplus";
       else if (ref.trim().toUpperCase().startsWith("QSH-")) effectiveTenant = "quickscrap";
-      const apiPrefix = `/portal/${effectiveTenant}`;
+      const isPrefixed = typeof window !== "undefined" && window.location.pathname.startsWith("/portal/");
+      const apiPrefix = isPrefixed ? `/portal/${effectiveTenant}` : "";
       const url = ref.trim()
         ? `${apiPrefix}/api/bookings?ref=${encodeURIComponent(ref.trim())}`
         : `${apiPrefix}/api/bookings?client=${encodeURIComponent(clientId.trim())}`;
