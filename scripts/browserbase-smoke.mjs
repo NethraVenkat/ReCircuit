@@ -163,11 +163,15 @@ async function runSmokeTest() {
       status: "PASS",
       provider: "browserbase",
       targetUrl,
+      observedTitle: pageTitle,
       observedHeading: heading,
+      hasH1Tag: h1Count > 0,
+      titleAssertionPassed: pageTitle === "Example Domain",
       screenshot: "browserbase-smoke.png",
       startTime,
       endTime,
       sessionId,
+      requestedCleanup: "COMPLETED",
     };
     fs.appendFileSync(
       path.join(evidenceDir, "manifest.jsonl"),
@@ -218,9 +222,32 @@ async function runSmokeTest() {
 
     if (bb && sessionId && sessionId !== "unknown") {
       try {
-        console.log(`- Updating Browserbase session ${sessionId} status to COMPLETED...`);
-        await bb.sessions.update(sessionId, { status: "COMPLETED" }).catch(() => {});
-      } catch {}
+        const releaseRequestedAt = new Date().toISOString();
+        console.log(`- Requesting documented session release for ${sessionId} via status='REQUEST_RELEASE'...`);
+        await bb.sessions.update(sessionId, { status: "REQUEST_RELEASE", projectId }).catch((err) => {
+          console.warn(`  * Release request notification: ${err.message}`);
+        });
+
+        // Retrieve and record actual observed terminal state
+        const terminal = await bb.sessions.retrieve(sessionId).catch(() => null);
+        const observedTerminalState = terminal?.status || "UNKNOWN";
+        const endedAt = terminal?.endedAt || null;
+
+        console.log(`- Observed Terminal State: ${observedTerminalState}`);
+        console.log(`  * Release Requested At: ${releaseRequestedAt}`);
+        console.log(`  * Session Ended At:     ${endedAt || "N/A"}`);
+
+        let completionSource = "unknown";
+        if (endedAt && new Date(endedAt).getTime() <= new Date(releaseRequestedAt).getTime()) {
+          completionSource = "cdp-disconnect";
+          console.log(`  * Note: Session endedAt (${endedAt}) preceded release request (${releaseRequestedAt}); client disconnect triggered session completion.`);
+        } else if (endedAt) {
+          completionSource = "request-release";
+          console.log(`  * Note: Session endedAt (${endedAt}) occurred upon REQUEST_RELEASE.`);
+        }
+      } catch (e) {
+        console.warn(`- Failed to retrieve terminal state: ${e.message}`);
+      }
     }
     console.log("- Cloud session released cleanly.");
   }

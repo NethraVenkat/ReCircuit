@@ -3,9 +3,14 @@
 /**
  * scripts/start-portals.cjs
  * Cross-platform launcher that concurrently starts the 3 mock recycler portals:
- * - Deccan E-Cycle: http://localhost:3101
- * - PaperPlus Kabadi: http://localhost:3102
- * - QuickScrap Hyd: http://localhost:3103
+ * - Deccan E-Cycle:   http://127.0.0.1:3101 (RECYCLER_ID=deccan)
+ * - PaperPlus Kabadi: http://127.0.0.1:3102 (RECYCLER_ID=paperplus)
+ * - QuickScrap Hyd:   http://127.0.0.1:3103 (RECYCLER_ID=quickscrap)
+ *
+ * Guarantees:
+ * - Passes consistent resolved STORAGE_DIR to all portal processes.
+ * - Records child PIDs in STORAGE_DIR/portal-processes.json for safe process teardown.
+ * - Never deletes synthetic storage or evidence.
  */
 
 const { spawn } = require("child_process");
@@ -15,7 +20,7 @@ const fs = require("fs");
 function loadEnvLocal() {
   const envLocalPath = path.resolve(__dirname, "..", ".env.local");
   if (fs.existsSync(envLocalPath)) {
-    const lines = fs.readFileSync(envLocalPath, "utf-8").split("\n");
+    const lines = fs.readFileSync(envLocalPath, "utf-8").split(/\r?\n/);
     for (const rawLine of lines) {
       const line = rawLine.trim();
       if (!line || line.startsWith("#")) continue;
@@ -40,6 +45,15 @@ const portalsDir = path.resolve(__dirname, "..", "apps", "portals");
 const isWin = process.platform === "win32";
 const npmCmd = isWin ? "npm.cmd" : "npm";
 
+// Ensure storage directory is resolved consistently to an absolute path
+const storageDir = process.env.STORAGE_DIR
+  ? path.resolve(process.env.STORAGE_DIR)
+  : path.resolve(__dirname, "..", ".data");
+
+if (!fs.existsSync(storageDir)) {
+  fs.mkdirSync(storageDir, { recursive: true });
+}
+
 const PORTALS = [
   { id: "deccan", name: "Deccan E-Cycle", port: 3101, color: "\x1b[32m" },
   { id: "paperplus", name: "PaperPlus Kabadi", port: 3102, color: "\x1b[33m" },
@@ -48,14 +62,19 @@ const PORTALS = [
 
 const RESET = "\x1b[0m";
 const children = [];
+const processRecords = [];
 
-console.log("🚀 Starting ReCircuit Mock Recycler Portals...\n");
+console.log("==================================================================");
+console.log("🚀 Starting ReCircuit Mock Recycler Portals...");
+console.log(`- Resolved STORAGE_DIR: ${storageDir}`);
+console.log("==================================================================\n");
 
 PORTALS.forEach(({ id, name, port, color }) => {
   const env = {
     ...process.env,
     PORT: String(port),
     RECYCLER_ID: id,
+    STORAGE_DIR: storageDir,
     NEXT_DIST_DIR: `.next-${port}`,
     ADMIN_TOKEN: process.env.ADMIN_TOKEN || "test-admin-secret-token",
     CAPTCHA_SECRET: process.env.CAPTCHA_SECRET || "test-captcha-secret-key-32chars!!",
@@ -66,6 +85,14 @@ PORTALS.forEach(({ id, name, port, color }) => {
     cwd: portalsDir,
     env,
     shell: true,
+  });
+
+  processRecords.push({
+    id,
+    name,
+    port,
+    pid: child.pid,
+    startTime: new Date().toISOString(),
   });
 
   child.stdout.on("data", (data) => {
@@ -91,16 +118,20 @@ PORTALS.forEach(({ id, name, port, color }) => {
   });
 
   children.push(child);
-  console.log(`${color}✓ ${name}${RESET} listening on http://localhost:${port}`);
+  console.log(`${color}✓ ${name}${RESET} listening on http://127.0.0.1:${port} (PID: ${child.pid})`);
 });
 
-console.log("\nPress Ctrl+C to stop all portals.\n");
+// Write process manifest to storage directory for tracking and graceful teardown
+const manifestPath = path.join(storageDir, "portal-processes.json");
+fs.writeFileSync(manifestPath, JSON.stringify(processRecords, null, 2), "utf8");
+console.log(`\n- Process manifest recorded to: ${manifestPath}`);
+console.log("\nPress Ctrl+C to stop portals.\n");
 
 let isShuttingDown = false;
 function shutdown() {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log("\n🛑 Stopping all portals...");
+  console.log("\n🛑 Stopping mock portals (preserving all storage and evidence)...");
   children.forEach((child) => {
     if (isWin && child.pid) {
       try {
@@ -115,7 +146,6 @@ function shutdown() {
   setTimeout(() => process.exit(0), 800);
 }
 
-// Windows TTY Ctrl+C raw mode listener
 if (process.stdin.isTTY) {
   process.stdin.setRawMode(true);
   process.stdin.resume();
@@ -128,4 +158,3 @@ if (process.stdin.isTTY) {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-

@@ -28,7 +28,7 @@ export class FileRepository implements BookingRepository {
   private lockPromise: Promise<void> = Promise.resolve();
 
   constructor(baseDir?: string) {
-    this.baseDir = baseDir || path.resolve(process.cwd(), ".data");
+    this.baseDir = baseDir || (process.env.STORAGE_DIR ? path.resolve(process.env.STORAGE_DIR) : path.resolve(process.cwd(), ".data"));
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });
     }

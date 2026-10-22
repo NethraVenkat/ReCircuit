@@ -21,6 +21,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const [locality, setLocality] = useState("Kukatpally");
   const [pincode, setPincode] = useState("500072");
   const [preferredSlot, setPreferredSlot] = useState("");
+  const [hydrated, setHydrated] = useState(false);
   const [dataWipeAck, setDataWipeAck] = useState(false);
   const [captchaSessionId, setCaptchaSessionId] = useState("");
   const [captchaCode, setCaptchaCode] = useState("");
@@ -70,6 +71,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   useEffect(() => {
     // Generate a default client_request_id if none exists
     const randId = `req-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+    setHydrated(true);
     setClientRequestId(randId);
     if (slots.length > 0) {
       setPreferredSlot(slots[0] || "");
@@ -191,6 +193,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   return (
     <form
       data-testid="booking-form"
+      data-hydrated={hydrated ? "true" : "false"}
       onSubmit={handleSubmit}
       className={`p-6 rounded-lg border shadow-sm space-y-6 ${
         isDeccan
@@ -517,7 +520,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       {/* Confirm Booking Button */}
       <div className="pt-2">
         <button
-          type="submit"
+          type="button"
+          onClick={handleSubmit}
           data-testid="confirm-booking"
           disabled={loading}
           className={`w-full py-3 px-6 rounded-md font-bold text-sm shadow transition-all ${

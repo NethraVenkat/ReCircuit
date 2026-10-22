@@ -106,14 +106,27 @@ export function getPortalBookingUrl(recyclerId: string, customBaseUrl?: string):
   const base = getPortalBaseUrl(recyclerId, customBaseUrl);
   const route = PORTAL_ROUTES[recyclerId];
   const path = route ? route.bookPath : "/book";
-  return `${base}${path}`;
+  try {
+    const url = new URL(base);
+    url.pathname = path;
+    return url.toString();
+  } catch {
+    return `${base}${path}`;
+  }
 }
 
 export function getPortalTrackingUrl(recyclerId: string, customBaseUrl?: string, ref?: string): string {
   const base = getPortalBaseUrl(recyclerId, customBaseUrl);
   const route = PORTAL_ROUTES[recyclerId];
   const path = route ? route.trackPath : "/track";
-  return ref ? `${base}${path}?ref=${encodeURIComponent(ref)}` : `${base}${path}`;
+  try {
+    const url = new URL(base);
+    url.pathname = path;
+    if (ref) url.searchParams.set("ref", ref);
+    return url.toString();
+  } catch {
+    return ref ? `${base}${path}?ref=${encodeURIComponent(ref)}` : `${base}${path}`;
+  }
 }
 
 export function getBookingReferenceRegex(recyclerId: string): RegExp {

@@ -183,7 +183,7 @@ export function TrackingView({
           <div>
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">Booked Items</h4>
             <div data-testid="tracking-items-list" className="border rounded divide-y text-xs">
-              {booking.items.map((item, i) => (
+              {(booking.items || []).map((item, i) => (
                 <div key={i} data-testid="tracking-item-row" className="p-2.5 flex justify-between bg-slate-50/50">
                   <span data-testid="tracking-item-name" className="font-bold">{item.name}</span>
                   <span data-testid="tracking-item-details" className="text-slate-600">
@@ -201,7 +201,7 @@ export function TrackingView({
               Status Event History & Proof Audit
             </h4>
             <div data-testid="tracking-history" className="space-y-2 border-l-2 border-slate-200 pl-4 ml-2">
-              {booking.events.map((evt) => (
+              {(booking.events || []).map((evt) => (
                 <div key={evt.id} className="relative pb-2">
                   <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-slate-400" />
                   <div className="flex flex-wrap items-center gap-2">
