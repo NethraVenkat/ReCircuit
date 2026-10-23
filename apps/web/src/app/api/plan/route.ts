@@ -24,6 +24,7 @@ import { resolveRecyclerPolicy, type PolicySource, type PolicyMetadata } from ".
 export async function POST(req: Request) {
   try {
     sameOrigin(req);
+    const repo = getRepository();
     const body = z.object({
       requestId: z.string().uuid().optional(),
       expectedHash: z.string().optional(),
@@ -201,7 +202,6 @@ export async function POST(req: Request) {
     });
 
     // 5. Persist to repository
-    const repo = getRepository();
     const save = async () => {
       if (body.requestId) {
         const previous = await owned(body.requestId);
@@ -231,6 +231,7 @@ export async function POST(req: Request) {
           choices: routing.scoredPlans.slice(0, 5),
           policyMode: effectivePolicyMode,
           policies: policyMetas,
+          policySources: policies,
         },
         auditEvents: [],
         updatedAt: new Date().toISOString(),

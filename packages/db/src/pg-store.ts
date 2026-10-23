@@ -75,6 +75,7 @@ export class PgRepository implements IRepository {
   private db: PGlite;
 
   constructor(db?: PGlite) {
+    if (process.env.NODE_ENV === "production") throw new Error("PERSISTENCE_UNAVAILABLE: PGLITE_DISABLED");
     this.db = db || new PGlite();
   }
 

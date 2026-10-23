@@ -154,16 +154,20 @@ export async function verifyCaptchaToken(
   if (!safeEqual(sig, expectedSig)) return false;
 
   const expiry = Number(expiryStr);
-  if (Date.now() > expiry) return false;
+  if (!Number.isFinite(expiry) || Date.now() >= expiry) return false;
 
   const submittedHash = createHmac("sha256", secret).update(code.trim().toUpperCase()).digest("hex");
   if (!safeEqual(submittedHash, codeHash)) return false;
 
   if (repo) {
+    if (repo.consumeNonce) return repo.consumeNonce(nonce, expiry);
+    if (process.env.NODE_ENV === "production") throw new Error("PERSISTENCE_UNAVAILABLE: ATOMIC_CAPTCHA_STORE");
     const isUsed = await repo.isNonceUsed(nonce);
     if (isUsed) return false;
     await repo.recordUsedNonce(nonce, expiry);
   }
+
+  if (process.env.NODE_ENV === "production") throw new Error("PERSISTENCE_UNAVAILABLE: CAPTCHA_NONCE_STORE");
 
   return true;
 }
@@ -172,6 +176,7 @@ export async function verifyCaptchaToken(
 const memoryUsedNonces = new Set<string>();
 
 export function verifyCaptchaCode(sessionId: string, code: string): boolean {
+  if (process.env.NODE_ENV === "production") throw new Error("Use the persistent asynchronous CAPTCHA verifier in production");
   if (!sessionId || !code) return false;
   const parts = sessionId.split(":");
   if (parts.length !== 5) return false;

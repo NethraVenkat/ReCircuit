@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { defineConfig, devices } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -5,8 +6,8 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-process.env.CAPTCHA_SECRET = process.env.CAPTCHA_SECRET || "test-captcha-secret-key-32chars!!";
-process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "test-admin-secret-token";
+process.env.CAPTCHA_SECRET = process.env.CAPTCHA_SECRET || randomBytes(32).toString("hex");
+process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || randomBytes(32).toString("hex");
 process.env.STORAGE_DIR = process.env.STORAGE_DIR || path.resolve(__dirname, ".data", "test-storage");
 process.env.RECIRCUIT_DATA_DIR = process.env.RECIRCUIT_DATA_DIR || path.resolve(__dirname, ".data", "test-storage", "household");
 
@@ -31,10 +32,12 @@ export default defineConfig({
   webServer: [
     {
       command: "node scripts/start-portals.cjs",
+      stdout: "pipe",
       url: "http://127.0.0.1:3101/api/health",
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
       env: {
+        RECIRCUIT_PERSISTENCE: "local",
         STORAGE_DIR: process.env.STORAGE_DIR,
         CAPTCHA_SECRET: process.env.CAPTCHA_SECRET,
         ADMIN_TOKEN: process.env.ADMIN_TOKEN,
@@ -42,10 +45,12 @@ export default defineConfig({
     },
     {
       command: "npm run dev --workspace=@recircuit/web",
+      stdout: "pipe",
       url: "http://127.0.0.1:3000/api/health",
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
       env: {
+        RECIRCUIT_PERSISTENCE: "local",
         PORT: "3000",
         RECIRCUIT_DATA_DIR: process.env.RECIRCUIT_DATA_DIR,
         STORAGE_DIR: process.env.STORAGE_DIR,

@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { cloudConfigured, getRepository, storeEvidence } from "@recircuit/db";
 import { Verifier } from "./verifier.js";
 import type { LegVerificationContext, VerifierOptions, VerifierResult } from "./types.js";
 
@@ -13,6 +14,12 @@ export class VerificationRunner {
     options: VerifierOptions = {}
   ): Promise<VerifierResult> {
     const result = await Verifier.verifyLeg(context, options);
+    if (cloudConfigured()) {
+      const proof = await storeEvidence(`${result.bookingReference}.json`, Buffer.from(JSON.stringify(result)), "application/json");
+      await getRepository().appendAction!({ ...result, requestId: context.plan.requestId, legId: context.leg.id, action: "independent_verification", proof });
+      return result;
+    }
+    if (process.env.NODE_ENV === "production") throw new Error("PERSISTENCE_UNAVAILABLE: VERIFICATION_STORE");
 
     // Persist verification proof to disk
     try {

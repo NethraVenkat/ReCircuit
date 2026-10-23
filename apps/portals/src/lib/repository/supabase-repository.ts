@@ -1,5 +1,4 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { randomUUID } from "crypto";
 import type {
   BookingRepository,
   FailureSwitches,
@@ -15,6 +14,7 @@ const DEFAULT_SWITCHES: FailureSwitches = {
   changedPolicyLayout: false,
   hideFeeInfo: false,
   raiseFee: false,
+  hideReviewFee: false,
 };
 
 export class SupabaseRepository implements BookingRepository {
@@ -29,110 +29,59 @@ export class SupabaseRepository implements BookingRepository {
   async createBooking(
     bookingData: Omit<PortalBooking, "id" | "createdAt" | "updatedAt" | "events" | "status" | "bookingReference">
   ): Promise<{ booking: PortalBooking; isDuplicate: boolean; omitReference?: boolean }> {
-    // 1. Check duplicate client_request_id
-    const { data: existing } = await this.client
-      .from("bookings")
-      .select("*, events:booking_events(*)")
-      .eq("recycler_id", bookingData.recyclerId)
-      .eq("client_request_id", bookingData.clientRequestId)
-      .maybeSingle();
-
-    if (existing) {
-      return { booking: this.mapRowToBooking(existing), isDuplicate: true };
-    }
-
-    // 2. Failure switches
-    const switches = await this.getFailureSwitches(bookingData.recyclerId);
-    let omitRef = switches.omitNextReference;
-    if (omitRef) {
-      await this.consumeFailureSwitch(bookingData.recyclerId, "omitNextReference");
-    }
-
-    const config = RECYCLER_CONFIGS[bookingData.recyclerId];
-    const reference = generateReference(config.refPrefix);
-    const now = new Date().toISOString();
-
-    const { data: newRow, error } = await this.client
-      .from("bookings")
-      .insert({
-        recycler_id: bookingData.recyclerId,
-        booking_reference: reference,
-        client_request_id: bookingData.clientRequestId,
-        full_name: bookingData.fullName,
-        phone: bookingData.phone,
-        address_line: bookingData.addressLine,
-        locality: bookingData.locality,
-        pincode: bookingData.pincode,
-        preferred_slot: bookingData.preferredSlot,
-        charged_fee_inr: bookingData.chargedFeeInr,
-        items: bookingData.items,
-        status: "RECEIVED",
-      })
-      .select()
-      .single();
-
-    if (error || !newRow) {
-      throw new Error(`Failed to create portal booking in Supabase: ${error?.message}`);
-    }
-
-    // Insert creation event
-    await this.client.from("booking_events").insert({
-      booking_id: newRow.id,
-      event_type: "BOOKING_CREATED",
-      status: "RECEIVED",
-      detail: "Booking request received through public website portal",
-      is_simulated: false,
-      created_at: now,
-    });
-
-    const booking = this.mapRowToBooking({
-      ...newRow,
-      events: [
-        {
-          id: randomUUID(),
-          eventType: "BOOKING_CREATED",
-          status: "RECEIVED",
-          detail: "Booking request received through public website portal",
-          isSimulated: false,
-          createdAt: now,
-        },
-      ],
-    });
-
-    return { booking, isDuplicate: false, omitReference: omitRef };
+    // Read errors are fatal: an outage must never be interpreted as absence.
+    const existing = await this.getBookingByClientRequestId(bookingData.recyclerId, bookingData.clientRequestId);
+    if (existing) return { booking: existing, isDuplicate: true };
+    const omitReference = await this.consumeFailureSwitch(bookingData.recyclerId, "omitNextReference");
+    const { data, error } = await this.client.rpc("create_booking", { p_booking: {
+      recycler_id: bookingData.recyclerId,
+      booking_reference: generateReference(RECYCLER_CONFIGS[bookingData.recyclerId].refPrefix),
+      client_request_id: bookingData.clientRequestId, full_name: bookingData.fullName,
+      phone: bookingData.phone, address_line: bookingData.addressLine,
+      locality: bookingData.locality, pincode: bookingData.pincode,
+      preferred_slot: bookingData.preferredSlot, items: bookingData.items,
+      charged_fee_inr: bookingData.chargedFeeInr ?? null,
+      data_wipe_acknowledged: bookingData.dataWipeAcknowledged ?? null,
+    } });
+    this.check(error);
+    if (!data?.booking) throw new Error("PERSISTENCE_UNAVAILABLE: BOOKING_RESPONSE");
+    return { booking: this.mapRowToBooking(data.booking), isDuplicate: data.isDuplicate, omitReference };
   }
 
   async getBookingByReference(recyclerId: RecyclerId, reference: string): Promise<PortalBooking | null> {
-    const { data } = await this.client
+    const { data, error } = await this.client
       .from("bookings")
       .select("*, events:booking_events(*)")
       .eq("recycler_id", recyclerId)
       .ilike("booking_reference", reference.trim())
       .maybeSingle();
 
+    this.check(error);
     if (!data) return null;
     return this.mapRowToBooking(data);
   }
 
   async getBookingByClientRequestId(recyclerId: RecyclerId, clientRequestId: string): Promise<PortalBooking | null> {
-    const { data } = await this.client
+    const { data, error } = await this.client
       .from("bookings")
       .select("*, events:booking_events(*)")
       .eq("recycler_id", recyclerId)
       .eq("client_request_id", clientRequestId.trim())
       .maybeSingle();
 
+    this.check(error);
     if (!data) return null;
     return this.mapRowToBooking(data);
   }
 
   async listBookings(recyclerId: RecyclerId): Promise<PortalBooking[]> {
-    const { data } = await this.client
+    const { data, error } = await this.client
       .from("bookings")
       .select("*, events:booking_events(*)")
       .eq("recycler_id", recyclerId)
       .order("created_at", { ascending: false });
 
+    this.check(error);
     return (data || []).map((row) => this.mapRowToBooking(row));
   }
 
@@ -143,105 +92,71 @@ export class SupabaseRepository implements BookingRepository {
     detail: string,
     options: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean } = {}
   ): Promise<PortalBooking | null> {
-    const existing = await this.getBookingByReference(recyclerId, reference);
-    if (!existing) return null;
-
-    const updates: Record<string, unknown> = {
-      status,
-      updated_at: new Date().toISOString(),
-    };
-    if (options.pickupOtp) updates.pickup_otp = options.pickupOtp;
-    if (options.weightKg !== undefined) updates.weight_kg = options.weightKg;
-    if (options.slot) updates.preferred_slot = options.slot;
-
-    const { data: updated, error } = await this.client
-      .from("bookings")
-      .update(updates)
-      .eq("id", existing.id)
-      .select()
-      .single();
-
-    if (error || !updated) return null;
-
-    await this.client.from("booking_events").insert({
-      booking_id: existing.id,
-      event_type: `STATUS_UPDATED_${status}`,
-      status,
-      detail,
-      is_simulated: options.isSimulated ?? true,
+    const { error } = await this.client.rpc("update_booking", {
+      p_recycler: recyclerId, p_reference: reference, p_status: status,
+      p_detail: detail, p_options: options,
     });
-
+    this.check(error);
     return this.getBookingByReference(recyclerId, reference);
   }
 
   async getFailureSwitches(recyclerId: RecyclerId): Promise<FailureSwitches> {
-    const { data } = await this.client
+    const { data, error } = await this.client
       .from("failure_switches")
       .select("*")
       .eq("recycler_id", recyclerId)
       .maybeSingle();
 
+    this.check(error);
     if (!data) return { ...DEFAULT_SWITCHES };
     return {
       failNextSubmit: data.fail_next_submit ?? false,
       omitNextReference: data.omit_next_reference ?? false,
       changedPolicyLayout: data.changed_policy_layout ?? false,
       hideFeeInfo: data.hide_fee_info ?? false,
+      raiseFee: data.raise_fee ?? false,
+      hideReviewFee: data.hide_review_fee ?? false,
     };
   }
 
   async updateFailureSwitches(recyclerId: RecyclerId, switches: Partial<FailureSwitches>): Promise<FailureSwitches> {
-    const current = await this.getFailureSwitches(recyclerId);
-    const updated = { ...current, ...switches };
-
-    await this.client.from("failure_switches").upsert({
-      recycler_id: recyclerId,
-      fail_next_submit: updated.failNextSubmit,
-      omit_next_reference: updated.omitNextReference,
-      changed_policy_layout: updated.changedPolicyLayout,
-      updated_at: new Date().toISOString(),
-    });
-
-    return updated;
+    const { data, error } = await this.client.rpc("update_switches", { p_recycler: recyclerId, p_switches: switches });
+    this.check(error);
+    return data as FailureSwitches;
   }
 
   async consumeFailureSwitch(recyclerId: RecyclerId, switchName: keyof FailureSwitches): Promise<boolean> {
-    const switches = await this.getFailureSwitches(recyclerId);
-    if (switches[switchName]) {
-      await this.updateFailureSwitches(recyclerId, { [switchName]: false });
-      return true;
-    }
-    return false;
+    const { data, error } = await this.client.rpc("consume_switch", { p_recycler: recyclerId, p_switch: switchName });
+    this.check(error);
+    return Boolean(data);
   }
 
   async reset(recyclerId?: RecyclerId): Promise<void> {
-    if (recyclerId) {
-      await this.client.from("bookings").delete().eq("recycler_id", recyclerId);
-      await this.client.from("failure_switches").delete().eq("recycler_id", recyclerId);
-    } else {
-      await this.client.from("bookings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      await this.client.from("failure_switches").delete().neq("recycler_id", "");
+    if (process.env.NODE_ENV === "production") throw new Error("RESET_DISABLED_IN_PRODUCTION");
+    for (const table of ["bookings", "failure_switches"]) {
+      let query = this.client.from(table).delete();
+      query = recyclerId ? query.eq("recycler_id", recyclerId) : query.neq("recycler_id", "");
+      const { error } = await query;
+      this.check(error);
     }
   }
 
-  private inMemoryNonces: Map<string, number> = new Map();
+  private check(error: { code?: string } | null): void {
+    if (error) throw new Error(`PERSISTENCE_UNAVAILABLE: ${error.code || "PORTAL_DATABASE"}`);
+  }
 
+  async consumeNonce(nonce: string, expiresAt: number): Promise<boolean> {
+    const { data, error } = await this.client.rpc("consume_nonce", { p_nonce: nonce, p_expires_at: new Date(expiresAt).toISOString() });
+    this.check(error);
+    return Boolean(data);
+  }
   async isNonceUsed(nonce: string): Promise<boolean> {
-    const exp = this.inMemoryNonces.get(nonce);
-    if (!exp) return false;
-    if (Date.now() > exp) {
-      this.inMemoryNonces.delete(nonce);
-      return false;
-    }
-    return true;
+    const { data, error } = await this.client.from("captcha_nonces").select("nonce").eq("nonce", nonce).maybeSingle();
+    this.check(error);
+    return Boolean(data);
   }
-
   async recordUsedNonce(nonce: string, expiresAt: number): Promise<void> {
-    const now = Date.now();
-    for (const [k, exp] of this.inMemoryNonces.entries()) {
-      if (now > exp) this.inMemoryNonces.delete(k);
-    }
-    this.inMemoryNonces.set(nonce, expiresAt);
+    if (!await this.consumeNonce(nonce, expiresAt)) throw new Error("CAPTCHA_NONCE_ALREADY_USED");
   }
 
   private mapRowToBooking(row: Record<string, unknown>): PortalBooking {
@@ -269,8 +184,9 @@ export class SupabaseRepository implements BookingRepository {
       ...(typeof row.charged_fee_inr === "number" ? { chargedFeeInr: row.charged_fee_inr } : {}),
       items: (row.items as PortalBooking["items"]) || [],
       status: row.status as PortalBookingStatus,
+      ...(typeof row.data_wipe_acknowledged === "boolean" ? { dataWipeAcknowledged: row.data_wipe_acknowledged } : {}),
       pickupOtp: typeof row.pickup_otp === "string" ? row.pickup_otp : undefined,
-      weightKg: row.weight_kg ? Number(row.weight_kg) : undefined,
+      weightKg: row.weight_kg != null ? Number(row.weight_kg) : undefined,
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
       events,

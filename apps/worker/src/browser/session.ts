@@ -20,6 +20,7 @@ import fs from "fs";
 import path from "path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { guardPortalApi } from "./api-guard.js";
+import { cloudConfigured, storeEvidence } from "@recircuit/db";
 
 export type BrowserMode = "local" | "browserbase" | "auto";
 
@@ -51,6 +52,7 @@ export interface BrowserSession {
 }
 
 export async function openSession(options: BrowserSessionOptions = {}): Promise<BrowserSession> {
+  if (process.env.NODE_ENV === "production" && !cloudConfigured()) throw new ConfigurationError("PERSISTENCE_UNAVAILABLE: EVIDENCE_STORAGE");
   const requestedMode = options.mode || (process.env.BROWSER_MODE as BrowserMode) || "local";
 
   let mode: BrowserMode = "local";
@@ -78,9 +80,9 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
       });
       mode = "browserbase";
       sessionId = `bb-${randomUUID()}`;
-    } catch (err: unknown) {
+    } catch {
       throw new ConfigurationError(
-        `Failed to connect to Browserbase cloud session: ${err instanceof Error ? err.message : String(err)}. Refusing silent fallback to local.`
+        "Failed to connect to Browserbase cloud session. Check server-side credentials and connectivity."
       );
     }
   } else {
@@ -100,14 +102,19 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
   await guardPortalApi(page);
 
   const evidenceDir = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "evidence");
-  if (!fs.existsSync(evidenceDir)) {
+  if (!cloudConfigured() && !fs.existsSync(evidenceDir)) {
     fs.mkdirSync(evidenceDir, { recursive: true });
   }
 
   const captureScreenshot = async (label: string): Promise<ScreenshotResult> => {
     const filename = `${sessionId}-${label.replace(/[^a-zA-Z0-9_-]/g, "_")}.png`;
     const fullPath = path.join(evidenceDir, filename);
-    const buffer = await page.screenshot({ path: fullPath, fullPage: true });
+    const buffer = await page.screenshot({ ...(cloudConfigured() ? {} : { path: fullPath }), fullPage: true });
+    if (cloudConfigured()) {
+      const reference = await storeEvidence(filename, buffer, "image/png");
+      return { path: reference, buffer, filename: reference };
+    }
+    if (process.env.NODE_ENV === "production") throw new ConfigurationError("PERSISTENCE_UNAVAILABLE: EVIDENCE_STORAGE");
     return {
       path: fullPath,
       buffer,

@@ -14,6 +14,7 @@
  */
 
 const { spawn } = require("child_process");
+const { randomBytes } = require("crypto");
 const path = require("path");
 const fs = require("fs");
 
@@ -39,7 +40,7 @@ function loadEnvLocal() {
   }
 }
 
-loadEnvLocal();
+if (process.env.RECIRCUIT_PERSISTENCE !== "local") loadEnvLocal();
 
 const portalsDir = path.resolve(__dirname, "..", "apps", "portals");
 const isWin = process.platform === "win32";
@@ -60,6 +61,9 @@ const PORTALS = [
   { id: "quickscrap", name: "QuickScrap Hyd", port: 3103, color: "\x1b[36m" },
 ];
 
+const localCaptchaSecret = randomBytes(32).toString("hex");
+const localAdminToken = randomBytes(32).toString("hex");
+
 const RESET = "\x1b[0m";
 const children = [];
 const processRecords = [];
@@ -76,8 +80,8 @@ PORTALS.forEach(({ id, name, port, color }) => {
     RECYCLER_ID: id,
     STORAGE_DIR: storageDir,
     NEXT_DIST_DIR: `.next-${port}`,
-    ADMIN_TOKEN: process.env.ADMIN_TOKEN || "test-admin-secret-token",
-    CAPTCHA_SECRET: process.env.CAPTCHA_SECRET || "test-captcha-secret-key-32chars!!",
+    ADMIN_TOKEN: process.env.ADMIN_TOKEN || (process.env.NODE_ENV === "production" ? "" : localAdminToken),
+    CAPTCHA_SECRET: process.env.CAPTCHA_SECRET || (process.env.NODE_ENV === "production" ? "" : localCaptchaSecret),
   };
 
   const cmd = `${npmCmd} run dev -- -p ${port}`;

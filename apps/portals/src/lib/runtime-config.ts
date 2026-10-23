@@ -1,6 +1,7 @@
 /** Validate deployment configuration before serving health or accepting bookings. */
 export function assertPortalConfiguration(): void {
   if (process.env.NODE_ENV !== "production") return;
+  if (process.env.RECIRCUIT_PERSISTENCE === "local") throw new Error("PERSISTENCE_UNAVAILABLE: LOCAL_MODE_DISABLED_IN_PRODUCTION");
   const required = [
     "RECYCLER_ID",
     "CAPTCHA_SECRET",

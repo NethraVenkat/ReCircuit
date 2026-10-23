@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () => {
-  test.setTimeout(180000);
+  test.setTimeout(360000);
 
   test("Complete household journey: Intake -> Plan -> Approval -> Booking -> Verifier -> Ledger", async ({
     page,
@@ -19,6 +19,8 @@ test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () =>
       page.request.get("http://127.0.0.1:3101/").catch(() => {}),
       page.request.get("http://127.0.0.1:3101/pickup-charges").catch(() => {}),
       page.request.get("http://127.0.0.1:3101/accepted-items").catch(() => {}),
+      page.request.get("http://127.0.0.1:3101/book-pickup").catch(() => {}),
+      page.request.get("http://127.0.0.1:3101/track?client=journey-warmup").catch(() => {}),
       page.request.get("http://127.0.0.1:3102/").catch(() => {}),
       page.request.get("http://127.0.0.1:3102/what-we-take").catch(() => {}),
       page.request.get("http://127.0.0.1:3103/").catch(() => {}),
@@ -104,7 +106,13 @@ test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () =>
     // 5. Booking Execution
     const startBookingBtn = page.locator('button:has-text("Start booking")');
     await expect(startBookingBtn).toBeVisible({ timeout: 15000 });
+    const bookingResponse = page.waitForResponse(
+      response => response.url().endsWith("/api/book") && response.request().method() === "POST",
+      { timeout: 180000 }
+    );
     await startBookingBtn.click();
+    const booking = await bookingResponse;
+    expect(booking.status(), await booking.text()).toBe(200);
 
     // 6. Verify Booking Reference & Exact Label Mapping (REQUEST_SUBMITTED -> "Booking requested")
     const refBadge = page.locator('[data-testid="booking-reference-badge"]');
@@ -125,14 +133,19 @@ test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () =>
     // 7. Execute Independent Verification
     const verifyBtn = page.locator('[data-testid="run-independent-verification-button"]');
     await expect(verifyBtn).toBeVisible({ timeout: 15000 });
+    const verificationResponse = page.waitForResponse(
+      response => response.url().endsWith("/api/verify") && response.request().method() === "POST",
+      { timeout: 120000 }
+    );
     await verifyBtn.click();
 
-    // Verify Independent Verification feedback
-    await expect(
-      page.locator("text=The independent check matched the exposed booking fields.").or(
-        page.locator("text=Checking the recycler record")
-      )
-    ).toBeVisible({ timeout: 45000 });
+    // The loading message is not a completed verification. Wait for the actual
+    // result before asserting the ledger; cold browser startup can exceed 5s.
+    const verification = await verificationResponse;
+    expect(verification.status(), await verification.text()).toBe(200);
+    const verificationBody = await verification.json();
+    expect(verificationBody.verification.verified).toBe(true);
+    await expect(page.locator("text=The independent check matched the exposed booking fields.")).toBeVisible({ timeout: 30000 });
 
     // Assert exact verified state: "Booking independently checked" (REQUEST_CONFIRMED)
     // and recycler status is "Booking received" (RECEIVED).

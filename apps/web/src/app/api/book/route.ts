@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       if (!plan || stored.request.state !== "APPROVED" || approval?.decision !== "approved") {
         throw new Error(`Cannot book plan: request must be APPROVED (current state: ${stored?.request?.state || "UNKNOWN"}). Approve the current plan before booking.`);
       }
-      if (body.planHash && (body.planHash !== hashPlan(plan) || approval.planHash !== hashPlan(plan))) {
+      if ((body.planHash && body.planHash !== hashPlan(plan)) || approval.planHash !== hashPlan(plan)) {
         throw new Error("STALE: Approval no longer matches this plan. Review again.");
       }
       if (!plan.legs || plan.legs.length === 0) {

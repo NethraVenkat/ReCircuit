@@ -36,7 +36,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next-household-redesign/types/**/*.ts"
+    ".next-household-redesign/types/**/*.ts",
+    ".next-cloud-production/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

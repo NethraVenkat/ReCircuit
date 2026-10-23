@@ -140,6 +140,16 @@ export class FileRepository implements BookingRepository {
     });
   }
 
+  async consumeNonce(nonce: string, expiresAt: number): Promise<boolean> {
+    return this.withLock(() => {
+      const nonces = this.readNonces();
+      if (nonces[nonce] || Date.now() >= expiresAt) return false;
+      nonces[nonce] = expiresAt;
+      this.writeNonces(nonces);
+      return true;
+    });
+  }
+
   async recordUsedNonce(nonce: string, expiresAt: number): Promise<void> {
     return this.withLock(() => {
       const nonces = this.readNonces();

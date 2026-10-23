@@ -16,6 +16,7 @@
  */
 
 import readline from "readline";
+import { cloudConfigured, getRepository } from "@recircuit/db";
 import {
   assertActionAllowed,
   getCanonicalItemLabel,
@@ -783,13 +784,17 @@ export class Booker {
 
       // Safe Action Gating: Validates observedFeeInr === leg.estimatedFee
       // Throws FeeChangedReapprovalRequiredError if raise_fee switch is active
-      assertActionAllowed({
+      let allowedAction: ReturnType<typeof assertActionAllowed>;
+      try { allowedAction = assertActionAllowed({
         leg,
         plan,
         approval,
         action: "submit_booking",
         observedFeeInr,
-      });
+      }); } catch (err) {
+        if (cloudConfigured() && err instanceof SafeActionBlockedError) await getRepository().appendAction!({ ...err.attemptLog });
+        throw err;
+      }
 
       // ---------------------------------------------------------------------
       // 10. Live CAPTCHA Handoff (Single Live Session)
@@ -877,6 +882,11 @@ export class Booker {
       }
 
       const confirmBtn = page.locator(PORTAL_SELECTORS.confirmBooking);
+      if (cloudConfigured()) {
+        // Recheck persisted approval/expiry and reserve the unique action after
+        // human input, immediately before the external side effect.
+        await getRepository().appendAction!({ ...allowedAction.attemptLog }, allowedAction.idempotencyKey);
+      } else if (process.env.NODE_ENV === "production") throw new Error("PERSISTENCE_UNAVAILABLE: ACTION_STORE");
       await confirmBtn.click();
 
       browserActions.push({
@@ -990,8 +1000,10 @@ export class Booker {
         browserActions,
       };
     } finally {
-      if (ownsSession && !keepSessionAlive) {
-        await session.close();
+      try {
+        if (cloudConfigured()) await getRepository().appendAction!({ requestId: plan.requestId, legId: leg.id, sessionId: session.sessionId, action: "browser_actions", browserActions });
+      } finally {
+        if (ownsSession && !keepSessionAlive) await session.close();
       }
     }
   }

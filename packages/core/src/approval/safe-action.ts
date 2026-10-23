@@ -47,6 +47,7 @@ const inMemoryActionLogs: ActionAttemptLog[] = [];
  * Returns a copy of all recorded action logs (in-memory + disk).
  */
 export function getActionLogEntries(): ActionAttemptLog[] {
+  if (process.env.NODE_ENV === "production") return [];
   const logs = [...inMemoryActionLogs];
   try {
     const logFile = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "action-log.jsonl");
@@ -89,6 +90,7 @@ export function clearActionLogs(): void {
  * Loads all used idempotency keys from the action attempt store (in-memory + disk).
  */
 export function getUsedIdempotencyKeysFromStore(): Set<string> {
+  if (process.env.NODE_ENV === "production") return new Set();
   const used = new Set<string>();
   for (const log of inMemoryActionLogs) {
     if (log.allowed && log.idempotencyKey) {
@@ -121,6 +123,9 @@ export function getUsedIdempotencyKeysFromStore(): Set<string> {
  * Appends an action attempt record to disk (.data/action-log.jsonl) and memory.
  */
 function recordActionAttempt(attempt: ActionAttemptLog): void {
+  // Production workers persist authorization and browser traces in the database
+  // before submission. The synchronous legacy logger is local-test support only.
+  if (process.env.NODE_ENV === "production") return;
   inMemoryActionLogs.push(attempt);
   try {
     const logDir = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"));

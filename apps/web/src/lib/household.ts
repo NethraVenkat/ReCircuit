@@ -22,7 +22,9 @@ export function owner(create = false): string | null {
 }
 export async function owned(id: string) {
   if (!z.string().uuid().safeParse(id).success) throw new Error("NOT_FOUND");
-  const record = await getRepository().getRequest(id);
+  const userId = owner();
+  if (!userId) throw new Error("NOT_FOUND");
+  const record = await getRepository().getRequest(id, userId);
   if (!record || !owner() || record.request.userId !== owner()) throw new Error("NOT_FOUND");
   return record;
 }
@@ -32,6 +34,8 @@ export function sameOrigin(req: Request): void {
 }
 export async function locked<T>(id: string, run: () => Promise<T>): Promise<T> {
   if (!z.string().uuid().safeParse(id).success) throw new Error("NOT_FOUND");
+  const repo = getRepository();
+  if (repo.withRequestLock) return repo.withRequestLock(id, run);
   const dir = path.resolve(process.env.RECIRCUIT_DATA_DIR || ".data", "household-locks");
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${id}.lock`);
@@ -41,5 +45,5 @@ export async function locked<T>(id: string, run: () => Promise<T>): Promise<T> {
 }
 export function failure(err: unknown) {
   const message = err instanceof Error ? err.message : "Request failed";
-  return { body: { error: message === "NOT_FOUND" ? "Request not found" : /[A-Z]:\\|file:\/\//i.test(message) ? "Local browser integration is unavailable. Check the local service configuration." : message }, status: message === "NOT_FOUND" ? 404 : message.startsWith("BUSY") || message.startsWith("STALE") ? 409 : 400 };
+  return { body: { error: message === "NOT_FOUND" ? "Request not found" : /[A-Z]:\\|file:\/\//i.test(message) ? "Local browser integration is unavailable. Check the local service configuration." : message }, status: message.startsWith("PERSISTENCE_UNAVAILABLE") ? 503 : message === "NOT_FOUND" ? 404 : message.startsWith("BUSY") || message.startsWith("STALE") ? 409 : 400 };
 }

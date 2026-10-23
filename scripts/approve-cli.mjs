@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./local-cli-only.mjs";
 /**
  * scripts/approve-cli.mjs
  *

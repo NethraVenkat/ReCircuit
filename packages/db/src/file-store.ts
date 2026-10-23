@@ -23,6 +23,7 @@ export class FileRepository implements IRepository {
   private actionLogPath: string;
 
   constructor(baseDir = ".data") {
+    if (process.env.NODE_ENV === "production") throw new Error("PERSISTENCE_UNAVAILABLE: FILE_REPOSITORY_DISABLED");
     this.baseDir = path.resolve(process.cwd(), baseDir);
     this.requestsDir = path.join(this.baseDir, "requests");
     this.jobsDir = path.join(this.baseDir, "jobs");
