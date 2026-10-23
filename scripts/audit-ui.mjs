@@ -7,7 +7,7 @@ const seed=path.resolve(process.env.UI_AUDIT_DATA||'../evidence/local-data/porta
 for(const t of ['deccan','paperplus','quickscrap'])fs.writeFileSync(path.join(seed,t+'.json'),JSON.stringify({bookings:[booking(t)],switches:{failNextSubmit:false,omitNextReference:false,changedPolicyLayout:false,hideFeeInfo:false,raiseFee:false}}));
 async function inspect(name,url,setup,action){
  if(process.env.UI_AUDIT_FILTER && !new RegExp(process.env.UI_AUDIT_FILTER).test(name))return;
- const context=await browser.newContext({viewport:{width:1440,height:1000}});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];let fixtureState='comparison';let listState='empty';let portalState='RECEIVED';let mode='normal';
+ const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:process.env.UI_AUDIT_ZOOM_ONLY?2:1});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];let fixtureState='comparison';let listState='empty';let portalState='RECEIVED';let mode='normal';
  const controls={setState:v=>fixtureState=v,setList:v=>listState=v,setPortal:v=>portalState=v,setMode:v=>mode=v};setup?.(controls);
  await page.route('**/*',async route=>{const r=route.request(),u=new URL(r.url());if(!origins.includes(u.origin)&&u.protocol!=='data:')return route.abort();if(!u.pathname.startsWith('/api/'))return route.continue();
   const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
@@ -35,11 +35,13 @@ async function inspect(name,url,setup,action){
   row.zoom=[];
   for(const viewport of viewports.filter(v=>v.width>=1366)){
    if(process.env.UI_AUDIT_ZOOM_ONLY){
-    const cdp=await context.newCDPSession(page);
-    await cdp.send('Emulation.setDeviceMetricsOverride',{width:Math.floor(viewport.width/2),height:Math.floor(viewport.height/2),deviceScaleFactor:2,mobile:false});
+    const effectiveWidth=Math.floor(viewport.width/2);
+    await page.setViewportSize({width:effectiveWidth,height:Math.floor(viewport.height/2)});
+    const measure=async()=>page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,scale:devicePixelRatio}));
+    const before=await measure();if(before.width!==effectiveWidth||before.scale!==2)throw new Error('200% viewport setup failed: '+JSON.stringify(before));
     await page.screenshot({path:path.join(out,`${String(serial).padStart(3,'0')}-${name}-${viewport.width}-browser200-reflow.png`),fullPage:true});
-    row.zoom.push({width:viewport.width,cssWidth:await page.evaluate(()=>innerWidth),method:'200% effective CSS viewport with device scale 2',overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)});
-    await cdp.send('Emulation.clearDeviceMetricsOverride');await cdp.detach();
+    const after=await measure();if(after.width!==effectiveWidth)throw new Error('Screenshot changed the reflow viewport: '+JSON.stringify(after));
+    row.zoom.push({width:viewport.width,cssWidth:after.width,deviceScaleFactor:after.scale,method:'200% effective CSS viewport with device scale 2',overflow:after.scroll>after.width+1});
    }else{
     await page.setViewportSize(viewport);await page.evaluate(()=>document.documentElement.style.zoom='2');await page.screenshot({path:path.join(out,`${String(serial).padStart(3,'0')}-${name}-${viewport.width}-zoom200.png`),fullPage:true});row.zoom.push({width:viewport.width,overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)});await page.evaluate(()=>document.documentElement.style.zoom='');
    }
@@ -74,3 +76,5 @@ try{
   await inspect(tenant+'-operator-switches',base+'/admin',null,async p=>{await p.getByRole('heading',{name:tenant==='deccan'?'Deccan E-Cycle':tenant==='paperplus'?'PaperPlus Kabadi':'QuickScrap Hyd',exact:true}).waitFor();await p.getByText('Test failure switches',{exact:true}).click();});for(const mode of ['normal','admin-empty','unauthorized','admin-disabled','operator-loading'])await inspect(tenant+'-operator-'+mode,base+'/admin',c=>c.setMode(mode));
  }
 }finally{await browser.close();fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify({phase,inspected:rows.filter(r=>r.inspected).length,total:rows.length,blocked:rows.filter(r=>!r.inspected).map(r=>({name:r.name,error:r.error})),overflow:rows.filter(r=>r.screens.some(s=>s.overflow)||r.zoomOverflow).map(r=>r.name),axeViolations:rows.reduce((s,r)=>s+r.violations.length,0)},null,2));}
+
+if(rows.some(r=>!r.inspected||r.errors.length||r.screens.some(s=>s.overflow)||r.zoomOverflow||r.violations.length))process.exitCode=1;
