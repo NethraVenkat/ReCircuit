@@ -3,6 +3,7 @@ import { recordDecision, hashPlan, type DecisionRecord } from "@recircuit/core";
 import { getRepository } from "@recircuit/db";
 import { z } from "zod";
 import { owned, locked, failure, sameOrigin } from "../../../lib/household";
+import { assertExecutionEvidence } from "../../../lib/execution-policy";
 
 export async function POST(req: Request) {
   try {
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
         throw new Error(`Stale approval rejected: plan has changed. Expected hash ${stored.plan.planHash}, got ${body.planHash}`);
       }
       const decision = body.decision.startsWith("approve") ? "approved" : "rejected";
+      if (decision === "approved") assertExecutionEvidence(stored.plan, stored.household);
       if (decision === "approved" && !stored.plan.legs.length) throw new Error("No eligible pickup is available to approve. Edit your items or location first.");
       if (stored.request.state === "APPROVED" && decision === "approved") {
         return NextResponse.json({ success: true, request: stored.request, plan: stored.plan });

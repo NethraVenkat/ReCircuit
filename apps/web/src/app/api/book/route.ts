@@ -4,6 +4,7 @@ import { hashPlan, type DecisionRecord } from "@recircuit/core";
 import { getRepository } from "@recircuit/db";
 import { z } from "zod";
 import { owned, locked, sameOrigin, failure, customerSchema } from "../../../lib/household";
+import { assertExecutionEvidence } from "../../../lib/execution-policy";
 
 export async function POST(req: Request) {
   try {
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
         throw new Error("Cannot book plan: request was generated using fixture/example policies. Live booking requires verified live policy retrieval.");
       }
       const customer = customerSchema.parse(stored.household?.customer);
+      assertExecutionEvidence(plan, stored.household);
       const repo = getRepository();
       for (const leg of plan.legs) {
         if (leg.state !== "APPROVED") continue;
