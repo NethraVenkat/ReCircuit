@@ -16,7 +16,7 @@ export function owner(create = false): string | null {
   let token = cookies().get("rc-household")?.value;
   if (!token && create) {
     token = randomBytes(32).toString("hex");
-    cookies().set("rc-household", token, { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" && process.env.RC_SECURE_COOKIE === "true", path: "/", maxAge: 60 * 60 * 24 * 90 });
+    cookies().set("rc-household", token, { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 90 });
   }
   return token ? createHash("sha256").update(token).digest("hex") : null;
 }

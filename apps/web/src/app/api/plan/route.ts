@@ -20,10 +20,14 @@ import { openSession, readRecyclerPolicy } from "@recircuit/worker";
 import { z } from "zod";
 import { customerSchema, owner, sameOrigin, failure, owned, locked } from "../../../lib/household";
 import { resolveRecyclerPolicy, type PolicySource, type PolicyMetadata } from "../../../lib/policy-cache";
+import { assertProductionConfiguration } from "../../../lib/production-config";
+
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {
     sameOrigin(req);
+    assertProductionConfiguration();
     const repo = getRepository();
     const body = z.object({
       requestId: z.string().uuid().optional(),
@@ -73,7 +77,7 @@ export async function POST(req: Request) {
           policyMode: body.policyMode,
           forceRefresh: body.forceRefresh,
           fetchLive: async (src) => {
-            const session = await openSession({ mode: "local", recyclerId: src.id, headless: true });
+            const session = await openSession({ recyclerId: src.id, headless: true });
             try {
               const policy: ExtractedPolicy = {
                 ...(await readRecyclerPolicy(src.id, session, src.url)),

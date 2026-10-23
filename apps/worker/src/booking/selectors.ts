@@ -92,6 +92,12 @@ function getEnvPortalUrl(recyclerId: string): string | undefined {
 }
 
 export function getPortalBaseUrl(recyclerId: string, customBaseUrl?: string): string {
+  if (process.env.NODE_ENV === "production") {
+    const value = customBaseUrl || getEnvPortalUrl(recyclerId);
+    let valid = false;
+    try { const url = new URL(value || ""); valid = url.protocol === "https:" && !url.username && !url.password && !/^(localhost|127\.|\[::1\])/.test(url.hostname); } catch { /* invalid */ }
+    if (!valid) throw new Error(`CONFIGURATION_ERROR: Public HTTPS portal URL required for ${recyclerId}`);
+  }
   if (customBaseUrl) return customBaseUrl.replace(/\/$/, "");
   const envVal = getEnvPortalUrl(recyclerId);
   if (envVal) {

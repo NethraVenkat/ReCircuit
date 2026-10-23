@@ -1,20 +1,29 @@
 import { z } from "zod";
 import type { GenerateStructuredOptions, LlmAdapter, LlmProvider } from "./types.js";
-import { LlmOutputError } from "./types.js";
+import { LlmOutputError, LlmConfigurationError } from "./types.js";
 import { FakeLlmAdapter } from "./adapters/fake.js";
 import { AnthropicAdapter } from "./adapters/anthropic.js";
 import { OpenAiAdapter } from "./adapters/openai.js";
+import { GeminiAdapter } from "./adapters/gemini.js";
 
 export function getAdapter(provider?: string): LlmAdapter {
   const chosen = (provider || process.env.LLM_PROVIDER || "fake").toLowerCase() as LlmProvider;
+  if (process.env.NODE_ENV === "production") {
+    if (!["openai", "anthropic", "gemini"].includes(chosen)) throw new LlmConfigurationError("Production requires LLM_PROVIDER=openai, anthropic or gemini; fake is disabled.");
+    const missing = ["LLM_API_KEY", "LLM_FAST_MODEL", "LLM_STRONG_MODEL"].filter(k => !process.env[k]?.trim());
+    if (missing.length) throw new LlmConfigurationError(`Missing production configuration: ${missing.join(", ")}`);
+  }
   switch (chosen) {
+    case "gemini":
+      return new GeminiAdapter();
     case "anthropic":
       return new AnthropicAdapter();
     case "openai":
       return new OpenAiAdapter();
     case "fake":
-    default:
       return new FakeLlmAdapter();
+    default:
+      throw new LlmConfigurationError("Unsupported LLM_PROVIDER");
   }
 }
 
@@ -33,7 +42,7 @@ function extractJsonString(raw: string): string {
 export async function generateStructured<T>(
   options: GenerateStructuredOptions<T>
 ): Promise<T> {
-  const { schema, system, user, modelTier = "fast", timeoutMs = 20000, testFixtureName } = options;
+  const { schema, system, user, modelTier = "fast", timeoutMs = process.env.LLM_PROVIDER === "gemini" ? 45000 : 20000, testFixtureName } = options;
   const adapter = getAdapter();
 
   let attempt = 0;

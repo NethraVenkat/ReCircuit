@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
 export type ModelTier = "fast" | "strong";
-export type LlmProvider = "anthropic" | "openai" | "fake";
+export type LlmProvider = "anthropic" | "openai" | "gemini" | "fake";
 
 export interface GenerateStructuredOptions<T> {
   schema: z.ZodType<T, z.ZodTypeDef, unknown>;
@@ -39,5 +39,6 @@ export interface LlmAdapter {
     modelTier: ModelTier;
     timeoutMs: number;
     testFixtureName?: string;
+    jsonSchema?: Record<string, unknown>;
   }): Promise<string>;
 }

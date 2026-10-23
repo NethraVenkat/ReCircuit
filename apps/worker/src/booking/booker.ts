@@ -324,6 +324,7 @@ export class Booker {
         mode: (process.env.BROWSER_MODE as "local" | "browserbase") || "local",
         headless: options.headless === true,
         recyclerId,
+        keepAlive: Boolean(options.keepSessionOpenOnNeedsHuman),
       }));
 
     const ownsSession = !existingSession;

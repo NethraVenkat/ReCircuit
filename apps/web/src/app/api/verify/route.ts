@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { assertProductionConfiguration } from "../../../lib/production-config";
+
+export const maxDuration = 300;
 import { VerificationRunner } from "@recircuit/worker";
 import { getRepository } from "@recircuit/db";
 import { z } from "zod";
@@ -6,6 +9,7 @@ import { owned, locked, sameOrigin, failure } from "../../../lib/household";
 export async function POST(req: Request) {
   try {
     sameOrigin(req);
+    assertProductionConfiguration();
     const body = z.object({ requestId: z.string().uuid(), legId: z.string() }).parse(await req.json());
     return await locked(body.requestId, async () => {
       const stored = await owned(body.requestId);

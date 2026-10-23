@@ -6,7 +6,7 @@
  *
  * Supported Modes:
  * - "local": Offline Chromium instance. Session IDs prefixed with "local-".
- * - "browserbase": Remote cloud browser via CDP. Session IDs prefixed with "bb-".
+ * - "browserbase": Remote cloud browser via CDP. Uses the real Browserbase session ID.
  * - "auto": Uses Browserbase if keys exist; defaults to local offline execution.
  *
  * Ingress & Cloud Limitations:
@@ -35,6 +35,9 @@ export interface BrowserSessionOptions {
   mode?: BrowserMode;
   recyclerId?: string;
   headless?: boolean;
+  /** Durable human handoff; only supported by existing Browserbase plans with keepAlive. */
+  keepAlive?: boolean;
+  resumeSessionId?: string;
 }
 
 export interface ScreenshotResult {
@@ -49,11 +52,13 @@ export interface BrowserSession {
   mode: BrowserMode;
   close(): Promise<void>;
   captureScreenshot(label: string): Promise<ScreenshotResult>;
+  disconnect?(): Promise<void>;
 }
 
 export async function openSession(options: BrowserSessionOptions = {}): Promise<BrowserSession> {
   if (process.env.NODE_ENV === "production" && !cloudConfigured()) throw new ConfigurationError("PERSISTENCE_UNAVAILABLE: EVIDENCE_STORAGE");
   const requestedMode = options.mode || (process.env.BROWSER_MODE as BrowserMode) || "local";
+  if (process.env.NODE_ENV === "production" && requestedMode !== "browserbase") throw new ConfigurationError("Production requires BROWSER_MODE=browserbase; local browsers are disabled.");
 
   let mode: BrowserMode = "local";
   let sessionId: string;
@@ -71,15 +76,19 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
     }
 
     try {
-      const cdpUrl = `wss://connect.browserbase.com?apiKey=${encodeURIComponent(
-        apiKey
-      )}&projectId=${encodeURIComponent(projectId)}`;
-      browser = await chromium.connectOverCDP(cdpUrl);
-      context = await browser.newContext({
-        viewport: { width: 1280, height: 800 },
+      if (options.resumeSessionId && !/^[a-zA-Z0-9-]+$/.test(options.resumeSessionId)) throw new Error("Invalid session");
+      const response = await fetch(`https://api.browserbase.com/v1/sessions${options.resumeSessionId ? `/${options.resumeSessionId}` : ""}`, {
+        method: options.resumeSessionId ? "GET" : "POST",
+        headers: { "X-BB-API-Key": apiKey, "Content-Type": "application/json" },
+        ...(!options.resumeSessionId ? { body: JSON.stringify({ projectId, timeout: options.keepAlive ? 900 : 280, keepAlive: Boolean(options.keepAlive), browserSettings: { solveCaptchas: false, recordSession: false, logSession: false, viewport: { width: 1280, height: 800 } } }) } : {}),
+        signal: AbortSignal.timeout(20000),
       });
+      if (!response.ok) throw new Error("Session API failed");
+      const remote = await response.json() as { id: string; connectUrl: string };
+      sessionId = remote.id;
+      browser = await chromium.connectOverCDP(remote.connectUrl, { timeout: 20000 });
+      context = browser.contexts()[0] || await browser.newContext({ viewport: { width: 1280, height: 800 } });
       mode = "browserbase";
-      sessionId = `bb-${randomUUID()}`;
     } catch {
       throw new ConfigurationError(
         "Failed to connect to Browserbase cloud session. Check server-side credentials and connectivity."
@@ -98,7 +107,8 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
     sessionId = `local-${randomUUID()}`;
   }
 
-  const page = await context.newPage();
+  const page = context.pages()[0] || (!options.resumeSessionId ? await context.newPage() : undefined);
+  if (!page) throw new ConfigurationError("Browserbase human session expired or has no page. No booking was submitted.");
   await guardPortalApi(page);
 
   const evidenceDir = path.resolve(process.env.RECIRCUIT_DATA_DIR || path.join(process.cwd(), ".data"), "evidence");
@@ -122,7 +132,12 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
     };
   };
 
+  let closed = false;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   const close = async (): Promise<void> => {
+    if (closed) return;
+    closed = true;
+    clearTimeout(deadline);
     try {
       await page.close();
     } catch {
@@ -138,7 +153,17 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
     } catch {
       // Ignore cleanup error
     }
+    if (mode === "browserbase") {
+      const response = await fetch(`https://api.browserbase.com/v1/sessions/${sessionId}`, {
+        method: "POST", headers: { "X-BB-API-Key": apiKey!, "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, status: "REQUEST_RELEASE" }), signal: AbortSignal.timeout(10000),
+      }).catch(() => null);
+      if (!response?.ok) throw new ConfigurationError("Browserbase session release failed; its configured timeout will release it.");
+    }
   };
+
+  // Stay below the free host's hard stop, including persistence cleanup.
+  if (process.env.NODE_ENV === "production") deadline = setTimeout(() => { void close().catch(() => {}); }, 240000);
 
   return {
     page,
@@ -146,5 +171,6 @@ export async function openSession(options: BrowserSessionOptions = {}): Promise<
     mode,
     close,
     captureScreenshot,
+    disconnect: async (): Promise<void> => { clearTimeout(deadline); await browser.close(); },
   };
 }

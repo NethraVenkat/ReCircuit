@@ -270,7 +270,7 @@ export async function readRecyclerPolicy(
         system: GENERIC_POLICY_SYSTEM_PROMPT,
         user: userPrompt,
         modelTier: "fast",
-        timeoutMs: 15000,
+        timeoutMs: process.env.LLM_PROVIDER === "gemini" ? 45000 : 15000,
       });
 
       const cleaned = rawResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();

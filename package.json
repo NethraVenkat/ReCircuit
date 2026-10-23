@@ -2,11 +2,16 @@
   "name": "recircuit",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
+    "build:household": "tsc --build packages/llm packages/core packages/db && npm run build --workspace=@recircuit/web",
+    "build:portals": "npm run build --workspace=@recircuit/portals",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "typecheck": "tsc -p packages/llm/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/db/tsconfig.json --noEmit && tsc -p apps/portals/tsconfig.json --noEmit && tsc -p apps/worker/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
     "test": "vitest run",
