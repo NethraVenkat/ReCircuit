@@ -1,5 +1,5 @@
 import {chromium} from 'playwright';import AxeBuilder from '@axe-core/playwright';import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {createHash,randomUUID} from 'node:crypto';
-const evidence=path.resolve('../evidence'),data=fs.readFileSync(path.join(evidence,'application-data-path.txt'),'utf8').trim().replace(/^\uFEFF/,''),scenario=JSON.parse(fs.readFileSync(path.join(data,'scenario.json'))),out=path.join(evidence,'browser-'+Date.now());fs.mkdirSync(out);
+const evidence=path.resolve(process.env.ROUTING_AUDIT_EVIDENCE_DIR||'../evidence'),data=fs.readFileSync(path.join(evidence,'application-data-path.txt'),'utf8').trim().replace(/^\uFEFF/,''),scenario=JSON.parse(fs.readFileSync(path.join(data,'scenario.json'))),out=path.join(evidence,'browser-'+Date.now());fs.mkdirSync(out);
 const base='http://127.0.0.1:3200',token='synthetic-routing-test-token',rows=[],checks=[];const browser=await chromium.launch();
 const context=await browser.newContext({viewport:{width:1366,height:768}}),page=await context.newPage();page.setDefaultTimeout(20000);
 await context.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():route.abort());

@@ -15,7 +15,7 @@ afterEach(() => vi.unstubAllEnvs());
 async function setup() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "recircuit-geospatial-")), booking = syntheticBooking("synthetic-stop-000"), base = syntheticInput(1);
   const source: BookingSource = { list: async () => [structuredClone(booking)], verification: async () => syntheticPreparation(booking).verification as Awaited<ReturnType<BookingSource["verification"]>> };
-  const provider: MatrixProvider = { matrix: async request => ({ ...base.matrix, nodes: request.nodes, edges: base.matrix.edges }) };
+  const provider: MatrixProvider = { configurationId: "synthetic-service-test-v1", matrix: async request => ({ ...base.matrix, nodes: request.nodes, edges: base.matrix.edges }) };
   const store = new RoutingStore(directory), service = new RoutingService(source, store, provider);
   await service.vehicles("deccan", base.vehicles);
   await service.review("deccan", { bookingId: booking.id, coordinate: base.pickups[0]!.coordinate, serviceSeconds: 60, assumptionVersion: "synthetic-reviewed-60s" }, "synthetic-operator");
@@ -41,7 +41,7 @@ describe("authorized services, persistence and concurrency", () => {
   });
   it("rejects a source change during a delayed provider request and blocks simultaneous generation", async () => {
     const s = await setup(); let release!: (m: MatrixSnapshot) => void, input!: MatrixRequest;
-    const slow = new RoutingService(s.source, s.store, { matrix: async r => { input = r; return new Promise(resolve => { release = resolve; }); } });
+    const slow = new RoutingService(s.source, s.store, { configurationId: "synthetic-delayed-test-v1", matrix: async r => { input = r; return new Promise(resolve => { release = resolve; }); } });
     const first = slow.generate("deccan", "2026-10-24", randomUUID());
     while (!release) await new Promise(resolve => setTimeout(resolve, 1));
     await expect(slow.generate("deccan", "2026-10-24", randomUUID())).rejects.toThrow("BUSY");

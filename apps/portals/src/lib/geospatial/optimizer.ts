@@ -32,7 +32,11 @@ function calculation(input: PlanningInput, orders: string[][]): Calculation | nu
   const routes: ProposedRoute[] = [];
   for (const [i, order] of orders.entries()) { if (!order.length) continue; const route = evaluate(input, input.vehicles[i]!, order); if (!route) return null; routes.push(route); }
   const served = routes.flatMap(r => r.pickupIds);
-  return { routes, served: served.length, metres: routes.reduce((n, r) => n + r.metres, 0), unassigned: input.pickups.filter(p => !served.includes(p.id)).map(p => ({ pickupId: p.id, reason: "NO_FEASIBLE_INSERTION_WITHIN_SEARCH_LIMIT" })) };
+  return { routes, served: served.length, metres: routes.reduce((n, r) => n + r.metres, 0), unassigned: input.pickups.filter(p => !served.includes(p.id)).map(p => {
+    const compatible = input.vehicles.filter(v => p.materials.every(m => v.materials.includes(m)));
+    const reason = !input.vehicles.length ? "NO_PLANNING_VEHICLES" : !compatible.length ? "NO_COMPATIBLE_VEHICLE_MATERIAL" : compatible.every(v => p.loadKg + v.initialLoadKg > v.capacityKg) ? "PICKUP_LOAD_EXCEEDS_AVAILABLE_CAPACITY" : "NO_FEASIBLE_INSERTION_WITHIN_SEARCH_LIMIT";
+    return { pickupId: p.id, reason };
+  }) };
 }
 function better(a: Calculation, b: Calculation): boolean { return a.served > b.served || a.served === b.served && a.metres < b.metres; }
 function insertion(input: PlanningInput, pickups: RoutingPickup[], cheapest: boolean, count: () => boolean): Calculation {

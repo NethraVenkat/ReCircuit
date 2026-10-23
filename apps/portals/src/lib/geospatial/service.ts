@@ -28,8 +28,17 @@ export class RoutingStore {
   async append(tenant: RecyclerId, kind: "settings" | "proposals", value: { tenant: RecyclerId; version: number }): Promise<void> {
     if (value.tenant !== tenant) throw Error("TENANT_MISMATCH");
     const directory = this.directory(tenant, kind); await fs.mkdir(directory, { recursive: true });
-    // wx makes a duplicate generation/version fail rather than overwrite history, even across processes.
-    await fs.writeFile(path.join(directory, String(value.version).padStart(8, "0") + ".json"), JSON.stringify(value), { flag: "wx", mode: 0o600 });
+    if (!Number.isInteger(value.version) || value.version < 1 || value.version > 99999999) throw Error("ROUTING_VERSION_INVALID");
+    const destination = path.join(directory, String(value.version).padStart(8, "0") + ".json");
+    const temporary = path.join(directory, ".pending-" + randomUUID());
+    try {
+      // A partial write is never visible as committed history. Linking a fully
+      // flushed file publishes atomically and fails if this version exists.
+      await fs.writeFile(temporary, JSON.stringify(value), { flag: "wx", mode: 0o600 });
+      const handle = await fs.open(temporary, "r+");
+      try { await handle.sync(); } finally { await handle.close(); }
+      await fs.link(temporary, destination);
+    } finally { await fs.unlink(temporary).catch(() => undefined); }
   }
   async settings(tenant: RecyclerId): Promise<WorkspaceSettings> {
     const all = await this.history<WorkspaceSettings>(tenant, "settings"), latest = all.at(-1);
@@ -40,13 +49,13 @@ export class RoutingStore {
 const tenantLocks = new Set<string>();
 async function exclusive<T>(tenant: string, run: () => Promise<T>): Promise<T> { if (tenantLocks.has(tenant)) throw Error("ROUTING_BUSY"); tenantLocks.add(tenant); try { return await run(); } finally { tenantLocks.delete(tenant); } }
 export class RoutingService {
-  constructor(private readonly source: BookingSource, private readonly store: RoutingStore, private readonly provider: MatrixProvider, private readonly now: () => Date = () => new Date()) {}
+  constructor(private readonly source: BookingSource, private readonly store: RoutingStore, private readonly provider: MatrixProvider, private readonly now: () => Date = () => new Date()) { if (!provider.configurationId?.trim()) throw Error("PROVIDER_CONFIGURATION_ID_REQUIRED"); }
   private async sources(tenant: RecyclerId) {
     const bookings = await this.source.list(tenant);
     if (bookings.length > 500 || bookings.some(b => b.recyclerId !== tenant) || new Set(bookings.map(b => b.id)).size !== bookings.length) throw Error("SOURCE_IDENTITY_OR_LIMIT");
     const settings = await this.store.settings(tenant);
     const verification = await Promise.all(bookings.map(b => this.source.verification(tenant, b)));
-    return { bookings, settings, verification, sourceFingerprint: fingerprint({ tenant, bookings: bookings.map(b => bookingFingerprint(b)).sort(), settings, verification }) };
+    return { bookings, settings, verification, sourceFingerprint: fingerprint({ tenant, providerConfiguration: this.provider.configurationId, bookings: bookings.map(b => bookingFingerprint(b)).sort(), settings, verification }) };
   }
   async preview(tenant: RecyclerId, serviceDate: string) {
     ServiceDate.parse(serviceDate); const source = await this.sources(tenant);
@@ -106,6 +115,7 @@ export class RoutingService {
   async read(tenant: RecyclerId, id: string) {
     z.string().uuid().parse(id); const all = await this.store.history<SavedProposal>(tenant, "proposals"), proposal = all.find(p => p.id === id && p.tenant === tenant); if (!proposal) throw Error("PROPOSAL_NOT_FOUND");
     RouteProposalRecord.parse(proposal);
+    if (proposal.input.tenant !== tenant) throw Error("STORED_PROPOSAL_INVALID");
     const validation = validateProposal(proposal.input, proposal.optimization.solution);
     const baselineValidation = validateProposal(proposal.input, proposal.optimization.baseline);
     if (!validation.valid || !baselineValidation.valid || proposal.optimization.inputFingerprint !== fingerprint(proposal.input)) throw Error("STORED_PROPOSAL_INVALID");

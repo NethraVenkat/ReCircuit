@@ -1,6 +1,6 @@
 // UI-only network fixtures supplement the real vertical-slice browser audit; never claim these are live provider responses.
 import {chromium} from 'playwright';import AxeBuilder from '@axe-core/playwright';import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';
-const base='http://127.0.0.1:3200',out=path.resolve('../evidence/browser-states-'+Date.now());fs.mkdirSync(out);const browser=await chromium.launch(),rows=[];
+const base='http://127.0.0.1:3200',out=path.resolve(process.env.ROUTING_AUDIT_EVIDENCE_DIR||'../evidence','browser-states-'+Date.now());fs.mkdirSync(out);const browser=await chromium.launch(),rows=[];
 try{for(const name of['no-eligible-pickups','ambiguous-coordinate','feature-disabled','provider-disabled','long-reference-address','loading']){
  const context=await browser.newContext({viewport:{width:1366,height:768}}),page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await context.route('**/*',async route=>{const r=route.request(),url=new URL(r.url());if(url.origin!==base)return route.abort();if(!url.pathname.startsWith('/api/routing'))return route.continue();

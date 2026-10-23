@@ -3,7 +3,7 @@ import type { RecyclerId } from "../types";
 export interface Node { id: string; coordinate: { lat: number; lon: number } }
 export interface MatrixRequest { tenant: RecyclerId; nodes: Node[]; departureAssumption: string }
 export interface RouteGeometry { provider: string; geometry: { type: "LineString"; coordinates: [number, number][] }; metres: number; seconds: number; attribution: string }
-export interface MatrixProvider { matrix(input: MatrixRequest): Promise<MatrixSnapshot>; geometry?(coordinates: Node["coordinate"][]): Promise<RouteGeometry> }
+export interface MatrixProvider { readonly configurationId: string; matrix(input: MatrixRequest): Promise<MatrixSnapshot>; geometry?(coordinates: Node["coordinate"][]): Promise<RouteGeometry> }
 export interface GeocodeQuery { tenant: RecyclerId; address: string; addressFingerprint: string }
 export type GeocodeCandidates = { state: "review-required" | "ambiguous" | "failed" | "unavailable"; candidates: Array<{ coordinate: Node["coordinate"]; precision: string | null }>; provider: string };
 
@@ -16,6 +16,7 @@ export class SyntheticGeocoder {
   }
 }
 export class SyntheticMatrixProvider implements MatrixProvider {
+  get configurationId() { return fingerprint({ adapter: "synthetic-registry-v1", fixtures: this.fixtures }); }
   constructor(private readonly fixtures: Readonly<Record<string, MatrixSnapshot>>) {}
   async matrix(input: MatrixRequest): Promise<MatrixSnapshot> {
     const fixture = this.fixtures[fingerprint(input)];
@@ -27,6 +28,7 @@ interface ProviderConfig { origin: string; allowedOrigins: string[]; enabled: bo
 type Transport = typeof fetch;
 /** Caller payloads cannot select an origin/profile. No public-demo or public Nominatim defaults. */
 export class PrivateRoadProvider implements MatrixProvider {
+  get configurationId() { return fingerprint({ adapter: "private-osrm-v1", ...this.config }); }
   private readonly origin: string;
   private readonly inflight = new Map<string, Promise<MatrixSnapshot>>();
   private readonly cache = new Map<string, MatrixSnapshot>();

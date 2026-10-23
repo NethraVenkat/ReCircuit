@@ -21,6 +21,7 @@ class PublicOnlyHeiGitProvider extends HeiGitProvider {
 }
 
 class RegisteredScenarioProvider implements MatrixProvider {
+  readonly configurationId = "registered-synthetic-four-stop-v1";
   async matrix(request: MatrixRequest): Promise<MatrixSnapshot> {
     const known = syntheticInput(4).matrix;
     if (request.tenant !== "deccan" || request.nodes.some(node => !known.nodes.some(n => n.id === node.id && fingerprint(n.coordinate) === fingerprint(node.coordinate)))) throw Error("SYNTHETIC_SCENARIO_NOT_REGISTERED");

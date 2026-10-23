@@ -82,12 +82,13 @@ export function bookingToPickup(b: PortalBooking, rawContext: unknown): Conversi
   if (!["RECEIVED", "CONFIRMED", "SCHEDULED"].includes(b.status)) reasons.push("LIFECYCLE_EXCLUDED");
   if (!b.id || !b.bookingReference || !b.addressLine?.trim() || !b.pincode?.trim()) reasons.push("IDENTITY_OR_ADDRESS_MISSING");
   if (!p.verification || p.verification.tenant !== p.tenant || p.verification.bookingId !== b.id || p.verification.bookingFingerprint !== version) reasons.push("INDEPENDENT_VERIFICATION_REQUIRED");
-  if (!b.items.length || b.items.some(i => !Number.isFinite(i.weightKg) || i.weightKg! <= 0 || !Number.isInteger(i.quantity) || i.quantity! <= 0 || !i.category?.trim())) reasons.push("LOAD_OR_MATERIAL_UNKNOWN");
+  const loadKg = b.items.reduce((n, i) => n + (i.weightKg ?? NaN), 0);
+  if (!b.items.length || !Number.isFinite(loadKg) || b.items.some(i => !Number.isFinite(i.weightKg) || i.weightKg! <= 0 || !Number.isInteger(i.quantity) || i.quantity! <= 0 || !i.category?.trim())) reasons.push("LOAD_OR_MATERIAL_UNKNOWN");
   if (!p.geocode || p.geocode.tenant !== p.tenant || p.geocode.state !== "resolved" || p.geocode.addressFingerprint !== address || !p.geocode.coordinate) reasons.push("COORDINATE_REVIEW_REQUIRED");
   if (p.serviceSeconds === null) reasons.push("SERVICE_DURATION_UNKNOWN");
   if (trackingSlots(b).assignedSlot !== null && p.confirmedWindow === null) reasons.push("CONFIRMED_WINDOW_NOT_INTERPRETED");
   if (reasons.length) return { eligible: false, id: b.id, reasons };
-  const pickup = Pickup.parse({ id: b.id, reference: b.bookingReference, tenant: p.tenant, bookingFingerprint: version, serviceDate: p.serviceDate, timezone: p.timezone, addressFingerprint: address, coordinate: p.geocode!.coordinate, coordinateVersion: p.geocode!.version, materials: [...new Set(b.items.map(i => i.category!))].sort(), loadKg: b.items.reduce((n, i) => n + i.weightKg!, 0), serviceSeconds: p.serviceSeconds, assumptionVersion: p.assumptionVersion, requestedWindow: trackingSlots(b).requestedSlot, confirmedWindow: p.confirmedWindow, verificationEvidenceId: p.verification!.evidenceId });
+  const pickup = Pickup.parse({ id: b.id, reference: b.bookingReference, tenant: p.tenant, bookingFingerprint: version, serviceDate: p.serviceDate, timezone: p.timezone, addressFingerprint: address, coordinate: p.geocode!.coordinate, coordinateVersion: p.geocode!.version, materials: [...new Set(b.items.map(i => i.category!))].sort(), loadKg, serviceSeconds: p.serviceSeconds, assumptionVersion: p.assumptionVersion, requestedWindow: trackingSlots(b).requestedSlot, confirmedWindow: p.confirmedWindow, verificationEvidenceId: p.verification!.evidenceId });
   return { eligible: true, pickup };
 }
 export interface PlanningInput { tenant: RecyclerId; serviceDate: string; timezone: "Asia/Kolkata"; pickups: RoutingPickup[]; vehicles: RoutingVehicle[]; matrix: MatrixSnapshot }
