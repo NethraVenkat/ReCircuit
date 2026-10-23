@@ -13,6 +13,7 @@ export const Geocode = z.object({
   state: z.enum(["resolved", "ambiguous", "failed", "unavailable", "review-required"]),
   tenant: Tenant, addressFingerprint: Id, version: Id, provider: Id, retrievedAt: z.string().datetime(),
   coordinate: Coordinate.nullable(), reviewedBy: Id.nullable(), precision: z.string().nullable(),
+  reviewedAt: z.string().datetime().optional(), sourceResultId: z.string().uuid().optional(), sourceCandidateId: Id.optional(), providerConfiguration: Id.optional(), correctionReason: z.string().min(1).max(500).optional(),
 }).strict().superRefine((g, ctx) => { if (g.state === "resolved" && (!g.coordinate || !g.reviewedBy)) ctx.addIssue({ code: "custom", message: "Resolved coordinates require explicit review provenance" }); });
 export const Verification = z.object({ tenant: Tenant, bookingId: Id, bookingFingerprint: Id, independent: z.literal(true), verified: z.literal(true), checkedAt: z.string().datetime(), evidenceId: Id }).strict();
 export const Preparation = z.object({
@@ -57,6 +58,7 @@ export const RouteProposalRecord = z.object({
   input: z.object({ tenant: Tenant, serviceDate: ServiceDate, timezone: z.literal("Asia/Kolkata"), pickups: z.array(Pickup).max(50), vehicles: z.array(Vehicle).max(8), matrix: Matrix }).strict(),
   optimization: z.object({ inputFingerprint: Id, algorithm: Id, status: z.enum(["proven-optimum", "heuristic-feasible", "no-feasible-solution-found"]), solution: RouteCalculation, baseline: RouteCalculation, evaluations: z.number().int().nonnegative().max(20000), evaluationLimit: z.number().int().positive().max(20000), objective: z.string().min(1).max(1024) }).strict(),
   independentValidation: ReplayResult, baselineValidation: ReplayResult,
+  preparationSnapshot: z.object({ settingsVersion: z.number().int().positive(), geocoderConfiguration: Id, coordinates: z.array(z.object({ bookingId: Id, geocode: Geocode }).strict()).max(50) }).strict().optional(),
   comparison: z.object({ comparable: z.boolean(), deltaMetres: z.number().finite().nullable(), reductionPercent: z.number().finite().nullable(), reason: z.string() }).strict(), planningOnly: z.literal(true),
   geometry: z.array(z.object({ provider: Id, geometry: z.object({ type: z.literal("LineString"), coordinates: z.array(z.tuple([z.number().finite().min(-180).max(180), z.number().finite().min(-90).max(90)])).min(2) }).strict(), metres: Nonnegative, seconds: Nonnegative, attribution: z.string(), vehicleId: Id, matrixMismatch: z.boolean() }).strict()).max(8).optional(), geometryError: Id.optional(),
 }).strict();

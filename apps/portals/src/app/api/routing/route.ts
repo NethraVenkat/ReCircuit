@@ -27,8 +27,8 @@ export async function POST(request: Request) {
     const decoder = new TextDecoder(); let text = "", size = 0;
     for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) { size += chunk.value.length; if (size > 65536) { await reader.cancel(); throw Error("PAYLOAD_LIMIT"); } text += decoder.decode(chunk.value, { stream: true }); }
     text += decoder.decode();
-    const envelope = z.object({ action: z.enum(["review", "vehicles", "generate"]), payload: z.unknown() }).strict().parse(JSON.parse(text)), service = routingService();
-    const result = envelope.action === "review" ? await service.review(tenant, envelope.payload, reviewer) : envelope.action === "vehicles" ? await service.vehicles(tenant, envelope.payload) : await (async () => { const body = z.object({ serviceDate: z.string(), requestKey: z.string().uuid() }).strict().parse(envelope.payload); return service.generate(tenant, body.serviceDate, body.requestKey); })();
+    const envelope = z.object({ action: z.enum(["review", "geocode", "vehicles", "generate"]), payload: z.unknown() }).strict().parse(JSON.parse(text)), service = routingService();
+    const result = envelope.action === "review" ? await service.review(tenant, envelope.payload, reviewer) : envelope.action === "geocode" ? await service.geocode(tenant, envelope.payload) : envelope.action === "vehicles" ? await service.vehicles(tenant, envelope.payload) : await (async () => { const body = z.object({ serviceDate: z.string(), requestKey: z.string().uuid() }).strict().parse(envelope.payload); return service.generate(tenant, body.serviceDate, body.requestKey); })();
     return NextResponse.json(result, { headers });
   } catch (error) { return failure(error); }
 }

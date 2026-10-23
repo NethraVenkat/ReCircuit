@@ -3,10 +3,13 @@ import path from "node:path";
 import { getRepository } from "../repository";
 import { RoutingService, RoutingStore } from "./service";
 import { verificationFromHousehold } from "./verification-bridge";
-import { syntheticInput } from "./fixtures";
+import { syntheticBooking, syntheticInput } from "./fixtures";
 import { fingerprint, type MatrixSnapshot } from "./contracts";
 import type { MatrixProvider, MatrixRequest } from "./providers";
 import { HeiGitProvider } from "./heigit.server";
+import { HeiGitGeocoder } from "./geocoding.server";
+import { DisabledGeocoder, type GeocodingProvider } from "./geocoding";
+import { SupabaseRoutingStore } from "./shared-store.server";
 
 class PublicOnlyHeiGitProvider extends HeiGitProvider {
   async matrix(request: MatrixRequest) {
@@ -30,18 +33,36 @@ class RegisteredScenarioProvider implements MatrixProvider {
   }
 }
 let service: RoutingService | undefined;
+class RegisteredScenarioGeocoder implements GeocodingProvider {
+  readonly configurationId = "synthetic-geocode-four-stop-v1";
+  async resolve(query: Parameters<GeocodingProvider["resolve"]>[0]): ReturnType<GeocodingProvider["resolve"]> {
+    const pickup = syntheticInput(4).pickups.find(p => { const b = syntheticBooking(p.id); return query.tenant === "deccan" && query.address === [b.addressLine, b.locality, b.pincode].join(", "); });
+    if (!pickup) return { provider: "synthetic-registered-geocoder", state: "unavailable", candidates: [] };
+    const candidate = { id: "synthetic-candidate-" + pickup.id, coordinate: pickup.coordinate, label: "SYNTHETIC grid " + pickup.id, precision: "synthetic-fixture", confidence: null };
+    const candidates = pickup.id.endsWith("000") ? [candidate, { ...candidate, id: candidate.id + "-alternative", coordinate: { ...candidate.coordinate, lat: 0.001 }, label: "SYNTHETIC alternative; requires operator review" }] : [candidate];
+    return { provider: "synthetic-registered-geocoder", state: candidates.length > 1 ? "ambiguous" : "review-required", candidates };
+  }
+}
 export function routingService(): RoutingService {
   // Deployment needs an independently reviewed shared store/coordination mechanism; never silently write ephemeral production files.
   if (process.env.NODE_ENV === "production" || process.env.RECIRCUIT_PERSISTENCE !== "local") throw Error("ROUTING_LOCAL_PREVIEW_ONLY");
   if (service) return service;
   const directory = process.env.ROUTING_DATA_DIR, records = process.env.ROUTING_HOUSEHOLD_EVIDENCE_DIR;
   if (!directory || !path.isAbsolute(directory) || !records || !path.isAbsolute(records)) throw Error("ROUTING_STORAGE_CONFIGURATION_REQUIRED");
-  const provider: MatrixProvider = process.env.ROUTING_MATRIX_PROVIDER === "heigit-public" ? new PublicOnlyHeiGitProvider(process.env.HEIGIT_API_KEY, process.env.ROUTING_EXTERNAL_PUBLIC_ENABLED === "true", fetch, 2) : new RegisteredScenarioProvider();
+  if (!["synthetic", "heigit-public"].includes(process.env.ROUTING_MATRIX_PROVIDER || "synthetic") || !["disabled", "synthetic", "heigit-public"].includes(process.env.ROUTING_GEOCODER_PROVIDER || "disabled")) throw Error("ROUTING_PROVIDER_CONFIGURATION_REQUIRED");
+  const provider: MatrixProvider = process.env.ROUTING_MATRIX_PROVIDER === "heigit-public" ? new PublicOnlyHeiGitProvider(process.env.HEIGIT_API_KEY, process.env.ROUTING_EXTERNAL_PUBLIC_ENABLED === "true" && process.env.ROUTING_FREE_QUOTA_CONFIRMED === "true", fetch, 2) : new RegisteredScenarioProvider();
+  const geocoder = process.env.ROUTING_GEOCODER_PROVIDER === "synthetic" ? new RegisteredScenarioGeocoder() : process.env.ROUTING_GEOCODER_PROVIDER === "heigit-public" ? new HeiGitGeocoder(process.env.HEIGIT_API_KEY, process.env.ROUTING_EXTERNAL_PUBLIC_ENABLED === "true" && process.env.ROUTING_FREE_QUOTA_CONFIRMED === "true", ["Heidelberg Castle, Heidelberg, 69117"]) : new DisabledGeocoder();
+  let store: import("./service").RoutingPersistence = new RoutingStore(directory);
+  if (process.env.ROUTING_STORE_BACKEND === "supabase-local-test") {
+    const url = new URL(process.env.SUPABASE_URL || "https://invalid.example");
+    if (process.env.ROUTING_SHARED_TEST_MODE !== "true" || url.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(url.hostname) || url.origin !== process.env.SUPABASE_URL) throw Error("ROUTING_SHARED_LOCAL_TEST_CONFIGURATION_REQUIRED");
+    store = new SupabaseRoutingStore();
+  } else if (process.env.ROUTING_STORE_BACKEND && process.env.ROUTING_STORE_BACKEND !== "local") throw Error("ROUTING_STORAGE_CONFIGURATION_REQUIRED");
   service = new RoutingService({ list: tenant => getRepository().listBookings(tenant), verification: async (tenant, booking) => {
     const names = await fs.readdir(records);
     if (names.length > 500) throw Error("EVIDENCE_LIMIT");
     const values = await Promise.all(names.filter(n => /^[a-zA-Z0-9_-]+\.json$/.test(n)).map(async n => JSON.parse(await fs.readFile(path.join(records, n), "utf8")) as unknown));
     return verificationFromHousehold(tenant, booking, values);
-  } }, new RoutingStore(directory), provider);
+  } }, store, provider, () => new Date(), geocoder);
   return service;
 }

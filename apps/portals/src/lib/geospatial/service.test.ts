@@ -67,6 +67,7 @@ describe("authorization and credentials", () => {
   it("withholds MapTiler browser key until restrictions are verified and origin is exact", () => {
     vi.stubEnv("MAPTILER_API_KEY", "unit-only-public-key"); vi.stubEnv("MAPTILER_ALLOWED_ORIGINS", "http://localhost:3200,http://127.0.0.1:3200");
     expect(browserMapConfiguration("http://localhost:3200")).not.toHaveProperty("key"); vi.stubEnv("MAPTILER_ORIGIN_RESTRICTIONS_VERIFIED", "true");
+    expect(browserMapConfiguration("http://localhost:3200")).not.toHaveProperty("key"); vi.stubEnv("ROUTING_MAP_ENABLED", "true");
     expect(browserMapConfiguration("http://localhost:3200").enabled).toBe(true); expect(browserMapConfiguration("http://localhost:3201").enabled).toBe(false); expect(browserMapConfiguration("https://anything.vercel.app").enabled).toBe(false);
   });
   it("HeiGIT key stays in server Authorization; directed units and hard budget are preserved", async () => {

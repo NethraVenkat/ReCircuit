@@ -43,7 +43,7 @@ export function validateProposal(raw: PlanningInput, proposal: Calculation): { v
 }
 
 export function compare(proposal: Calculation, baseline: Calculation): { comparable: boolean; deltaMetres: number | null; reductionPercent: number | null; reason: string } {
-  const scope = (c: Calculation) => c.routes.flatMap(r => r.pickupIds).sort().join("|");
+  const scope = (c: Calculation) => JSON.stringify(c.routes.flatMap(r => r.pickupIds).sort());
   if (scope(proposal) !== scope(baseline)) return { comparable: false, deltaMetres: null, reductionPercent: null, reason: "Different served pickup scope; no headline reduction" };
   const delta = baseline.metres - proposal.metres;
   return { comparable: true, deltaMetres: delta, reductionPercent: baseline.metres === 0 ? null : delta / baseline.metres * 100, reason: baseline.metres === 0 ? "Zero baseline; percentage undefined" : "Planned distance comparison, not distance driven" };

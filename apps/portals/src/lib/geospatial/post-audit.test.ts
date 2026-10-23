@@ -61,3 +61,11 @@ it("excludes overflowing aggregate row weight rather than crashing conversion", 
   expect(result.eligible).toBe(false);
   expect(!result.eligible && result.reasons).toContain("LOAD_OR_MATERIAL_UNKNOWN");
 });
+it("retains reviewed coordinate provenance in immutable proposals and rejects altered snapshot links", async () => {
+  const s = await scenario(), saved = await s.service.generate("deccan", "2026-10-24", randomUUID());
+  expect(saved.preparationSnapshot?.coordinates[0]?.geocode.version).toBe(saved.input.pickups[0]!.coordinateVersion);
+  expect(saved.preparationSnapshot?.coordinates[0]?.geocode.reviewedBy).toBe("audit-operator");
+  const file = path.join(s.directory, "deccan/proposals/00000001.json"), record = JSON.parse(await fs.readFile(file, "utf8"));
+  record.preparationSnapshot.coordinates[0].geocode.coordinate.lat = 5; await fs.writeFile(file, JSON.stringify(record));
+  await expect(s.service.read("deccan", saved.id)).rejects.toThrow("STORED_PREPARATION_INVALID");
+});

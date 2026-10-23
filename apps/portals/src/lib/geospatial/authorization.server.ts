@@ -21,7 +21,7 @@ export function permittedMapOrigin(origin: string): boolean {
   return allowed.some(value => { try { const url = new URL(value); return url.origin === value && !url.username && !url.password && value === origin && ["http:", "https:"].includes(url.protocol); } catch { return false; } });
 }
 export function browserMapConfiguration(origin: string): { enabled: boolean; key?: string; reason?: string } {
-  if (process.env.MAPTILER_ORIGIN_RESTRICTIONS_VERIFIED !== "true" || !permittedMapOrigin(origin) || !process.env.MAPTILER_API_KEY) return { enabled: false, reason: "Provider origin restrictions not verified; schematic map remains usable" };
+  if (process.env.ROUTING_MAP_ENABLED !== "true" || process.env.MAPTILER_ORIGIN_RESTRICTIONS_VERIFIED !== "true" || !permittedMapOrigin(origin) || !process.env.MAPTILER_API_KEY) return { enabled: false, reason: "Map feature disabled or provider origin restrictions not verified; schematic map remains usable" };
   // This is an intentional public browser credential, released only after origin restriction review.
   // HEIGIT_API_KEY has no browser-facing path and must never receive a NEXT_PUBLIC_ alias.
   return { enabled: true, key: process.env.MAPTILER_API_KEY };

@@ -37,3 +37,5 @@ body {
 .portal-shell--quickscrap .portal-form-hint{color:#cbd5e1}
 .portal-shell--quickscrap .portal-card .text-slate-500,.portal-shell--quickscrap .portal-card .text-slate-600{color:#475569}
 .portal-form-page{max-width:980px;margin-inline:auto}.portal-tracking-page{max-width:1100px;margin-inline:auto}
+
+.routing-map{height:360px;max-width:100%;border:1px solid #cdd9cf;border-radius:8px;isolation:isolate}.routing-map svg{background:transparent;border:0;max-height:none;border-radius:0}.routing-geocode-result{border-left:3px solid #245c3d;padding:12px;margin:16px 0}.routing-geocode-result fieldset{min-width:0}.routing-geocode-result .routing-check{align-items:start}.routing-geocode-result span{overflow-wrap:anywhere}
