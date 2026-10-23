@@ -68,7 +68,7 @@ export class RoutingService {
     });
   }
   async vehicles(tenant: RecyclerId, raw: unknown) {
-    const vehicles = z.array(Vehicle).max(8).parse(raw); if (vehicles.some(v => v.tenant !== tenant) || new Set(vehicles.map(v => v.id)).size !== vehicles.length) throw Error("TENANT_OR_VEHICLE_ID");
+    const vehicles = z.array(Vehicle).max(8).parse(raw).map(v => ({ ...v, version: randomUUID() })); if (vehicles.some(v => v.tenant !== tenant) || new Set(vehicles.map(v => v.id)).size !== vehicles.length) throw Error("TENANT_OR_VEHICLE_ID");
     return exclusive(tenant, async () => { const prior = await this.store.settings(tenant), versions = await this.store.history(tenant, "settings"); const next = Settings.parse({ ...prior, version: versions.length + 1, createdAt: this.now().toISOString(), vehicles }); await this.store.append(tenant, "settings", next); return { version: next.version }; });
   }
   async generate(tenant: RecyclerId, serviceDate: string, requestKey: string) {

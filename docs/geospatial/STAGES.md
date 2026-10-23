@@ -1,49 +1,33 @@
-# Geospatial routing execution board
+# Geospatial routing stage board — local verification
 
-Starting checkpoint: 78faed277c13c4bedc121645386ffea3dd74963c, verified on ui/recircuit-household-redesign. Isolated branch feature/geospatial-pickup-routing under .data/geospatial-20261023/worktree. Root report edit preserved (SHA256 48e8820075f065c136f16158b0c8f6244d373623d11f482326fcbf8a1c9f3329).
+Updated 2026-10-24T00:43:42.869023+05:30. Isolated branch `feature/geospatial-pickup-routing`, source checkpoint `0f4610685e40dc58391eaf8f0e2a69c8dd2b3b92`; foundation `5ad7cb1`. Documentation/polish checkpoint is the commit containing this board. Starting release `78faed277c13c4bedc121645386ffea3dd74963c` remains preserved in the original worktree, together with its existing report edit.
 
-Evidence and append-only execution log: ../evidence, relative to this worktree. Existing .data runs, three worktrees, ignored environment/build artifacts and external submission videos are preserved. No environment contents are copied. No production action is authorized.
+| Stage | Local gate | Paths / executed evidence | Limitations |
+|---|---|---|---|
+| 0 Baseline/architecture | PASS | Baseline compile/lint and 91 tests, `baseline-*.log`; architecture below | Initial inspection start was not timestamped; no invented duration |
+| 1 Validated conversion | PASS | `contracts.ts`, conversion cases in `geospatial.test.ts`; Zod models and pure row-weight semantics | Legacy missing data is excluded |
+| 2 Provider contracts | PASS for offline + public HeiGIT sample | `providers.ts`, `heigit.server.ts`, offline failures and `live-public-*.json` | Private customer routing not authorized/verified; MapTiler account/browser check BLOCKED |
+| 3 Optimization/independent replay | PASS | `optimizer.ts`, `validator.ts`, oracle/load/window/corruption cases, `benchmark-1792781220000.json` | Exact proof only ≤7 complete-service one-vehicle instances; larger results heuristic |
+| 4 Services/storage/security | PASS for isolated local preview | `service.ts`, `authorization.server.ts`, `verification-bridge.ts`, API, service/security tests and actual reload | Production shared persistence/distributed coordination intentionally unsupported; production guard retained |
+| 5 Operator UI/analytics | PASS map-independent workflow | `admin/routing/page.tsx`, fleet form, numbered SVG/list, fair comparison, screenshots | MapTiler disabled; no unsupported fuel/emissions factors |
+| 6 Verification/regression | PASS local scope | 354 regression tests; accepted type/lint/build exits 0; seven actual UI states plus six labelled UI fixtures | No live customer workflow or production deployment claimed |
+| 7 Documentation/release preparation | PASS for local preview preparation | REPORT, CONTRACTS, OPERATIONS, storyboard, local commits | Production activation requires the explicit prerequisites in OPERATIONS; not release-ready for production |
+| MapTiler account settings + actual browser-origin enforcement | BLOCKED | Provider docs reviewed; `cua.getState` had no enabled browser/app session | One HTTP 200 probe is inconclusive; no browser key exposure; exact local origins only |
+| Push/deployment/shared migration/production writes | NOT STARTED | None performed | Not authorized |
 
-| Stage | State | Evidence / remaining gate |
-|---|---|---|
-| 0 baseline and architecture | IN PROGRESS | inspection completed; baseline checks pending |
-| 1 validated conversion | NOT STARTED | |
-| 2 providers | NOT STARTED | official sources read 2026-10-23; external execution prohibited |
-| 3 optimizer / independent validation | NOT STARTED | |
-| 4 services / persistence / security | NOT STARTED | |
-| 5 operator workspace | NOT STARTED | |
-| 6 complete verification | NOT STARTED | |
-| 7 release preparation | NOT STARTED | |
-
-## Integration decisions
-
-Use the existing TypeScript Next.js recycler portal and its tenant-bound operator surface, not a driver application. Existing routing in core allocates materials to recyclers; it is not a fleet/road optimizer. Geospatial planning is a separate domain, with no booking mutation methods in its service dependency.
-
-Portal RECEIVED / CONFIRMED / SCHEDULED status is not independent verification. A matching, version-bound independent verification attestation is required for preparation. Requested windows remain preferences. A confirmed time must come from explicit dispatcher evidence; ambiguous legacy window strings cannot be parsed into invented hard windows. Unknown total row weights, capacity and service duration block readiness. Four battery units at 0.5 kg row weight contribute 0.5 kg.
-
-Permission model: fail closed unless feature flag and server-side operator token are configured; require explicit header token (no query token) and fixed configured tenant. Every booking, vehicle, coordinate and proposal is checked against that tenant. No caller-selected tenant or arbitrary fetch target. JSON mutations require same-origin and header authorization. Local planning storage is separate from booking persistence. Shared/cloud persistence deployment remains disabled until separately reviewed.
+Stage check timestamps and measured process/check-window elapsed times are in `C:\Users\Manish\Downloads\ReCircuit-Local\.data\geospatial-20261023\evidence\stage-verification-timing.json`. The append-only command log is `C:\Users\Manish\Downloads\ReCircuit-Local\.data\geospatial-20261023\evidence\execution.jsonl`. This records actual command start/end, elapsed milliseconds and exit codes. It does not fabricate full-stage coding time: initial editing/inspection windows were not fully instrumented, and development/checks overlapped.
 
 ```mermaid
 flowchart LR
- A[Authorized tenant booking read] --> B[Pure eligibility + version conversion]
- B --> C[Reviewed coordinates and preparation evidence]
- C --> D[Immutable fingerprinted snapshot]
- D --> E[Directed matrix provider]
- E --> F[Bounded optimizer]
- F --> G[Separate constraint validator]
- G --> H[Versioned proposal-only store]
- H --> I[Authorized operator map and stop list]
- I --> J[Comparable baseline and assumption estimates]
+ A[Header-authenticated fixed tenant] --> B[Read existing portal bookings]
+ B --> C[Read-only approved household verification bridge]
+ C --> D[Pure booking conversion and exclusions]
+ D --> E[Reviewed coordinate and fleet versions]
+ E --> F[Immutable input fingerprint + directed matrix]
+ F --> G[Bounded optimization and feasible baseline]
+ G --> H[Separate schema/constraint replay]
+ H --> I[Immutable tenant proposal history]
+ I --> J[Authorized current/stale read + numbered map/list]
 ```
 
-Changed paths planned: apps/portals/src/lib/geospatial/*; apps/portals/src/app/api/routing/*; apps/portals/src/app/admin/routing/*; focused unit/integration/browser harnesses; docs/geospatial/*. No booking lifecycle schema migration is planned. No LLM is used for geospatial calculations.
-
-## Provider references (accessed 2026-10-23)
-
-- https://project-osrm.org/docs/v26.5.0/http — directed table distance/duration and route geometry; longitude,latitude input order. A self-hosted, explicitly approved OSRM origin is the initial road adapter candidate. No public demo endpoint default.
-- https://operations.osmfoundation.org/policies/nominatim/ — public endpoint maximum one request per second, identification and attribution requirements; do not send private customer addresses. Manual reviewed coordinates and exact-match synthetic fixtures are initial geocoding paths.
-- https://operations.osmfoundation.org/policies/tiles/ — free OSM data does not imply unrestricted hosted tiles; no SLA. No automatic public tile requests; schematic offline map fallback must be labelled.
-- https://developers.google.com/maps/documentation/routes/compute_route_matrix and https://developers.google.com/maps/documentation/routes/usage-and-billing — matrix billed by origin × destination elements, with per-element failures and request limits. Paid execution is prohibited; credentials/billing/legal storage review required before enabling.
-- https://developers.google.com/optimization/routing and https://developers.google.com/optimization/routing/routing_options — routing has bounded search controls and multiple strategies. Keep implementation in current stack; deterministic bounded insertion plus exact small-instance enumeration can avoid adding another runtime. Do not claim a heuristic is optimal.
-
-Provider implementation is not live verification. Coverage, deployment-specific limits, retention and caching terms require provider-specific review before live activation; no blanket permission to persist commercial-provider responses is inferred.
+Routing has no booking mutation dependency. Current provider configuration, historical Gemini/Groq extraction evidence, pricing, approval hashes, independent booking verification and operational status remain separate. No LLM participates in routing calculations. Detailed units, contracts and permissions are in CONTRACTS and OPERATIONS.

@@ -85,6 +85,15 @@ it("material geometry/matrix differences are preserved for disclosure", async ()
   const s = await setup(); s.provider.geometry = async () => ({ provider: "synthetic-test", geometry: { type: "LineString", coordinates: [[0, 0], [0.001, 0]] }, metres: 9000, seconds: 900, attribution: "SYNTHETIC ONLY" });
   const result = await s.service.generate("deccan", "2026-10-24", randomUUID()); expect(result.geometry?.[0]?.matrixMismatch).toBe(true); expect(result.optimization.solution.metres).toBe(300);
 });
+it("vehicle changes and expired matrix snapshots invalidate currency without rewriting history", async () => {
+  const s = await setup(), result = await s.service.generate("deccan", "2026-10-24", randomUUID());
+  expect(result.current).toBe(true); await s.service.vehicles("deccan", s.base.vehicles.map(v => ({ ...v, version: "explicit-fleet-v2", capacityKg: 11 })));
+  expect((await s.service.read("deccan", result.id)).current).toBe(false);
+  const other = await setup(), saved = await other.service.generate("deccan", "2026-10-24", randomUUID());
+  const later = new RoutingService(other.source, other.store, other.provider, () => new Date("2100-01-01T00:00:00Z"));
+  expect((await later.read("deccan", saved.id)).current).toBe(false);
+  await expect(later.generate("deccan", "2026-10-24", randomUUID())).rejects.toThrow("MATRIX_EXPIRED");
+});
 it("independent evidence bridge refuses stale, uncertain, mismatched or self-asserted verification", () => {
   const b = syntheticBooking(), record = { request: { id: "synthetic-household", state: "APPROVED" }, plan: { legs: [{ id: "leg", recyclerId: "deccan", bookingReference: b.bookingReference, state: "REQUEST_CONFIRMED" }] }, household: { customer: { addressLine: b.addressLine, locality: b.locality, pincode: b.pincode }, verifications: { leg: { verified: true, independent: true, isUncertain: false, bookingReference: b.bookingReference, observedItems: b.items, observedFeeText: "INR 180", checkedAt: "2026-10-23T00:01:00.000Z" } } } };
   expect(verificationFromHousehold("deccan", b, [record])?.bookingFingerprint).toBe(bookingFingerprint(b));
