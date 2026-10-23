@@ -19,6 +19,14 @@ export async function POST(req: Request) {
       if (body.planHash && (body.planHash !== hashPlan(plan) || approval.planHash !== hashPlan(plan))) {
         throw new Error("STALE: Approval no longer matches this plan. Review again.");
       }
+      if (!plan.legs || plan.legs.length === 0) {
+        throw new Error("Cannot book plan: plan has no eligible pickup legs to book.");
+      }
+      const household = stored.household as Record<string, unknown> | undefined;
+      const policies = Array.isArray(household?.policies) ? (household?.policies as Array<{ provenance?: string }>) : [];
+      if (household?.policyMode === "fixture" || policies.some((p) => p.provenance === "fixture")) {
+        throw new Error("Cannot book plan: request was generated using fixture/example policies. Live booking requires verified live policy retrieval.");
+      }
       const customer = customerSchema.parse(stored.household?.customer);
       const repo = getRepository();
       for (const leg of plan.legs) {
