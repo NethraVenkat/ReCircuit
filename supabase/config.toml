@@ -1,0 +1,6 @@
+project_id = "recircuit"
+
+# Only this remote API property is managed here. Other remote settings are
+# intentionally undeclared and must be preserved when applying this config.
+[api]
+schemas = ["public", "graphql_public", "portal"]
