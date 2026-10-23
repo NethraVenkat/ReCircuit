@@ -14,7 +14,7 @@ export default function TrackPage({ searchParams }: TrackPageProps): JSX.Element
 
   return (
     <DeccanLayout activePath="/track">
-      <div className="space-y-6">
+      <div className="space-y-6 portal-tracking-page">
         <div>
           <h2 className="text-2xl font-black text-emerald-950">Track E-Waste Consignment</h2>
           <p className="text-sm text-emerald-800 font-medium mt-1">

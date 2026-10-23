@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { mkdtempSync } from "node:fs";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import { expect, it, vi } from "vitest";
 import type { BookingEvent, PortalBooking } from "../lib/types";
 import { dispatcherSlotDetail, trackingEventMessage, trackingSlots } from "../lib/tracking-slots";
@@ -56,7 +57,7 @@ it("selects the latest dispatcher event even when event rows arrive unordered", 
   expect(trackingSlots(booking([later, earlier], "SCHEDULED")).assignedSlot).toBe("Afternoon");
 });
 it("preserves the customer's preference across persisted file-store scheduling and fresh readback", async () => {
-  const dir = mkdtempSync(path.resolve(".data/submission-resume-20261023/slot-test-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "recircuit-slot-test-"));
   const repo = new FileRepository(dir);
   const created = await repo.createBooking(input);
   await repo.updateBookingStatus("deccan", created.booking.bookingReference, "SCHEDULED", "Dispatcher scheduled pickup", { slot: "Afternoon" });

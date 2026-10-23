@@ -19,18 +19,19 @@ export function PaperPlusLayout({ children, activePath = "/" }: PaperPlusLayoutP
   ];
 
   return (
-    <div className="min-h-screen bg-amber-50/40 text-amber-950 flex flex-col">
+    <div className="portal-shell portal-shell--paperplus min-h-screen bg-amber-50/40 text-amber-950 flex flex-col">
+      <a className="portal-skip" href="#portal-main">Skip to content</a>
       {/* Header and Branding */}
       <header className="bg-white border-b border-amber-200 shadow-sm">
         {/* Top Banner */}
-        <div className="bg-amber-600 text-amber-50 px-6 py-2 text-xs flex justify-between items-center font-medium">
+        <div className="portal-banner bg-amber-600 text-amber-50 px-6 py-2 text-xs flex justify-between items-center font-medium">
           <span>Hyderabad Paper & Scrap Buyers · Kukatpally / KPHB / Madhapur</span>
           <span data-testid="cpcb-badge" className="bg-amber-700/80 px-2.5 py-0.5 rounded text-[11px]">
             {config.badge}
           </span>
         </div>
 
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="portal-brand-row max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-amber-500 text-white font-black flex items-center justify-center text-xl shadow">
               PP
@@ -47,7 +48,7 @@ export function PaperPlusLayout({ children, activePath = "/" }: PaperPlusLayoutP
         </div>
 
         {/* Top Tab Bar */}
-        <nav data-testid="paperplus-topbar" className="bg-amber-100/70 border-t border-amber-200 px-6">
+        <nav aria-label="Recycler navigation" data-testid="paperplus-topbar" className="portal-nav bg-amber-100/70 border-t border-amber-200 px-6">
           <div className="max-w-6xl mx-auto flex space-x-2">
             {navItems.map((item) => {
               const isActive = activePath === item.href;
@@ -55,6 +56,7 @@ export function PaperPlusLayout({ children, activePath = "/" }: PaperPlusLayoutP
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   className={`px-5 py-3 text-sm font-bold border-b-2 transition-all ${
                     isActive
                       ? "border-amber-700 text-amber-900 bg-amber-200/60"
@@ -70,7 +72,7 @@ export function PaperPlusLayout({ children, activePath = "/" }: PaperPlusLayoutP
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">{children}</main>
+      <main id="portal-main" className="portal-content flex-1 max-w-6xl w-full mx-auto px-6 py-8">{children}</main>
 
       {/* Footer */}
       <footer className="bg-amber-900 text-amber-100 py-6 text-center text-xs border-t border-amber-800 mt-12">

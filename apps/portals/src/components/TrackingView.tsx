@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { PortalBooking, RecyclerId } from "@/lib/types";
+import { PortalFeedback } from "./PortalFeedback";
 import { TrackingSlotDetails } from "./TrackingSlotDetails";
 import { trackingEventMessage } from "../lib/tracking-slots";
 
@@ -21,10 +22,14 @@ export function TrackingView({
   const [booking, setBooking] = useState<PortalBooking | null>(null);
   const [searched, setSearched] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [requestError, setRequestError] = useState("");
+  const sequence = useRef(0);
 
   const fetchTracking = async (ref: string, clientId: string = ""): Promise<void> => {
     if (!ref.trim() && !clientId.trim()) return;
+    const current = ++sequence.current;
     setLoading(true);
+    setBooking(null); setRequestError("");
     setNotFound(false);
     setSearched(true);
 
@@ -41,6 +46,8 @@ export function TrackingView({
       const res = await fetch(url, {
         headers: { "x-recycler-id": effectiveTenant },
       });
+      if (current !== sequence.current) return;
+      if (res.status !== 404 && !res.ok) throw new Error(`Tracking lookup returned HTTP ${res.status}`);
       if (res.ok) {
         const data = await res.json();
         if (data.booking) {
@@ -50,13 +57,13 @@ export function TrackingView({
           return;
         }
       }
-      setBooking(null);
-      setNotFound(true);
-    } catch {
-      setBooking(null);
-      setNotFound(true);
+      if (res.ok) throw new Error("Tracking response contained no booking record");
+      setBooking(null); setNotFound(true);
+    } catch (error) {
+      if (current !== sequence.current) return;
+      setBooking(null); setNotFound(false); setRequestError(error instanceof Error ? error.message : "Network request failed");
     } finally {
-      setLoading(false);
+      if (current === sequence.current) setLoading(false);
     }
   };
 
@@ -75,27 +82,13 @@ export function TrackingView({
 
   return (
     <div className="space-y-6">
-      {/* Search Input Box */}
-      <form onSubmit={handleSearch} className="flex gap-2 max-w-xl">
-        <label htmlFor="search_reference" className="sr-only">Booking Reference</label>
-        <input
-          id="search_reference"
-          type="text"
-          data-testid="input-reference"
-          value={reference}
-          onChange={(e) => setReference(e.target.value)}
-          placeholder="Enter Booking Reference (e.g. DEC-12345)"
-          className="flex-1 px-4 py-2 border rounded text-sm text-slate-900 bg-white font-mono font-bold"
-        />
-        <button
-          type="submit"
-          data-testid="submit-track"
-          disabled={loading}
-          className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm rounded shadow"
-        >
-          {loading ? "Tracking..." : "Track"}
-        </button>
+      <form onSubmit={handleSearch} className="portal-tracking-search">
+        <div><label htmlFor="search_reference">Booking reference</label><input id="search_reference" type="text" data-testid="input-reference" required autoComplete="off" value={reference} onChange={e => setReference(e.target.value)} placeholder={`e.g. ${{deccan:"DEC",paperplus:"PPK",quickscrap:"QSH"}[recyclerId]}-12345`} className="px-4 py-2 border rounded text-slate-900 bg-white font-mono"/></div>
+        <button type="submit" data-testid="submit-track" disabled={loading} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded">{loading ? "Checking…" : "Track booking"}</button>
       </form>
+      {!searched && <p className="text-sm">Enter the reference saved when your request was submitted. A requested slot is not a dispatcher assignment.</p>}
+      {loading && <p role="status" className="portal-notice">Reading the saved recycler record… No booking or status change is submitted.</p>}
+      {requestError && <PortalFeedback message={requestError} title="The tracking service could not return a result. This does not establish that your booking is missing."/>}
 
       {/* 404 / Not Found message */}
       {notFound && searched && (
@@ -108,7 +101,7 @@ export function TrackingView({
             <span>No booking found</span>
           </div>
           <p>
-            We could not find any active booking with reference{" "}
+            We could not find any saved booking with reference{" "}
             <span className="font-mono font-bold">{reference}</span>. Please verify the reference code and try again.
           </p>
         </div>
@@ -120,6 +113,7 @@ export function TrackingView({
           data-testid="tracking-result"
           className="p-6 rounded-lg border bg-white shadow-sm space-y-6 text-slate-900"
         >
+          <p className="portal-notice">This is the saved recycler status. A received or confirmed request is not evidence of collection. Simulated downstream events are labelled in the history.</p>
           {/* Header row */}
           <div className="flex flex-wrap items-center justify-between border-b pb-4 gap-4">
             <div>

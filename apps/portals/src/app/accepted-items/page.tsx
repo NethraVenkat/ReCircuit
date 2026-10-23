@@ -20,7 +20,7 @@ export default function AcceptedItemsPage(): JSX.Element {
           <p className="text-xs text-slate-600">
             Deccan E-Cycle collects and recycles the following categories of household and office electronics:
           </p>
-          <div className="overflow-x-auto">
+          <div role="region" aria-label="Recycler policy table" tabIndex={0} className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="bg-emerald-50 text-emerald-900 border-b border-emerald-200">

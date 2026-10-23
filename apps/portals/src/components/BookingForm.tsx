@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { PortalFeedback } from "./PortalFeedback";
 import { getAvailableSlots, RECYCLER_CONFIGS } from "@/lib/config";
 import { SERVICEABLE_PINCODES, type BookingItemInput, type RecyclerId } from "@/lib/types";
 
@@ -47,13 +48,10 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const [itemQty, setItemQty] = useState<number>(1);
   const [itemWeight, setItemWeight] = useState<number>(5);
 
-  const totalWeight = items.reduce(
-    (sum, item) => sum + (item.weightKg || (item.quantity ? item.quantity * 2 : 1)),
-    0
-  );
-  const initialFee =
-    recyclerId === "deccan" ? (totalWeight < 5 ? 180 : 0) : recyclerId === "quickscrap" ? 50 : 0;
-  const [computedFee, setComputedFee] = useState<number | null>(initialFee);
+  const totalWeight = items.reduce((sum, item) => sum + (item.weightKg ?? 0), 0);
+  const [computedFee, setComputedFee] = useState<number | null>(null);
+  const [feeLoading, setFeeLoading] = useState(true);
+  const [feeError, setFeeError] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -62,20 +60,17 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const slots = getAvailableSlots();
 
   useEffect(() => {
+    const controller = new AbortController();
     const apiPrefix = getApiPrefix(recyclerId);
-    fetch(`${apiPrefix}/api/fee?weight=${totalWeight}`, {
-      headers: { "x-recycler-id": recyclerId },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (typeof data.fee === "number") {
-          setComputedFee(data.fee);
-        } else if (data.fee === null || data.hideReviewFee) {
-          setComputedFee(null);
-        }
-      })
-      .catch(() => {});
+    setFeeLoading(true); setComputedFee(null); setFeeError("");
+    fetch(`${apiPrefix}/api/fee?weight=${totalWeight}`, { headers: { "x-recycler-id": recyclerId }, signal: controller.signal })
+      .then(async res => { if (!res.ok) throw new Error(`Fee lookup returned HTTP ${res.status}`); return res.json(); })
+      .then(data => { if (!controller.signal.aborted) setComputedFee(typeof data.fee === "number" ? data.fee : null); })
+      .catch((error: Error) => { if (!controller.signal.aborted) setFeeError(error.message); })
+      .finally(() => { if (!controller.signal.aborted) setFeeLoading(false); });
+    return () => controller.abort();
   }, [totalWeight, recyclerId]);
+  useEffect(() => { if (errorMessage) document.getElementById("portal-form-error")?.focus(); }, [errorMessage]);
 
   // Initialize defaults
   useEffect(() => {
@@ -116,13 +111,16 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   };
 
   const handleAddItem = (): void => {
-    if (!itemName.trim()) return;
+    if (!itemName.trim() || !Number.isInteger(itemQty) || itemQty < 1 || !Number.isFinite(itemWeight) || itemWeight <= 0) {
+      setErrorMessage("Enter an item description, a whole-number quantity of at least 1, and a positive total row weight before adding it."); return;
+    }
+    setErrorMessage("");
     setItems((prev) => [
       ...prev,
       {
         name: itemName.trim(),
-        quantity: itemQty > 0 ? itemQty : undefined,
-        weightKg: itemWeight > 0 ? itemWeight : undefined,
+        quantity: itemQty,
+        weightKg: itemWeight,
       },
     ]);
     setItemName("");
@@ -140,6 +138,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
+    if (loading || feeLoading || computedFee === null) return;
     setLoading(true);
     setErrorMessage("");
     setValidationErrors([]);
@@ -215,6 +214,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       data-testid="booking-form"
       data-hydrated={hydrated ? "true" : "false"}
       onSubmit={handleSubmit}
+      onInvalid={e => (e.target as HTMLInputElement).setAttribute("aria-invalid", "true")}
+      onInput={e => (e.target as HTMLInputElement).removeAttribute("aria-invalid")}
+      aria-busy={loading}
       className={`p-6 rounded-lg border shadow-sm space-y-6 ${
         isDeccan
           ? "bg-white border-emerald-200"
@@ -232,22 +234,11 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         onChange={(e) => setClientRequestId(e.target.value)}
       />
 
-      {errorMessage && (
-        <div
-          data-testid="form-error-banner"
-          className="p-4 rounded border text-sm font-semibold bg-red-50 text-red-700 border-red-300"
-        >
-          <p className="font-bold">Submission Blocked:</p>
-          <p>{errorMessage}</p>
-          {validationErrors.length > 0 && (
-            <ul className="list-disc list-inside mt-2 text-xs space-y-1">
-              {validationErrors.map((v, i) => (
-                <li key={i}>{v.message}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <p className="text-sm">Fields marked * are required. Weight means the total for all units in each row.</p>
+      {errorMessage && <div id="portal-form-error" tabIndex={-1} data-testid="form-error-banner">
+        <PortalFeedback message={errorMessage} title="Your submission needs review. Check the fields and saved status before retrying."/>
+        {validationErrors.length > 0 && <ul className="mt-3 space-y-2 text-sm text-red-800">{validationErrors.map((v, i) => <li key={i}><a href={`#${v.field}`}>{v.message}</a></li>)}</ul>}
+      </div>}
 
       {/* Customer Info Section */}
       <div className="space-y-4">
@@ -259,6 +250,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               id="full_name"
               type="text"
               name="full_name"
+              autoComplete="name"
               data-testid="input-fullname"
               required
               value={fullName}
@@ -273,6 +265,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               id="phone"
               type="tel"
               name="phone"
+              pattern="[6-9][0-9]{9}" maxLength={10} autoComplete="tel" inputMode="tel"
               data-testid="input-phone"
               required
               value={phone}
@@ -290,6 +283,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               id="address_line"
               type="text"
               name="address_line"
+              autoComplete="street-address"
               data-testid="input-address"
               required
               value={addressLine}
@@ -333,7 +327,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         </div>
 
         <div>
-          <label htmlFor="preferred_slot" className="block text-xs font-semibold mb-1">Preferred Pickup Slot (IST) *</label>
+          <label htmlFor="preferred_slot" className="block text-xs font-semibold mb-1">Requested pickup slot (IST) *</label>
           <select
             id="preferred_slot"
             name="preferred_slot"
@@ -351,6 +345,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         </div>
       </div>
 
+      <p className="portal-form-hint">The selected slot is a request. A dispatcher-assigned slot appears separately in tracking.</p>
       {/* Items Section */}
       <div className="space-y-3 pt-2">
         <h3 className="text-base font-bold border-b pb-2 flex justify-between items-center">
@@ -368,7 +363,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               <div>
                 <span data-testid="item-row-name" className="font-bold">{item.name}</span>
                 {item.quantity && <span data-testid="item-row-qty" className="ml-2 text-xs text-slate-600">Qty: {item.quantity}</span>}
-                {item.weightKg && <span data-testid="item-row-weight" className="ml-2 text-xs text-slate-600">Weight: {item.weightKg} kg</span>}
+                {item.weightKg && <span data-testid="item-row-weight" className="ml-2 text-xs text-slate-600">Total row weight: {item.weightKg} kg</span>}
               </div>
               <button
                 type="button"
@@ -382,50 +377,13 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
           ))}
         </div>
 
-        {/* Add Item Row */}
-        <div className="flex flex-wrap items-center gap-2 pt-2">
-          <label htmlFor="input_item_name" className="sr-only">Item Description</label>
-          <input
-            id="input_item_name"
-            type="text"
-            data-testid="input-item-name"
-            value={itemName}
-            onChange={(e) => setItemName(e.target.value)}
-            placeholder="Add another item (e.g. Newspaper, Laptop)"
-            className="flex-1 min-w-[200px] px-3 py-2 border rounded text-sm text-slate-900 bg-white"
-          />
-          <label htmlFor="input_item_qty" className="sr-only">Item Quantity</label>
-          <input
-            id="input_item_qty"
-            type="number"
-            data-testid="input-item-qty"
-            value={itemQty}
-            onChange={(e) => setItemQty(parseInt(e.target.value) || 0)}
-            placeholder="Qty"
-            className="w-20 px-3 py-2 border rounded text-sm text-slate-900 bg-white"
-            min="0"
-          />
-          <label htmlFor="input_item_weight" className="sr-only">Item Weight (kg)</label>
-          <input
-            id="input_item_weight"
-            type="number"
-            data-testid="input-item-weight"
-            value={itemWeight}
-            onChange={(e) => setItemWeight(parseFloat(e.target.value) || 0)}
-            placeholder="Kg"
-            step="any"
-            className="w-20 px-3 py-2 border rounded text-sm text-slate-900 bg-white"
-            min="0"
-          />
-          <button
-            type="button"
-            data-testid="add-item"
-            onClick={handleAddItem}
-            className="px-3 py-2 rounded text-xs font-bold border border-slate-400 bg-slate-200 text-slate-800 hover:bg-slate-300"
-          >
-            + Add
-          </button>
+        <div className="portal-item-fields pt-3">
+          <div><label htmlFor="input_item_name">Add item description</label><input id="input_item_name" type="text" data-testid="input-item-name" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="e.g. Newspaper or laptop" className="px-3 py-2 border rounded text-slate-900 bg-white"/></div>
+          <div><label htmlFor="input_item_qty">Quantity (units)</label><input id="input_item_qty" type="number" data-testid="input-item-qty" value={Number.isFinite(itemQty) ? itemQty : ""} onChange={e => setItemQty(e.target.valueAsNumber)} min="1" step="1" className="px-3 py-2 border rounded text-slate-900 bg-white"/></div>
+          <div><label htmlFor="input_item_weight">Total row weight (kg)</label><input id="input_item_weight" type="number" data-testid="input-item-weight" value={Number.isFinite(itemWeight) ? itemWeight : ""} onChange={e => setItemWeight(e.target.valueAsNumber)} min="0" step="any" className="px-3 py-2 border rounded text-slate-900 bg-white"/></div>
+          <button type="button" data-testid="add-item" onClick={handleAddItem} className="px-3 py-2 rounded border border-slate-400 bg-slate-200 text-slate-800 hover:bg-slate-300">+ Add item</button>
         </div>
+        <p className="portal-form-hint">Current total: {totalWeight} kg across {items.length} item rows.</p>
       </div>
 
       {/* Deccan Data-Wipe Acknowledgement */}
@@ -437,6 +395,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
           <div className="flex items-start space-x-2">
             <input
               id="data_wipe_ack"
+              required
               type="checkbox"
               name="data_wipe_ack"
               data-testid="data-wipe-ack"
@@ -498,7 +457,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
                 name="human_verification_code"
                 data-testid="input-captcha-code"
                 required
-                maxLength={6}
+                maxLength={5}
+                minLength={5}
+                pattern="[A-Za-z0-9]{5}"
                 value={captchaCode}
                 onChange={(e) => setCaptchaCode(e.target.value.toUpperCase())}
                 placeholder="Enter 5 characters"
@@ -517,7 +478,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <div className="text-xs uppercase font-bold tracking-wider text-slate-500">
           Review Pickup Details & Fee
         </div>
-        {computedFee !== null && typeof computedFee === "number" ? (
+        {feeLoading ? <p role="status">Checking the pickup fee…</p> : computedFee !== null && typeof computedFee === "number" ? (
           <div
             data-testid="portal-computed-fee"
             className="text-base font-bold text-slate-900"
@@ -529,9 +490,10 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             data-testid="portal-fee-notice"
             className="text-sm italic text-slate-500"
           >
-            Pickup fee to be assessed upon collection by depot agent.
+            The pickup fee is unavailable. This does not mean pickup is free; review the fee with the recycler before proceeding.
           </div>
         )}
+        {feeError && <PortalFeedback message={feeError} title="The pickup fee could not be checked."/>}
         <p className="text-xs text-slate-600">
           Please review your items, address, and slot above before confirming your booking.
         </p>
@@ -540,10 +502,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       {/* Confirm Booking Button */}
       <div className="pt-2">
         <button
-          type="button"
-          onClick={handleSubmit}
+          type="submit"
           data-testid="confirm-booking"
-          disabled={loading}
+          disabled={loading || feeLoading || computedFee === null}
           className={`w-full py-3 px-6 rounded-md font-bold text-sm shadow transition-all ${
             isDeccan
               ? "bg-emerald-700 hover:bg-emerald-800 text-white"

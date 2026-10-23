@@ -25,6 +25,9 @@ describe("Policy Cache & Provenance Isolation", () => {
       extractedAt: "2026-10-23T07:00:00.000Z",
       sessionId: "session-live-01",
       extractionPath: "generic-ai",
+      llmProvider: "gemini",
+      llmModel: "historical-test-model",
+      llmAttempted: true,
     },
     quotes: ["Live quote: ₹180 standard pickup charge"],
   };
@@ -49,6 +52,7 @@ describe("Policy Cache & Provenance Isolation", () => {
     expect(result.meta.freshness).toBe("fresh");
     expect(result.meta.cached).toBe(false);
     expect(result.meta.retrievedAt).toBe("2026-10-23T07:00:00.000Z");
+    expect(result.meta).toMatchObject({ llmProvider: "gemini", llmModel: "historical-test-model", llmAttempted: true });
 
     // Cache should contain entry
     const cache = getPolicyCache();
@@ -89,6 +93,7 @@ describe("Policy Cache & Provenance Isolation", () => {
 
     // CRITICAL: retrievedAt must remain the original retrieval timestamp, NOT readNowMs!
     expect(result.meta.retrievedAt).toBe(originalRetrievedAt);
+    expect(result.meta).toMatchObject({ llmProvider: "gemini", llmModel: "historical-test-model", llmAttempted: true });
   });
 
   it("3. Live retrieval failure with NO cache produces genuine uncertainty, NOT silent fixtures", async () => {
@@ -144,6 +149,7 @@ describe("Policy Cache & Provenance Isolation", () => {
     expect(result.meta.cached).toBe(true);
     expect(result.meta.expired).toBe(true);
     expect(result.meta.retrievedAt).toBe(originalRetrievedAt);
+    expect(result.meta).toMatchObject({ llmProvider: "gemini", llmModel: "historical-test-model", llmAttempted: true });
     expect(result.meta.failureReason).toContain("Live refresh failed");
     expect(result.meta.failureReason).toContain("503 Gateway Timeout");
   });

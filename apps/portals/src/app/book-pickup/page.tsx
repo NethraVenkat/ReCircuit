@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default function BookPickupPage(): JSX.Element {
   return (
     <DeccanLayout activePath="/book-pickup">
-      <div className="space-y-6">
+      <div className="space-y-6 portal-form-page">
         <div>
           <h2 className="text-2xl font-black text-emerald-950">Book an E-Waste Pickup</h2>
           <p className="text-sm text-emerald-800 font-medium mt-1">

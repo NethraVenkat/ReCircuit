@@ -172,8 +172,8 @@ export default function HomePage(): JSX.Element {
               1. Flat Fee Structure & Logistics
             </summary>
             <p className="text-xs text-slate-300 leading-relaxed mt-3">
-              QuickScrap charges a standard convenience fee of ₹199 per pickup trip regardless of weight. Our pickup team
-              collects from your doorstep within selected slots.
+              QuickScrap charges a standard convenience fee of ₹50 per pickup trip regardless of weight. Our pickup team
+              records your requested slot; a dispatcher-assigned time is shown only when confirmed.
             </p>
           </details>
 

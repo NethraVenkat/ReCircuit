@@ -42,7 +42,7 @@ export default async function RatesPage(): Promise<JSX.Element> {
           <span className="text-xs font-bold text-orange-400 uppercase tracking-wider block mb-1">
             Standard Logistics Fee
           </span>
-          <p className="text-2xl font-black text-white font-mono">₹199 Flat Pickup Fee</p>
+          <p className="text-2xl font-black text-white font-mono">₹50 Flat Pickup Fee</p>
           <p className="text-xs text-slate-300 mt-1">
             Charged on all doorstep collections regardless of load size or material combination.
           </p>

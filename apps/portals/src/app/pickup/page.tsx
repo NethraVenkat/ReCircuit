@@ -11,7 +11,7 @@ export default function PickupPage(): JSX.Element {
         <div className="border-b border-slate-800 pb-3">
           <h2 className="text-xl font-bold uppercase tracking-wider text-white">Quick On-Demand Scrap Pickup</h2>
           <p className="text-xs text-slate-400 mt-1 font-mono">
-            Fast doorstep dispatch across Hyderabad · Standard flat fee ₹199
+            Fast doorstep dispatch across Hyderabad · Standard flat fee ₹50
           </p>
         </div>
 

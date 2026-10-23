@@ -4,11 +4,21 @@ import { useEffect, useRef, type ReactNode, type KeyboardEvent } from "react";
 export const money = (value: number | null | undefined) => value == null ? "Unknown" : new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(value);
 export const time = (value?: string) => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Not recorded";
 const labels: Record<string, string> = { PROPOSED_PICKUP: "Proposed pickup", AWAITING_APPROVAL: "Ready for review", APPROVED: "Approved", REJECTED: "Declined", SUBMITTING: "Booking in progress", REQUEST_SUBMITTED: "Booking requested", REQUEST_CONFIRMED: "Booking independently checked", PICKUP_SCHEDULED: "Pickup scheduled", NEEDS_HUMAN: "Needs your attention", FAILED: "Needs review", RECEIVED: "Booking received", PICKED_UP: "Collection recorded", RECYCLED: "Recycled" };
-export function Status({ value }: { value?: string }) { return <span className="rc-badge">{value ? labels[value] || value.replaceAll("_", " ").toLowerCase() : "Status unavailable"}</span>; }
+export function Status({ value, kind }: { value?: string; kind?: "eligibility" }) {
+  const title = kind === "eligibility" ? ({ ACCEPTED: "Accepted", REJECTED: "Not accepted", UNKNOWN: "Unknown" } as Record<string,string>)[value || ""] : labels[value || ""];
+  const tone = ["ACCEPTED", "REQUEST_CONFIRMED", "APPROVED"].includes(value || "") ? "success" : ["REJECTED", "FAILED", "NEEDS_HUMAN", "UNKNOWN"].includes(value || "") ? "warning" : "neutral";
+  return <span className={`rc-badge rc-badge--${tone}`}>{title || (value ? value.replaceAll("_", " ").toLowerCase() : "Status unavailable")}</span>;
+}
 export function Journey({ current }: { current: number }) { return <ol className="rc-journey" aria-label="Pickup journey">{["Items", "Recyclers", "Review", "Tracking"].map((s, i) => <li key={s} aria-current={current === i ? "step" : undefined}><span>{i + 1}</span>{s}</li>)}</ol>; }
 export function Drawer({ title, children, close }: { title: string; children: ReactNode; close: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const trigger = document.activeElement as HTMLElement; ref.current?.showModal(); return () => trigger?.focus(); }, []);
+  const trigger = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    trigger.current ??= document.activeElement as HTMLElement;
+    dialog?.showModal();
+    return () => { dialog?.close(); trigger.current?.focus(); };
+  }, []);
   function containFocus(event: KeyboardEvent<HTMLDialogElement>) {
     if(event.key!=="Tab")return;
     const controls=Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button,a[href],input,select,textarea,summary,[tabindex]:not([tabindex='-1'])")).filter(el=>!el.hasAttribute("disabled")&&el.getClientRects().length>0);

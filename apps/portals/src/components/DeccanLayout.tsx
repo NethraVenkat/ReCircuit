@@ -21,11 +21,12 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
   ];
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+    <div className="portal-shell portal-shell--deccan flex min-h-screen bg-slate-50 text-slate-900">
+      <a className="portal-skip" href="#portal-main">Skip to content</a>
       {/* Left Sidebar */}
       <aside
         data-testid="deccan-sidebar"
-        className="w-64 bg-emerald-900 text-emerald-50 flex flex-col shrink-0 border-r border-emerald-950 shadow-lg"
+        className="portal-sidebar w-64 bg-emerald-900 text-emerald-50 flex flex-col shrink-0 border-r border-emerald-950 shadow-lg"
       >
         <div className="p-6 border-b border-emerald-800">
           <div className="flex items-center space-x-2">
@@ -46,13 +47,14 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
         </div>
 
         {/* Sidebar Nav */}
-        <nav className="flex-1 px-3 py-2 space-y-1">
+        <nav aria-label="Recycler navigation" className="portal-nav flex-1 px-3 py-2 space-y-1">
           {navItems.map((item) => {
             const isActive = activePath === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={`flex items-center px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-emerald-700 text-white shadow-sm"
@@ -74,8 +76,8 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between">
+      <main id="portal-main" className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <header className="portal-top-header bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between">
           <div className="text-sm text-slate-500">
             Certified E-Waste Reverse Logistics Facility · Operational Zone: Hyderabad
           </div>
@@ -86,7 +88,7 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
             Schedule Pickup
           </Link>
         </header>
-        <div className="p-8 max-w-5xl w-full">{children}</div>
+        <div className="portal-content p-8 max-w-5xl w-full">{children}</div>
       </main>
     </div>
   );
