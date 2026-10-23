@@ -9,6 +9,7 @@ import type {
   RecyclerId,
 } from "../types";
 import { RECYCLER_CONFIGS, generateReference } from "../config";
+import { dispatcherSlotDetail } from "../tracking-slots";
 
 interface StoreData {
   bookings: PortalBooking[];
@@ -263,13 +264,12 @@ export class FileRepository implements BookingRepository {
 
       if (options.pickupOtp) booking.pickupOtp = options.pickupOtp;
       if (options.weightKg !== undefined) booking.weightKg = options.weightKg;
-      if (options.slot) booking.preferredSlot = options.slot;
 
       booking.events.push({
         id: randomUUID(),
         eventType: `STATUS_UPDATED_${status}`,
         status,
-        detail,
+        detail: status === "SCHEDULED" && options.slot?.trim() ? dispatcherSlotDetail(booking, detail, options.slot) : detail,
         isSimulated: options.isSimulated ?? true,
         createdAt: now,
       });

@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import type { PortalBooking, RecyclerId } from "@/lib/types";
+import { TrackingSlotDetails } from "./TrackingSlotDetails";
+import { trackingEventMessage } from "../lib/tracking-slots";
 
 interface TrackingViewProps {
   recyclerId: RecyclerId;
@@ -166,10 +168,7 @@ export function TrackingView({
                 {booking.addressLine}, {booking.locality} ({booking.pincode})
               </span>
             </div>
-            <div>
-              <span className="font-bold text-slate-500 block">Assigned / Preferred Slot</span>
-              <span className="font-semibold text-slate-800 text-sm font-mono">{booking.preferredSlot}</span>
-            </div>
+            <TrackingSlotDetails booking={booking}/>
             {booking.pickupOtp && (
               <div>
                 <span className="font-bold text-emerald-700 block">Pickup OTP Code</span>
@@ -226,7 +225,7 @@ export function TrackingView({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-600 mt-1">{evt.detail}</p>
+                  <p className="text-xs text-slate-600 mt-1">{trackingEventMessage(evt)}</p>
                 </div>
               ))}
             </div>

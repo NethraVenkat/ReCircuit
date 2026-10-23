@@ -7,6 +7,7 @@ import type {
   RecyclerId,
 } from "../types";
 import { RECYCLER_CONFIGS, generateReference } from "../config";
+import { dispatcherSlotDetail } from "../tracking-slots";
 
 const DEFAULT_SWITCHES: FailureSwitches = {
   failNextSubmit: false,
@@ -92,9 +93,17 @@ export class SupabaseRepository implements BookingRepository {
     detail: string,
     options: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean } = {}
   ): Promise<PortalBooking | null> {
+    const { slot, ...persistedOptions } = options;
+    let eventDetail = detail;
+    if (status === "SCHEDULED" && slot?.trim()) {
+      const booking = await this.getBookingByReference(recyclerId, reference);
+      if (!booking) return null;
+      eventDetail = dispatcherSlotDetail(booking, detail, slot);
+    }
     const { error } = await this.client.rpc("update_booking", {
       p_recycler: recyclerId, p_reference: reference, p_status: status,
-      p_detail: detail, p_options: options,
+      // Do not pass slot to the legacy RPC: it overwrites the customer's preference.
+      p_detail: eventDetail, p_options: persistedOptions,
     });
     this.check(error);
     return this.getBookingByReference(recyclerId, reference);
