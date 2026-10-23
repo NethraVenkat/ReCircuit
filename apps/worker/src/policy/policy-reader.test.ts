@@ -13,10 +13,10 @@
 
 import fs from "fs";
 import path from "path";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readRecyclerPolicy, extractPolicyViaDomFallback } from "./policy-reader.js";
 import { openSession, ConfigurationError, type BrowserSession } from "../browser/session.js";
-import { FakeLlmAdapter, clearFakeFixtures, registerFakeFixture } from "@recircuit/llm";
+import { GroqAdapter, FakeLlmAdapter, clearFakeFixtures, registerFakeFixture } from "@recircuit/llm";
 import { DECCAN_PAGE_TEXT, DECCAN_EXTRACTION, validatePolicyAgainstPageText } from "@recircuit/core";
 
 describe("Stage 4 Fixes: Worker Policy Reader Unit Tests", () => {
@@ -142,6 +142,20 @@ describe("Stage 4 Fixes: Worker Policy Reader Unit Tests", () => {
     const policy = await readRecyclerPolicy("deccan", fakeSession, "http://localhost:3101", adapter);
     expect(policy.status).toBe("SUCCESS");
     expect(policy.evidence.extractionPath).toBe("dom-fallback");
+  });
+
+  it("rejects Groq unsupported claims and retains DOM provenance with provider metadata", async () => {
+    const extraction = { ...DECCAN_EXTRACTION, feeRules: [{ kind: "flat", amountInr: 9999, thresholdKg: null, quote: "Invented fee" }] };
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ model: "openai/gpt-oss-20b", choices: [{ finish_reason: "stop", message: { content: JSON.stringify(extraction) } }] }))));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const policy = await readRecyclerPolicy("deccan", fakeSession, "http://localhost:3101", new GroqAdapter("unit-only", "openai/gpt-oss-20b"));
+      expect(policy.evidence.extractionPath).toBe("dom-fallback");
+      expect(policy.evidence.llmProvider).toBe("groq");
+      expect(policy.evidence.llmModel).toBe("openai/gpt-oss-20b");
+      expect(policy.feeRules.some(rule => rule.amountInr === 9999)).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it("recovers on retry when second extraction attempt adheres strictly to quotes", async () => {

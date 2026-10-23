@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
 export type ModelTier = "fast" | "strong";
-export type LlmProvider = "anthropic" | "openai" | "gemini" | "fake";
+export type LlmProvider = "anthropic" | "openai" | "gemini" | "groq" | "fake";
 
 export interface GenerateStructuredOptions<T> {
   schema: z.ZodType<T, z.ZodTypeDef, unknown>;
@@ -33,6 +33,8 @@ export class LlmConfigurationError extends Error {
 }
 
 export interface LlmAdapter {
+  readonly provider?: string;
+  readonly model?: string;
   generate(options: {
     system: string;
     user: string;

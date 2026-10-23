@@ -3,6 +3,8 @@ import { LlmConfigurationError } from "../types.js";
 
 /** Native Gemini REST adapter. Credentials remain in server-side headers. */
 export class GeminiAdapter implements LlmAdapter {
+  readonly provider = "gemini";
+  get model(): string { return process.env.LLM_FAST_MODEL || ""; }
   private readonly apiKey: string;
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.LLM_API_KEY || "";

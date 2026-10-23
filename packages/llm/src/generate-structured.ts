@@ -1,3 +1,4 @@
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { z } from "zod";
 import type { GenerateStructuredOptions, LlmAdapter, LlmProvider } from "./types.js";
 import { LlmOutputError, LlmConfigurationError } from "./types.js";
@@ -6,14 +7,23 @@ import { AnthropicAdapter } from "./adapters/anthropic.js";
 import { OpenAiAdapter } from "./adapters/openai.js";
 import { GeminiAdapter } from "./adapters/gemini.js";
 
+import { GroqAdapter } from "./adapters/groq.js";
+export function selectedProvider(): string {
+  return (process.env.LLM_PROVIDER || (process.env.GROQ_API_KEY?.trim() ? "groq" : "fake")).toLowerCase();
+}
+export function structuredSchema(schema: z.ZodType<unknown, z.ZodTypeDef, unknown>): Record<string, unknown> {
+  return zodToJsonSchema(schema, { $refStrategy: "none" });
+}
 export function getAdapter(provider?: string): LlmAdapter {
-  const chosen = (provider || process.env.LLM_PROVIDER || "fake").toLowerCase() as LlmProvider;
+  const chosen = (provider || selectedProvider()).toLowerCase() as LlmProvider;
   if (process.env.NODE_ENV === "production") {
-    if (!["openai", "anthropic", "gemini"].includes(chosen)) throw new LlmConfigurationError("Production requires LLM_PROVIDER=openai, anthropic or gemini; fake is disabled.");
-    const missing = ["LLM_API_KEY", "LLM_FAST_MODEL", "LLM_STRONG_MODEL"].filter(k => !process.env[k]?.trim());
+    if (!["openai", "anthropic", "gemini", "groq"].includes(chosen)) throw new LlmConfigurationError("Production requires LLM_PROVIDER=openai, anthropic, gemini or groq; fake is disabled.");
+    const missing = (chosen === "groq" ? ["GROQ_API_KEY"] : ["LLM_API_KEY", "LLM_FAST_MODEL", "LLM_STRONG_MODEL"]).filter(k => !process.env[k]?.trim());
     if (missing.length) throw new LlmConfigurationError(`Missing production configuration: ${missing.join(", ")}`);
   }
   switch (chosen) {
+    case "groq":
+      return new GroqAdapter();
     case "gemini":
       return new GeminiAdapter();
     case "anthropic":
@@ -45,6 +55,7 @@ export async function generateStructured<T>(
   const { schema, system, user, modelTier = "fast", timeoutMs = process.env.LLM_PROVIDER === "gemini" ? 45000 : 20000, testFixtureName } = options;
   const adapter = getAdapter();
 
+  const deadline = Date.now() + timeoutMs;
   let attempt = 0;
   let currentUserPrompt = user;
   let lastRawOutput = "";
@@ -59,7 +70,8 @@ export async function generateStructured<T>(
         system,
         user: currentUserPrompt,
         modelTier,
-        timeoutMs,
+        timeoutMs: Math.max(1, deadline - Date.now()),
+        jsonSchema: structuredSchema(schema),
         ...(testFixtureName !== undefined ? { testFixtureName } : {}),
       });
       lastRawOutput = rawResponse;
@@ -72,6 +84,7 @@ export async function generateStructured<T>(
       if (err instanceof LlmConfigurationError) throw err;
       lastError = err;
 
+      if (!(err instanceof z.ZodError || err instanceof SyntaxError) || Date.now() >= deadline) throw err;
       if (attempt === 1) {
         // Build error explanation to append for retry
         let errorDesc = "Invalid JSON or schema validation failure.";

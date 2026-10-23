@@ -16,7 +16,7 @@ import {
   type ExtractedPolicy,
   type GenericPolicyExtraction,
 } from "@recircuit/core";
-import { getAdapter, LlmConfigurationError, type LlmAdapter } from "@recircuit/llm";
+import { getAdapter, structuredSchema, LlmConfigurationError, type LlmAdapter } from "@recircuit/llm";
 import type { BrowserSession } from "../browser/session.js";
 import { discoverPolicyPages } from "./discovery.js";
 
@@ -194,6 +194,8 @@ export async function readRecyclerPolicy(
     sessionId: session.sessionId,
     replayUrl: null,
     extractionPath: "generic-ai" as const,
+    llmProvider: adapter.provider,
+    llmModel: adapter.model,
   };
 
   // If page had completely empty content, fail closed immediately
@@ -260,17 +262,19 @@ export async function readRecyclerPolicy(
     userPrompt += `\n\nNotice: Fee schedule is currently hidden or under revision on this portal. Extract acceptedItems, rejectedItems, and payoutRules from available text, and leave feeRules empty.`;
   }
 
+  const deadline = Date.now() + (process.env.LLM_PROVIDER === "gemini" ? 45000 : 15000);
   let attempt = 1;
   let parsedGeneric: GenericPolicyExtraction | null = null;
   let lastValidationError = "";
 
-  while (attempt <= 2) {
+  while (attempt <= 2 && Date.now() < deadline) {
     try {
       const rawResponse = await adapter.generate({
         system: GENERIC_POLICY_SYSTEM_PROMPT,
         user: userPrompt,
         modelTier: "fast",
-        timeoutMs: process.env.LLM_PROVIDER === "gemini" ? 45000 : 15000,
+        timeoutMs: Math.max(1, deadline - Date.now()),
+        jsonSchema: structuredSchema(GenericPolicyExtractionSchema),
       });
 
       const cleaned = rawResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
@@ -288,7 +292,7 @@ export async function readRecyclerPolicy(
       attempt++;
     } catch (err: unknown) {
       lastValidationError = err instanceof Error ? err.message : String(err);
-      if (err instanceof LlmConfigurationError) break;
+      if (err instanceof LlmConfigurationError || !(err instanceof SyntaxError || (err instanceof Error && err.name === "ZodError"))) break;
       attempt++;
     }
   }

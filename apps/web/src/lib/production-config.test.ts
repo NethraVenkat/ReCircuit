@@ -20,3 +20,11 @@ it("reports missing variable names and blocks missing model credentials", () => 
   expect(() => assertProductionConfiguration()).toThrow("LLM_API_KEY");
   expect(() => getAdapter()).toThrow("LLM_API_KEY");
 });
+it("accepts Groq in production without legacy Gemini variables and fails clearly without its key", () => {
+  configure(); vi.stubEnv("LLM_PROVIDER", "groq"); vi.stubEnv("GROQ_API_KEY", "unit-only");
+  for (const key of ["LLM_API_KEY", "LLM_FAST_MODEL", "LLM_STRONG_MODEL"]) vi.stubEnv(key, "");
+  expect(() => assertProductionConfiguration()).not.toThrow();
+  expect(getAdapter().provider).toBe("groq");
+  vi.stubEnv("GROQ_API_KEY", ""); expect(() => assertProductionConfiguration()).toThrow("GROQ_API_KEY");
+  expect(() => getAdapter()).toThrow("GROQ_API_KEY");
+});

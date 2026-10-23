@@ -66,3 +66,20 @@ npm run test:e2e
 ## Env Vars
 See `.env.example`.
 
+
+## Server-side LLM configuration
+
+Groq is the primary provider when `GROQ_API_KEY` is present and `LLM_PROVIDER` is unset.
+Set `LLM_PROVIDER=groq` explicitly in production, with private `GROQ_API_KEY` and
+`GROQ_MODEL=openai/gpt-oss-20b` (the default). No key belongs in `NEXT_PUBLIC_*` variables.
+Groq uses its Chat Completions API with JSON Schema best-effort mode, preserving optional
+fields in existing contracts; local Zod validation and policy source-quote checks remain mandatory.
+See https://console.groq.com/docs/structured-outputs for current model support.
+
+For explicit Gemini rollback, set `LLM_PROVIDER=gemini`, `LLM_API_KEY`,
+`LLM_FAST_MODEL` and `LLM_STRONG_MODEL` to Gemini configuration. Explicit selection wins;
+provider failures never trigger cross-provider fallback. Known portal DOM fallback remains
+labelled `dom-fallback`, never successful AI extraction. Policy evidence records attempted
+LLM provider/model separately from extraction method. Retries share a deadline and honor
+Retry-After; permanent authentication/model/schema configuration errors stop retries.
+Local tests may explicitly select `LLM_PROVIDER=fake`; production rejects fake.
