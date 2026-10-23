@@ -13,7 +13,14 @@
     "duplicate booking keeps reference",
     "accessibility evidence",
     "drawer Escape and focus return",
-    "cross-session request, evidence and mutation isolation"
+    "cross-session request, evidence and mutation isolation",
+    "responsive 360 390 768 1024 1440",
+    "200 percent reflow and reduced motion",
+    "populated overview survives reload",
+    "multi-item exact split allocation",
+    "real local human handoff shown without solving CAPTCHA",
+    "handoff persists on reload",
+    "no browser runtime errors"
   ],
   "errors": []
 }

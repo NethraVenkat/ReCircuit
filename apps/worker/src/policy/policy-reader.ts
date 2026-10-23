@@ -151,7 +151,8 @@ export async function readRecyclerPolicy(
   const visitedPages: Array<{ url: string; screenshotPath: string }> = [];
 
   for (let idx = 0; idx < discoveredUrls.length; idx++) {
-    const url = discoveredUrls[idx]!;
+    const url = discoveredUrls[idx];
+    if (!url) continue;
     try {
       await session.page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
       const screenshot = await session.captureScreenshot(`${recyclerId}-page-${idx}`);

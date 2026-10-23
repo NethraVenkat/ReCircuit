@@ -139,10 +139,12 @@ export class Verifier {
         const details = (await row.locator('[data-testid="tracking-item-details"]').textContent())?.trim() || "";
         const qtyMatch = details.match(/Qty:\s*(\d+)/i);
         const wtMatch = details.match(/Weight:\s*([\d.]+)\s*kg/i);
+        const qtyStr = qtyMatch?.[1];
+        const wtStr = wtMatch?.[1];
         observedItems.push({
           name,
-          quantity: qtyMatch ? parseInt(qtyMatch[1]!, 10) : undefined,
-          weightKg: wtMatch ? parseFloat(wtMatch[1]!) : undefined,
+          quantity: qtyStr ? parseInt(qtyStr, 10) : undefined,
+          weightKg: wtStr ? parseFloat(wtStr) : undefined,
         });
       }
 
@@ -178,8 +180,9 @@ export class Verifier {
         }
 
         for (let i = 0; i < expectedLegItems.length; i++) {
-          const exp = expectedLegItems[i]!;
-          const obs = observedItems[i]!;
+          const exp = expectedLegItems[i];
+          const obs = observedItems[i];
+          if (!exp || !obs) continue;
 
           // Check if expected tracking fields are missing on the tracking page item row
           const expWeight = exp.estimatedWeightKg ?? ((exp as unknown as Record<string, unknown>).weightKg as number | undefined);

@@ -22,7 +22,7 @@ try{
    const approved=await post("approve",{requestId:id,planHash:current.plan.planHash,decision:"approved",dataWipeConfirmed:true});assert.equal(approved.status,200);const oldHash=approved.body.plan.planHash;
    input=mutate(input);const edited=await post("plan",{...input,requestId:id,expectedHash:oldHash});assert.equal(edited.status,200,JSON.stringify(edited.body));current=edited.body;assert.equal(current.request.state,"AWAITING_APPROVAL");
    const read=await (await context.request.get(`${base}/api/requests/${id}`)).json();assert.equal(read.approval,null);
-   for(const ctx of [context,sibling]){assert.equal((await post("book",{requestId:id,planHash:oldHash},ctx)).status,400);assert.equal((await post("approve",{requestId:id,planHash:oldHash,decision:"approved",dataWipeConfirmed:true},ctx)).status,409);}
+   for(const ctx of [context,sibling]){assert.equal((await post("book",{requestId:id,planHash:oldHash},ctx)).status,400);const stale=await post("approve",{requestId:id,planHash:oldHash,decision:"approved",dataWipeConfirmed:true},ctx);assert.equal(stale.status,409,JSON.stringify(stale.body));}
    pass(`${name} edit clears approval and blocks both stale sessions after reload`);
  }
  input={...input,items:[{...input.items[0],quantity:2,declaredWeightKg:5}]};let result=await post("plan",input);assert.equal(result.status,200);assert.equal(result.body.plan.totalEstimatedFee,0);assert.equal(result.body.plan.legs[0].items[0].estimatedWeightKg,5);assert.equal(result.body.plan.legs[0].items[0].quantity,2);pass("5 kg threshold and total-row semantics without quantity multiplication");

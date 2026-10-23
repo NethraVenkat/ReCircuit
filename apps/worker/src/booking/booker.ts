@@ -199,8 +199,9 @@ export class Booker {
       }
 
       for (let i = 0; i < leg.items.length; i++) {
-        const legItem = leg.items[i]!;
-        const ctxItem = context.items[i]!;
+        const legItem = leg.items[i];
+        const ctxItem = context.items[i];
+        if (!legItem || !ctxItem) continue;
         const legCanon = getCanonicalItemLabel(legItem.name || legItem.description || (legItem.category ? String(legItem.category) : "") || "Recyclable Item");
         const ctxCanon = getCanonicalItemLabel(ctxItem.name || ctxItem.description || (ctxItem.category ? String(ctxItem.category) : "") || "Recyclable Item");
 
@@ -705,8 +706,9 @@ export class Booker {
       }
 
       for (let idx = 0; idx < expectedItems.length; idx++) {
-        const expItem = expectedItems[idx]!;
-        const row = renderedItemRows[idx]!;
+        const expItem = expectedItems[idx];
+        const row = renderedItemRows[idx];
+        if (!expItem || !row) continue;
         const rowName = (await row.locator(PORTAL_SELECTORS.itemRowName).textContent())?.trim() || "";
         const rowQtyText = (await row.locator(PORTAL_SELECTORS.itemRowQty).textContent())?.trim() || "";
         const rowWeightText = (await row.locator(PORTAL_SELECTORS.itemRowWeight).textContent())?.trim() || "";

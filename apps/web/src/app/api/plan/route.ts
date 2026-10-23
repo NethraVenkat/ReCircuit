@@ -3,98 +3,23 @@ import {
   parseIntake,
   buildEligibilityMatrix,
   generateRoutingPlans,
-  ExtractedPolicySchema,
   transitionState,
   createDomainRequestFromIntake,
   requestApproval,
   DEFAULT_SLOT_PREFERENCE,
   type ExtractedPolicy,
+  type Plan,
+  type ApprovalReason,
   ValidatedIntakeResultSchema,
   IntakeItemSchema,
   taxonomyCategoryToItemCategory,
-  DECCAN_EXTRACTION,
-  PAPERPLUS_EXTRACTION,
-  QUICKSCRAP_EXTRACTION,
+  hashPlan,
 } from "@recircuit/core";
 import { getRepository } from "@recircuit/db";
 import { openSession, readRecyclerPolicy } from "@recircuit/worker";
 import { z } from "zod";
 import { customerSchema, owner, sameOrigin, failure, owned, locked } from "../../../lib/household";
-
-const policyCache = new Map<string, { policy: ExtractedPolicy; expiresAt: number }>();
-const POLICY_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
-
-const FALLBACK_POLICIES: Record<string, ExtractedPolicy> = {
-  deccan: {
-    ...DECCAN_EXTRACTION,
-    recyclerId: "deccan",
-    companyName: "Deccan E-Cycle Solutions",
-    status: "SUCCESS",
-    feesUnknown: false,
-    evidence: {
-      url: "http://127.0.0.1:3101",
-      textHash: "deccan-fallback",
-      screenshotPath: ".data/evidence/deccan-policy.png",
-      extractedAt: new Date().toISOString(),
-      sessionId: "fallback-deccan",
-      extractionPath: "generic-ai",
-    },
-    acceptedCategories: ["laptop", "desktop", "mobile_phone", "charger_cable", "battery_household", "small_electronics"],
-    rejectedCategories: ["newspaper", "cardboard", "plastic", "glass"],
-    freeThresholdKg: 5,
-    underWeightFeeInr: 180,
-    minWeightKg: null,
-    requiresDataWipeAck: true,
-    quotes: ["Under 5 kg total weight: ₹180 standard pickup charge"],
-    rates: [],
-  },
-  paperplus: {
-    ...PAPERPLUS_EXTRACTION,
-    recyclerId: "paperplus",
-    companyName: "PaperPlus Kabadi",
-    status: "SUCCESS",
-    feesUnknown: false,
-    evidence: {
-      url: "http://127.0.0.1:3102",
-      textHash: "paperplus-fallback",
-      screenshotPath: ".data/evidence/paperplus-policy.png",
-      extractedAt: new Date().toISOString(),
-      sessionId: "fallback-paperplus",
-      extractionPath: "generic-ai",
-    },
-    acceptedCategories: ["newspaper", "cardboard", "plastic", "glass", "textiles"],
-    rejectedCategories: ["laptop", "desktop", "mobile_phone", "battery_household", "charger_cable"],
-    freeThresholdKg: null,
-    underWeightFeeInr: 0,
-    minWeightKg: null,
-    requiresDataWipeAck: false,
-    quotes: ["Free doorstep collection for dry recyclables across Hyderabad"],
-    rates: [],
-  },
-  quickscrap: {
-    ...QUICKSCRAP_EXTRACTION,
-    recyclerId: "quickscrap",
-    companyName: "QuickScrap Hyd",
-    status: "SUCCESS",
-    feesUnknown: true,
-    evidence: {
-      url: "http://127.0.0.1:3103",
-      textHash: "quickscrap-fallback",
-      screenshotPath: ".data/evidence/quickscrap-policy.png",
-      extractedAt: new Date().toISOString(),
-      sessionId: "fallback-quickscrap",
-      extractionPath: "generic-ai",
-    },
-    acceptedCategories: ["small_electronics", "desktop", "newspaper", "cardboard"],
-    rejectedCategories: ["battery_household"],
-    freeThresholdKg: null,
-    underWeightFeeInr: 0,
-    minWeightKg: 10,
-    requiresDataWipeAck: false,
-    quotes: ["10 kg minimum consignment weight strictly enforced"],
-    rates: [],
-  },
-};
+import { resolveRecyclerPolicy, type PolicySource, type PolicyMetadata } from "../../../lib/policy-cache";
 
 export async function POST(req: Request) {
   try {
@@ -114,6 +39,9 @@ export async function POST(req: Request) {
         locality: "Madhapur",
         pincode: "500081",
       }),
+      mode: z.enum(["live", "fixture", "example"]).optional(),
+      policyMode: z.enum(["live", "fixture"]).optional(),
+      forceRefresh: z.boolean().optional(),
     }).parse(await req.json());
     const text = body.text.trim();
     const intakeResult = body.items ? ValidatedIntakeResultSchema.parse({
@@ -128,53 +56,40 @@ export async function POST(req: Request) {
     domainRequest.description = text;
     if (body.feeCapInr !== undefined) domainRequest.feeCapInr = body.feeCapInr;
 
-    // 2. Recycler Policies
+    // 2. Recycler Policies - Resolved with provenance tracking and strict fixture isolation
     if (body.requestId) await owned(body.requestId);
-    const sources = [
+    const sources: PolicySource[] = [
       { id: "deccan", name: "Deccan E-Cycle Solutions", url: process.env.PORTAL_DECCAN_URL || "http://127.0.0.1:3101" },
       { id: "paperplus", name: "PaperPlus Kabadi", url: process.env.PORTAL_PAPERPLUS_URL || "http://127.0.0.1:3102" },
       { id: "quickscrap", name: "QuickScrap Hyd", url: process.env.PORTAL_QUICKSCRAP_URL || "http://127.0.0.1:3103" },
     ];
-    const policies: ExtractedPolicy[] = await Promise.all(sources.map(async source => {
-      const cached = policyCache.get(source.id);
-      if (cached && cached.expiresAt > Date.now() && cached.policy.status === "SUCCESS") {
-        return cached.policy;
-      }
-      const session = await openSession({ mode: "local", recyclerId: source.id, headless: true });
-      try {
-        const policy: ExtractedPolicy = {
-          ...await readRecyclerPolicy(source.id, session, source.url),
-          companyName: source.name,
-        };
-        if (policy.status === "SUCCESS") {
-          policyCache.set(source.id, { policy, expiresAt: Date.now() + POLICY_CACHE_TTL_MS });
-        }
-        return policy;
-      } catch (err) {
-        console.warn(`[API/PLAN POLICY READ FAILED: ${source.id}]`, err);
-        if (cached?.policy) return cached.policy;
-        if (FALLBACK_POLICIES[source.id]) {
-          return FALLBACK_POLICIES[source.id];
-        }
-        return ExtractedPolicySchema.parse({
-          recyclerId: source.id,
-          companyName: source.name,
-          status: "FAILED",
-          feesUnknown: true,
-          failureReason: "Policy source unavailable",
-          evidence: {
-            url: source.url,
-            textHash: "",
-            screenshotPath: "",
-            extractedAt: new Date().toISOString(),
-            sessionId: session.sessionId,
-            extractionPath: "generic-ai",
+
+    const resolutionResults = await Promise.all(
+      sources.map((source) =>
+        resolveRecyclerPolicy({
+          source,
+          mode: body.mode,
+          policyMode: body.policyMode,
+          forceRefresh: body.forceRefresh,
+          fetchLive: async (src) => {
+            const session = await openSession({ mode: "local", recyclerId: src.id, headless: true });
+            try {
+              const policy: ExtractedPolicy = {
+                ...(await readRecyclerPolicy(src.id, session, src.url)),
+                companyName: src.name,
+              };
+              return policy;
+            } finally {
+              await session.close();
+            }
           },
-        });
-      } finally {
-        await session.close();
-      }
-    }));
+        })
+      )
+    );
+
+    const policies: ExtractedPolicy[] = resolutionResults.map((r) => r.policy);
+    const policyMetas: PolicyMetadata[] = resolutionResults.map((r) => r.meta);
+    const effectivePolicyMode = policyMetas.some((m) => m.provenance === "fixture") ? "fixture" : "live";
 
     // 3. State Transitions: advance pipeline to POLICIES_READ then ELIGIBILITY_CHECKED
     const reqWithPolicies = { ...domainRequest, state: "POLICIES_READ" as const };
@@ -201,39 +116,74 @@ export async function POST(req: Request) {
     });
 
     const bestScored = routing.scoredPlans[0];
-    if (!bestScored) {
-      return NextResponse.json({ error: "No routing plan could be generated" }, { status: 500 });
-    }
+    let bestPlan: Plan;
+    let approvalReasons: ApprovalReason[] = [];
+    let isPartial = true;
+    let alternativesSummary: Array<{
+      rank: number;
+      planId: string;
+      legsCount: number;
+      fee: number;
+      payout: number;
+      net: number;
+      recyclers: string[];
+    }> = [];
+    let unrouted: Array<{ description: string; reasons: string }>;
 
-    const bestPlan = bestScored.plan;
-    bestPlan.requestId = step1.id;
+    if (!bestScored) {
+      const planId = crypto.randomUUID();
+      const nowStr = new Date().toISOString();
+      const emptyPlan: Plan = {
+        id: planId,
+        requestId: step1.id,
+        legs: [],
+        totalEstimatedFee: 0,
+        totalEstimatedPayout: 0,
+        planHash: "",
+        createdAt: nowStr,
+      };
+      emptyPlan.planHash = hashPlan(emptyPlan);
+      bestPlan = emptyPlan;
+      approvalReasons = ["BOOKING_SUBMISSION"];
+      isPartial = true;
+      unrouted = intakeResult.items.map((itm) => {
+        const desc = `${itm.rawText} (${itm.category})`;
+        const reasons = matrix.cells
+          .filter((c) => c.itemId === itm.id)
+          .map((c) => `${c.recyclerName}: ${c.status}${c.reason ? ` (${c.reason})` : ""}`)
+          .join("; ");
+        return { description: desc, reasons: reasons || "Policy source unavailable or item unserviceable" };
+      });
+    } else {
+      bestPlan = bestScored.plan;
+      bestPlan.requestId = step1.id;
+      approvalReasons = bestScored.approvalReasons;
+      isPartial = bestScored.isPartial;
+      alternativesSummary = routing.scoredPlans.slice(1).map((alt, idx) => ({
+        rank: idx + 2,
+        planId: alt.plan.id,
+        legsCount: alt.legsCount,
+        fee: alt.totalFee,
+        payout: alt.totalKnownPayout,
+        net: alt.netPayout,
+        recyclers: alt.plan.legs.map((l) => l.recyclerId),
+      }));
+      unrouted = bestScored.unroutedItemIds.map((unId) => {
+        const itm = intakeResult.items.find((i) => i.id === unId);
+        const desc = itm ? `${itm.rawText} (${itm.category})` : unId;
+        const reasons = matrix.cells
+          .filter((c) => c.itemId === unId)
+          .map((c) => `${c.recyclerName}: ${c.status}${c.reason ? ` (${c.reason})` : ""}`)
+          .join("; ");
+        return { description: desc, reasons };
+      });
+    }
 
     const step2 = transitionState(step1, "PLAN_CREATED", {
       planId: bestPlan.id,
       planHash: bestPlan.planHash,
-      approvalReason: bestScored.approvalReasons.join(",") || "NONE",
+      approvalReason: approvalReasons.join(",") || "NONE",
     }).newRequest!;
-
-    const approvalReasons = bestScored.approvalReasons;
-    const alternativesSummary = routing.scoredPlans.slice(1).map((alt, idx) => ({
-      rank: idx + 2,
-      planId: alt.plan.id,
-      legsCount: alt.legsCount,
-      fee: alt.totalFee,
-      payout: alt.totalKnownPayout,
-      net: alt.netPayout,
-      recyclers: alt.plan.legs.map((l) => l.recyclerId),
-    }));
-
-    const unrouted = bestScored.unroutedItemIds.map((unId) => {
-      const itm = intakeResult.items.find((i) => i.id === unId);
-      const desc = itm ? `${itm.rawText} (${itm.category})` : unId;
-      const reasons = matrix.cells
-        .filter((c) => c.itemId === unId)
-        .map((c) => `${c.recyclerName}: ${c.status}${c.reason ? ` (${c.reason})` : ""}`)
-        .join("; ");
-      return { description: desc, reasons };
-    });
 
     const slotPref = {
       day: body.slotDay || DEFAULT_SLOT_PREFERENCE.day,
@@ -245,7 +195,7 @@ export async function POST(req: Request) {
       plan: bestPlan,
       slotPreference: slotPref,
       approvalReasons,
-      isPartial: bestScored.isPartial,
+      isPartial,
       unroutedItems: unrouted,
       alternatives: alternativesSummary,
     });
@@ -253,33 +203,38 @@ export async function POST(req: Request) {
     // 5. Persist to repository
     const repo = getRepository();
     const save = async () => {
-    if (body.requestId) {
-      const previous = await owned(body.requestId);
-      if (previous.plan?.planHash !== body.expectedHash) throw new Error("STALE: Plan changed. Reload before editing.");
-      if (previous.plan?.legs.some(l => !["APPROVED", "REJECTED"].includes(l.state))) throw new Error("Booking has started; items cannot be edited safely.");
-    }
-    await repo.saveRequest({
-      request: awaitingReq,
-      items: intakeResult.items.map((i) => ({
-        id: i.id,
-        requestId: awaitingReq.id,
-        description: i.rawText,
-        category: taxonomyCategoryToItemCategory(i.category),
-        quantity: i.quantity,
-        estimatedWeightKg: i.declaredWeightKg ?? i.estimatedWeightKg ?? 0,
-        confidence: i.confidence,
-        hazardClass: (i.hazardClass.startsWith("battery") ? "BATTERY" : "NON_HAZARDOUS") as "BATTERY" | "NON_HAZARDOUS",
-        createdAt: new Date().toISOString(),
-      })),
-      plan: readyPlan,
-      approval: null,
-      household: { customer: body.customer, intakeResult, matrix, approvalCard, choices: routing.scoredPlans.slice(0,5),
-        policyMode: "live", policies: policies.map(p => ({ name: p.companyName, url: p.evidence.url, quotes: p.quotes, status: p.status, retrievedAt: p.evidence.extractedAt, extractionPath: p.evidence.extractionPath })),
-      },
-      auditEvents: [],
-      updatedAt: new Date().toISOString(),
-    });
-
+      if (body.requestId) {
+        const previous = await owned(body.requestId);
+        if (previous.plan?.planHash !== body.expectedHash) throw new Error("STALE: Plan changed. Reload before editing.");
+        if (previous.plan?.legs.some(l => !["APPROVED", "REJECTED"].includes(l.state))) throw new Error("Booking has started; items cannot be edited safely.");
+      }
+      await repo.saveRequest({
+        request: awaitingReq,
+        items: intakeResult.items.map((i) => ({
+          id: i.id,
+          requestId: awaitingReq.id,
+          description: i.rawText,
+          category: taxonomyCategoryToItemCategory(i.category),
+          quantity: i.quantity,
+          estimatedWeightKg: i.declaredWeightKg ?? i.estimatedWeightKg ?? 0,
+          confidence: i.confidence,
+          hazardClass: (i.hazardClass.startsWith("battery") ? "BATTERY" : "NON_HAZARDOUS") as "BATTERY" | "NON_HAZARDOUS",
+          createdAt: new Date().toISOString(),
+        })),
+        plan: readyPlan,
+        approval: null,
+        household: {
+          customer: body.customer,
+          intakeResult,
+          matrix,
+          approvalCard,
+          choices: routing.scoredPlans.slice(0, 5),
+          policyMode: effectivePolicyMode,
+          policies: policyMetas,
+        },
+        auditEvents: [],
+        updatedAt: new Date().toISOString(),
+      });
     };
     if (body.requestId) await locked(body.requestId, save); else await save();
 
@@ -291,7 +246,8 @@ export async function POST(req: Request) {
       matrix,
       scoredPlans: routing.scoredPlans,
       intakeResult,
-      policyMode: "live",
+      policyMode: effectivePolicyMode,
+      policies: policyMetas,
     });
   } catch (err) {
     const f = failure(err);

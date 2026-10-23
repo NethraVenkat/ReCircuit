@@ -250,7 +250,7 @@ export class SupabaseRepository implements BookingRepository {
       id: String(e.id),
       eventType: String(e.event_type || e.eventType),
       status: (e.status as PortalBookingStatus) || "RECEIVED",
-      detail: String(e.detail || ""),
+      detail: typeof e.detail === "string" ? e.detail : "",
       isSimulated: Boolean(e.is_simulated ?? e.isSimulated),
       createdAt: String(e.created_at || e.createdAt),
     }));
@@ -269,7 +269,7 @@ export class SupabaseRepository implements BookingRepository {
       ...(typeof row.charged_fee_inr === "number" ? { chargedFeeInr: row.charged_fee_inr } : {}),
       items: (row.items as PortalBooking["items"]) || [],
       status: row.status as PortalBookingStatus,
-      pickupOtp: row.pickup_otp ? String(row.pickup_otp) : undefined,
+      pickupOtp: typeof row.pickup_otp === "string" ? row.pickup_otp : undefined,
       weightKg: row.weight_kg ? Number(row.weight_kg) : undefined,
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),

@@ -18,9 +18,10 @@ export async function POST(req: Request) {
       const stored = await owned(body.requestId);
       if (!stored.plan) throw new Error("No plan available");
       if (body.planHash !== hashPlan(stored.plan)) {
-        throw new Error("Stale approval rejected: plan has changed. Reload and review it again.");
+        throw new Error(`Stale approval rejected: plan has changed. Expected hash ${stored.plan.planHash}, got ${body.planHash}`);
       }
       const decision = body.decision.startsWith("approve") ? "approved" : "rejected";
+      if (decision === "approved" && !stored.plan.legs.length) throw new Error("No eligible pickup is available to approve. Edit your items or location first.");
       if (stored.request.state === "APPROVED" && decision === "approved") {
         return NextResponse.json({ success: true, request: stored.request, plan: stored.plan });
       }

@@ -96,7 +96,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const action = String(body.action || "");
+  const action = typeof body.action === "string" ? body.action : "";
 
   if (action === "toggle_switch") {
     const rawSwitchName = String(body.switchName);
@@ -114,7 +114,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true, switches: updated });
   }
 
-  const reference = String(body.reference || "");
+  const reference = typeof body.reference === "string" ? body.reference : "";
   if (!reference) {
     return NextResponse.json({ ok: false, error: "Booking reference is required" }, { status: 400 });
   }
@@ -131,7 +131,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   if (action === "schedule") {
-    const slot = String(body.slot || "Tomorrow 10:00–12:00 IST");
+    const slot = typeof body.slot === "string" ? body.slot : "Tomorrow 10:00–12:00 IST";
     const updated = await repo.updateBookingStatus(
       recyclerId,
       reference,

@@ -106,14 +106,20 @@ test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () =>
     await expect(startBookingBtn).toBeVisible({ timeout: 15000 });
     await startBookingBtn.click();
 
-    // 6. Verify Booking Reference
+    // 6. Verify Booking Reference & Exact Label Mapping (REQUEST_SUBMITTED -> "Booking requested")
     const refBadge = page.locator('[data-testid="booking-reference-badge"]');
-    await expect(refBadge).toHaveText(/^DEC-\d+$/, { timeout: 60000 });
+    await expect(refBadge).toHaveText(/^DEC-\d+$/, { timeout: 90000 });
     const bookingRef = (await refBadge.textContent())?.trim();
 
-    await expect(page.locator('[data-testid="request-dashboard"]')).toContainText(
-      /REQUEST_SUBMITTED|REQUEST_CONFIRMED|SCHEDULED|Booking requested|Booking independently checked|Pickup scheduled/
-    );
+    // Exact state assertion: leg is submitted, waiting for verification
+    await expect(page.locator('[data-testid="request-dashboard"]')).toContainText("Booking requested");
+    await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("Pickup scheduled");
+    await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("Booking independently checked");
+
+    // Requested slot is explicitly labelled requested, and assigned slot is "Not assigned"
+    await expect(page.locator("text=Requested slot")).toBeVisible();
+    await expect(page.locator("text=Assigned slot")).toBeVisible();
+    await expect(page.locator("text=Not assigned")).toBeVisible();
     await page.screenshot({ path: path.join(evidenceDir, "05-proof-ledger-booked.png") });
 
     // 7. Execute Independent Verification
@@ -128,20 +134,27 @@ test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () =>
       )
     ).toBeVisible({ timeout: 45000 });
 
+    // Assert exact verified state: "Booking independently checked" (REQUEST_CONFIRMED)
+    // and recycler status is "Booking received" (RECEIVED).
+    // RECEIVED and independent verification MUST NOT imply scheduling!
+    await expect(page.locator('[data-testid="request-dashboard"]')).toContainText("Booking independently checked");
+    await expect(page.locator('[data-testid="request-dashboard"]')).toContainText("Booking received");
+    await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("Pickup scheduled");
+    await expect(page.locator("text=Not assigned")).toBeVisible();
+
     // 8. Verify TC4 Invariant: Never Reported as Collected
-    await expect(
-      page.locator("text=Your items have not been reported as collected.").or(
-        page.locator("text=A booking request is not evidence of collection.")
-      )
-    ).toBeVisible();
+    await expect(page.locator("text=Your items have not been reported as collected.")).toBeVisible();
+    await expect(page.locator("text=A booking request is not evidence of collection.")).toBeVisible();
     await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("COLLECTED");
     await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("PICKED_UP");
+    await expect(page.locator('[data-testid="request-dashboard"]')).not.toContainText("Collection recorded");
 
     // 9. Open Independent Browser Context and verify public tracking portal directly
     const separateContext = await browser.newContext();
     const separatePage = await separateContext.newPage();
     await separatePage.goto(`http://127.0.0.1:3101/track?ref=${bookingRef}`);
     await expect(separatePage.locator(`text=${bookingRef}`)).toBeVisible({ timeout: 15000 });
+    await expect(separatePage.locator('[data-testid="tracking-status"]')).toHaveText("RECEIVED");
     await separatePage.screenshot({ path: path.join(evidenceDir, "06-independent-portal-tracking.png") });
 
     await separateContext.close();
