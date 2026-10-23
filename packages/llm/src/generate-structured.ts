@@ -69,6 +69,7 @@ export async function generateStructured<T>(
       const validated: T = schema.parse(parsed);
       return validated;
     } catch (err: unknown) {
+      if (err instanceof LlmConfigurationError) throw err;
       lastError = err;
 
       if (attempt === 1) {

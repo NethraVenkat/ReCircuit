@@ -16,7 +16,7 @@ import {
   type ExtractedPolicy,
   type GenericPolicyExtraction,
 } from "@recircuit/core";
-import { getAdapter, type LlmAdapter } from "@recircuit/llm";
+import { getAdapter, LlmConfigurationError, type LlmAdapter } from "@recircuit/llm";
 import type { BrowserSession } from "../browser/session.js";
 import { discoverPolicyPages } from "./discovery.js";
 
@@ -288,6 +288,7 @@ export async function readRecyclerPolicy(
       attempt++;
     } catch (err: unknown) {
       lastValidationError = err instanceof Error ? err.message : String(err);
+      if (err instanceof LlmConfigurationError) break;
       attempt++;
     }
   }
