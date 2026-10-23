@@ -1,0 +1,11 @@
+import { defineConfig } from '@playwright/test';
+import path from 'node:path';
+const root = process.cwd();
+process.env.RECIRCUIT_DATA_DIR=path.join(root,'.data/final-release/startup-followup/browser/household');
+process.env.STORAGE_DIR=path.join(root,'.data/final-release/startup-followup/browser/portals');
+process.env.BROWSER_MODE='local'; process.env.LLM_PROVIDER='fake';
+process.env.ADMIN_TOKEN='release-local-admin'; process.env.CAPTCHA_SECRET='release-local-captcha';
+for(const key of Object.keys(process.env)) if(/BROWSERBASE|OPENAI_API|ANTHROPIC_API|SUPABASE/.test(key)) delete process.env[key];
+process.env.HOUSEHOLD_EVIDENCE_DIR=path.join(root,'.data/final-release/startup-followup/screenshots');
+const env={...process.env};
+export default defineConfig({testDir:path.join(root,'tests/e2e'),workers:1,retries:0,timeout:60000,globalTimeout:300000,reporter:'list',outputDir:path.join(root,'.data/final-release/startup-followup/browser/results'),use:{headless:true,actionTimeout:15000,navigationTimeout:30000},webServer:[['web',3000,''],['portals',3101,'deccan'],['portals',3102,'paperplus'],['portals',3103,'quickscrap']].map(([app,port,id])=>({command:`node "${root}/node_modules/next/dist/bin/next" ${app === 'web' ? 'start' : 'dev'} -p ${port} -H 127.0.0.1`,cwd:path.join(root,'apps',app),url:`http://127.0.0.1:${port}/api/health`,reuseExistingServer:false,timeout:60000,gracefulShutdown:{signal:'SIGTERM',timeout:5000},stdout:'pipe',stderr:'pipe',env:{...env,NEXT_DIST_DIR:app === 'web' ? '.next' : `.next-release-local-${port}`,RECYCLER_ID:id,PORTAL_DECCAN_URL:'http://127.0.0.1:3101',PORTAL_PAPERPLUS_URL:'http://127.0.0.1:3102',PORTAL_QUICKSCRAP_URL:'http://127.0.0.1:3103'}}))});

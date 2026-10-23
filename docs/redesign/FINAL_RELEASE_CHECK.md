@@ -1,4 +1,4 @@
-# Focused final release check — 23 October 2026
+# Focused final release check - 23 October 2026
 
 Checkout: C:\Users\Manish\Downloads\ReCircuit-Local, branch ui/recircuit-household-redesign. Starting HEAD 52052a541390cdfd582d20f7901bcdf6dc9b82bc, clean; matches requested candidate.
 
@@ -17,3 +17,21 @@ Validation executed: npm run lint exit 0; npm run typecheck initially exit 2 (te
 Affected Playwright household journey attempted once against isolated production servers with occupied-port refusal, 60s startup, bounded actions/navigation and 300s global limit. Exit 1: server readiness timed out before any browser test executed (0 tests). No assertion weakening, timeout increase or duplicate rerun. Output: .data/final-release/playwright.log; isolated config: .data/final-release/playwright.config.mjs. Startup root cause remains unresolved. Owned observed server PIDs 27116 and 41612 were absent after teardown. Browser validation is the remaining release-check blocker.
 
 No cloud run, Browserbase, tunnel, deployment, soak or push. DEC-47124 and DEC-42479 historical evidence was not modified. No broad cleanup/reset or unrelated changes. This focused result does not establish exhaustive security, cloud readiness or submission completion.
+
+## Startup follow-up - 23 October 2026
+
+Starting branch/HEAD matched ui/recircuit-household-redesign / 06b09dddd4eb8aee0e81685250e5cd91f8cb39ef, with a clean working tree.
+
+Root cause reproduced directly: `node node_modules/next/dist/bin/next start -p 3101` from apps/portals, with RECYCLER_ID=deccan and isolated file storage, started in 634 ms but GET /api/health returned HTTP 503: `Portal configuration error: missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY. Bookings are unavailable.` The web production server returned 200. Production portal configuration correctly requires Supabase; the prior test configuration removed those credentials while trying to use production portal servers. This was a configuration mismatch, not slow compilation. Direct stdout/stderr and responses: .data/final-release/startup-followup/{direct,web,portals}.log.
+
+Corrected setup: scripts/test-household-local.mjs unconditionally checks all four loopback ports before launching Playwright. scripts/playwright-household-local.config.mjs uses the existing production web build and development-mode local portals with separate build directories and isolated file storage, explicit recycler IDs/URLs, local worker mode and fake LLM provider. Policy reading still reads the running local portal pages; fixture policies are not substituted. Production Supabase requirements and expiry guards were not changed. All servers use reuseExistingServer:false and bounded readiness/teardown. Server stdout/stderr is captured. Portal tsconfig includes the three generated local-dev type directories. The only test edit makes its screenshot directory configurable, preserving previous evidence and every assertion.
+
+A first corrected-setup attempt reached all four healthy servers but failed before browser launch because Playwright workers reloaded the top-level port probe and rejected the run's own servers. Its log/exit are preserved as playwright-config-reload-failed.log/.exit. The probe now runs once in the launcher before server creation, rather than in the config reloaded by workers. An environment-flag shortcut was rejected by automatic approval review and was not executed; the accepted launcher retains the unconditional occupied-port check.
+
+Final command: `node scripts/test-household-local.mjs`. Result: **1 browser test passed, exit 0**, 38.2s test / 58.2s total. Evidence: .data/final-release/startup-followup/playwright-journey.log and playwright-journey.exit. All health endpoints returned 200. Journey covers over-budget review and decline, then new intake, live-mode policy plan, normal approval, actual local portal booking DEC-32537, independent verification, and public tracking in a separate browser context. Persisted live-mode request e5a0873a-7df8-4c54-9be8-92b37feffcb0 has leg REQUEST_CONFIRMED; portal tracking remains RECEIVED. Assertions passed for requested slot, unassigned pickup, no scheduled/collected claims. Fresh evidence was obtained through real planning normally; no expiry guard bypass or stale-evidence workaround was needed.
+
+Screenshots: .data/final-release/startup-followup/screenshots/. Synthetic household/portal records: .data/final-release/startup-followup/browser/. Teardown verified that ports 3000, 3101, 3102 and 3103 were released, without killing unrelated processes; see teardown.log.
+
+Additional checks limited to changed files: both new .mjs files pass node --check; portal-only typecheck exits 0. ESLint cannot check this e2e file under existing configuration: first invocation reports it ignored; explicit --no-ignore reports it outside configured TypeScript projects. Both outputs are retained in lint.log and lint-final.log. The changed test was compiled and executed successfully by Playwright. No broader build/unit/browser suites were repeated. git diff --check passes.
+
+The startup/browser blocker is resolved. Previous failed evidence remains intact, including the original .data/final-release/playwright.log. No push, deployment, cloud booking, Browserbase, tunnel or soak; historical DEC-47124 and DEC-42479 records remain untouched. The successful booking is local synthetic portal evidence only.

@@ -38,7 +38,10 @@
     ".next-3103/types/**/*.ts",
     ".next-audit-deccan/types/**/*.ts",
     ".next-audit-paperplus/types/**/*.ts",
-    ".next-audit-quickscrap/types/**/*.ts"
+    ".next-audit-quickscrap/types/**/*.ts",
+    ".next-release-local-3101/types/**/*.ts",
+    ".next-release-local-3102/types/**/*.ts",
+    ".next-release-local-3103/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

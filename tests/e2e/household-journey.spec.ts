@@ -9,7 +9,7 @@ test.describe("Stage 9: Real Browser Household User Journey & Edge Cases", () =>
     page,
     browser,
   }) => {
-    const evidenceDir = path.resolve(process.cwd(), ".data", "evidence");
+    const evidenceDir = path.resolve(process.env.HOUSEHOLD_EVIDENCE_DIR || path.join(process.cwd(), ".data", "evidence"));
     if (!fs.existsSync(evidenceDir)) fs.mkdirSync(evidenceDir, { recursive: true });
 
     // Warm up Next.js routes to avoid cold compilation timeouts
