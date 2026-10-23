@@ -202,7 +202,7 @@ export function isRouteAllowedForRecycler(pathname: string, recyclerId: Recycler
   let cleanPath = pathname;
   const m = cleanPath.match(/^\/portal\/[^/]+(\/.*)?$/);
   if (m) cleanPath = m[1] || "/";
-  return Boolean(allowed && allowed.includes(cleanPath));
+  return Boolean(allowed && (allowed.includes(cleanPath) || cleanPath === "/admin/routing"));
 }
 
 /**

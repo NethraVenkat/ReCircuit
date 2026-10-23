@@ -1,9 +1,10 @@
-import { validateInput, type PlanningInput } from "./contracts";
+import { RouteCalculation, validateInput, type PlanningInput } from "./contracts";
 import type { Calculation } from "./optimizer";
 
 /** Independent replay: intentionally does not import optimizer scheduling/evaluation code. */
 export function validateProposal(raw: PlanningInput, proposal: Calculation): { valid: boolean; errors: string[] } {
   const errors: string[] = []; let input: PlanningInput;
+  const shape = RouteCalculation.safeParse(proposal); if (!shape.success) return { valid: false, errors: ["INVALID_PROPOSAL_SHAPE"] };
   try { input = validateInput(raw); } catch { return { valid: false, errors: ["INVALID_INPUT"] }; }
   const seen = new Set<string>(), usedVehicles = new Set<string>(); let totalMetres = 0, served = 0;
   const near = (a: number, b: number) => Number.isFinite(a) && Math.abs(a - b) < 0.000001;

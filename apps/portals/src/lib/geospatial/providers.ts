@@ -2,7 +2,8 @@ import { Coordinate, Matrix, fingerprint, type MatrixSnapshot } from "./contract
 import type { RecyclerId } from "../types";
 export interface Node { id: string; coordinate: { lat: number; lon: number } }
 export interface MatrixRequest { tenant: RecyclerId; nodes: Node[]; departureAssumption: string }
-export interface MatrixProvider { matrix(input: MatrixRequest): Promise<MatrixSnapshot> }
+export interface RouteGeometry { provider: string; geometry: { type: "LineString"; coordinates: [number, number][] }; metres: number; seconds: number; attribution: string }
+export interface MatrixProvider { matrix(input: MatrixRequest): Promise<MatrixSnapshot>; geometry?(coordinates: Node["coordinate"][]): Promise<RouteGeometry> }
 export interface GeocodeQuery { tenant: RecyclerId; address: string; addressFingerprint: string }
 export type GeocodeCandidates = { state: "review-required" | "ambiguous" | "failed" | "unavailable"; candidates: Array<{ coordinate: Node["coordinate"]; precision: string | null }>; provider: string };
 
@@ -30,18 +31,19 @@ export class PrivateRoadProvider implements MatrixProvider {
   private readonly inflight = new Map<string, Promise<MatrixSnapshot>>();
   private readonly cache = new Map<string, MatrixSnapshot>();
   private tail: Promise<unknown> = Promise.resolve();
-  readonly accounting = { httpAttempts: 0, elementsRequested: 0 };
+  readonly accounting = { httpAttempts: 0, elementsRequested: 0, elementAttempts: 0 };
   constructor(private readonly config: ProviderConfig, private readonly transport: Transport = fetch, private readonly now: () => number = Date.now) {
     const url = new URL(config.origin);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.pathname !== "/" || url.search || url.hash || !config.allowedOrigins.includes(url.origin) || ["router.project-osrm.org", "nominatim.openstreetmap.org"].includes(url.hostname) || config.ttlSeconds <= 0 || config.ttlSeconds > 3600) throw Error("PROVIDER_CONFIGURATION_REJECTED");
     this.origin = url.origin;
   }
-  private async request(path: string): Promise<unknown> {
+  private async request(path: string, elements = 0): Promise<unknown> {
     if (!this.config.enabled) throw Error("PROVIDER_DISABLED");
     // One provider request in flight per configured instance, with a fixed bounded retry budget.
     const run = async () => {
       for (let attempt = 0; attempt < 2; attempt++) {
         this.accounting.httpAttempts++;
+        this.accounting.elementAttempts += elements;
         const response = await this.transport(this.origin + path, { signal: AbortSignal.timeout(5000), redirect: "error", headers: { "User-Agent": "ReCircuit-PrivateRouting/1.0" } });
         if ((response.status === 429 || response.status === 503) && attempt === 0) {
           const retry = response.headers.get("retry-after");
@@ -73,7 +75,7 @@ export class PrivateRoadProvider implements MatrixProvider {
     for (let a = 0; a < n; a += 16) for (let b = 0; b < n; b += 16) {
       const sources = Array.from({ length: Math.min(16, n - a) }, (_, i) => a + i), destinations = Array.from({ length: Math.min(16, n - b) }, (_, i) => b + i);
       this.accounting.elementsRequested += sources.length * destinations.length;
-      const raw = await this.request(`/table/v1/${this.config.profile}/${coordinates}?annotations=distance,duration&sources=${sources.join(";")}&destinations=${destinations.join(";")}`) as { code?: string; distances?: unknown[][]; durations?: unknown[][]; fallback_speed_cells?: unknown[] };
+      const raw = await this.request(`/table/v1/${this.config.profile}/${coordinates}?annotations=distance,duration&sources=${sources.join(";")}&destinations=${destinations.join(";")}`, sources.length * destinations.length) as { code?: string; distances?: unknown[][]; durations?: unknown[][]; fallback_speed_cells?: unknown[] };
       if (raw.code !== "Ok" || raw.fallback_speed_cells?.length || raw.distances?.length !== sources.length || raw.durations?.length !== sources.length) throw Error("MATRIX_PARTIAL_OR_FALLBACK");
       for (const [i, row] of sources.entries()) {
         if (raw.distances[i]?.length !== destinations.length || raw.durations[i]?.length !== destinations.length) throw Error("MATRIX_PARTIAL");

@@ -229,7 +229,7 @@ function AdminPageContent(): JSX.Element {
             </p>
           </div>
 
-          <div className="portal-actions">
+          <div className="portal-actions"><a className="portal-button portal-button--secondary" href="/admin/routing">Pickup route planning</a>
 
             <a
               href="/"

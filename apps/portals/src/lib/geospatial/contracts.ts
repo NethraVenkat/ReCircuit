@@ -50,6 +50,16 @@ export const Matrix = z.object({
   if (Date.parse(m.expiresAt) <= Date.parse(m.retrievedAt)) ctx.addIssue({ code: "custom", message: "Invalid matrix freshness interval" });
 });
 export type MatrixSnapshot = z.infer<typeof Matrix>;
+export const RouteCalculation = z.object({ routes: z.array(z.object({ vehicleId: Id, pickupIds: z.array(Id).max(50), stops: z.array(z.object({ pickupId: Id, arrival: Nonnegative, serviceStart: Nonnegative, departure: Nonnegative, loadKg: Nonnegative }).strict()).max(50), metres: Nonnegative, travelSeconds: Nonnegative, serviceSeconds: Nonnegative, waitingSeconds: Nonnegative, totalSeconds: Nonnegative, endTime: Nonnegative }).strict()).max(8), unassigned: z.array(z.object({ pickupId: Id, reason: Id }).strict()).max(50), metres: Nonnegative, served: z.number().int().min(0).max(50) }).strict();
+const ReplayResult = z.object({ valid: z.boolean(), errors: z.array(z.string()) }).strict();
+export const RouteProposalRecord = z.object({
+  id: z.string().uuid(), tenant: Tenant, version: z.number().int().positive(), createdAt: z.string().datetime(), correlationId: z.string().uuid(), requestKey: z.string().uuid(), sourceFingerprint: Id,
+  input: z.object({ tenant: Tenant, serviceDate: ServiceDate, timezone: z.literal("Asia/Kolkata"), pickups: z.array(Pickup).max(50), vehicles: z.array(Vehicle).max(8), matrix: Matrix }).strict(),
+  optimization: z.object({ inputFingerprint: Id, algorithm: Id, status: z.enum(["proven-optimum", "heuristic-feasible", "no-feasible-solution-found"]), solution: RouteCalculation, baseline: RouteCalculation, evaluations: z.number().int().nonnegative().max(20000), evaluationLimit: z.number().int().positive().max(20000), objective: z.string().min(1).max(1024) }).strict(),
+  independentValidation: ReplayResult, baselineValidation: ReplayResult,
+  comparison: z.object({ comparable: z.boolean(), deltaMetres: z.number().finite().nullable(), reductionPercent: z.number().finite().nullable(), reason: z.string() }).strict(), planningOnly: z.literal(true),
+  geometry: z.array(z.object({ provider: Id, geometry: z.object({ type: z.literal("LineString"), coordinates: z.array(z.tuple([z.number().finite().min(-180).max(180), z.number().finite().min(-90).max(90)])).min(2) }).strict(), metres: Nonnegative, seconds: Nonnegative, attribution: z.string(), vehicleId: Id, matrixMismatch: z.boolean() }).strict()).max(8).optional(), geometryError: Id.optional(),
+}).strict();
 
 /** Sorted-key canonicalization; fingerprints are change detectors, never authorization. */
 export function fingerprint(value: unknown): string {
