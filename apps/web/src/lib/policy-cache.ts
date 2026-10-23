@@ -17,6 +17,9 @@ export interface PolicyMetadata {
   status: string;
   retrievedAt?: string;
   extractionPath?: string;
+  llmProvider?: string;
+  llmModel?: string;
+  llmAttempted?: boolean;
   provenance: PolicyProvenance;
   freshness: PolicyFreshness;
   cached: boolean;
@@ -224,6 +227,9 @@ export async function resolveRecyclerPolicy(options: {
         status: entry.policy.status,
         retrievedAt: entry.retrievedAt, // Retain original timestamp without refreshing!
         extractionPath: entry.policy.evidence.extractionPath,
+        llmProvider: entry.policy.evidence.llmProvider,
+        llmModel: entry.policy.evidence.llmModel,
+        llmAttempted: entry.policy.evidence.llmAttempted,
         provenance: "cached",
         freshness: "fresh",
         cached: true,
@@ -262,6 +268,9 @@ export async function resolveRecyclerPolicy(options: {
           status: livePolicy.status,
           retrievedAt,
           extractionPath: livePolicy.evidence.extractionPath,
+          llmProvider: livePolicy.evidence.llmProvider,
+          llmModel: livePolicy.evidence.llmModel,
+          llmAttempted: livePolicy.evidence.llmAttempted,
           provenance: "live",
           freshness: "fresh",
           cached: false,
@@ -281,6 +290,9 @@ export async function resolveRecyclerPolicy(options: {
         status: livePolicy.status,
         retrievedAt: livePolicy.evidence.extractedAt,
         extractionPath: livePolicy.evidence.extractionPath,
+        llmProvider: livePolicy.evidence.llmProvider,
+        llmModel: livePolicy.evidence.llmModel,
+        llmAttempted: livePolicy.evidence.llmAttempted,
         provenance: "live",
         freshness: "uncertain",
         cached: false,
@@ -304,6 +316,9 @@ export async function resolveRecyclerPolicy(options: {
           status: entry.policy.status,
           retrievedAt: entry.retrievedAt, // Retain original timestamp!
           extractionPath: entry.policy.evidence.extractionPath,
+          llmProvider: entry.policy.evidence.llmProvider,
+          llmModel: entry.policy.evidence.llmModel,
+          llmAttempted: entry.policy.evidence.llmAttempted,
           provenance: "stale",
           freshness: "stale",
           cached: true,

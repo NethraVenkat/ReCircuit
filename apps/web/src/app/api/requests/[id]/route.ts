@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@recircuit/db";
 import { owned, failure } from "../../../../lib/household";
+import { storedPolicyMetadata } from "../../../../lib/policy-presentation";
 export const dynamic = "force-dynamic";
 
 export async function GET(
@@ -17,7 +18,7 @@ export async function GET(
     const audits = await repo.getAudits({ requestId: params.id });
 
     return NextResponse.json({
-      household: stored.household,
+      household: storedPolicyMetadata(stored.household),
       request: stored.request,
       items: stored.items,
       plan: stored.plan,

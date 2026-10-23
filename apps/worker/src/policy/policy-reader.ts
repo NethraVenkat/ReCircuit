@@ -114,7 +114,7 @@ export async function extractPolicyViaDomFallback(
             { rawName: "Hazardous explosives and radioactive waste", quote: "Hazardous explosives and radioactive waste are prohibited." },
           ],
           feeRules: [
-            { kind: "flat", amountInr: 199, thresholdKg: null, quote: "₹199 Flat Pickup Fee" },
+            { kind: "flat", amountInr: 50, thresholdKg: null, quote: "₹50 Flat Pickup Fee" },
           ],
           payoutRules: [
             { rawName: "Dead Laptop / Notebook", unit: "per_item", amountInr: 180, quote: "Dead Laptop / Notebook: ₹180 / unit" },
@@ -196,6 +196,7 @@ export async function readRecyclerPolicy(
     extractionPath: "generic-ai" as const,
     llmProvider: adapter.provider,
     llmModel: adapter.model,
+    llmAttempted: false,
   };
 
   // If page had completely empty content, fail closed immediately
@@ -269,6 +270,7 @@ export async function readRecyclerPolicy(
 
   while (attempt <= 2 && Date.now() < deadline) {
     try {
+      baseEvidence.llmAttempted = true;
       const rawResponse = await adapter.generate({
         system: GENERIC_POLICY_SYSTEM_PROMPT,
         user: userPrompt,

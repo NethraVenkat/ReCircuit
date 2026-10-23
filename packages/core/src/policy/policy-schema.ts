@@ -219,6 +219,7 @@ export type PolicyVisitedPage = z.infer<typeof PolicyVisitedPageSchema>;
 export const PolicyEvidenceSchema = z.object({
   llmProvider: z.string().optional(),
   llmModel: z.string().optional(),
+  llmAttempted: z.boolean().optional(),
   url: z.string(),
   textHash: z.string(),
   screenshotPath: z.string(),
