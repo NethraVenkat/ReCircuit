@@ -26,3 +26,10 @@ export function browserMapConfiguration(origin: string): { enabled: boolean; key
   // HEIGIT_API_KEY has no browser-facing path and must never receive a NEXT_PUBLIC_ alias.
   return { enabled: true, key: process.env.MAPTILER_API_KEY };
 }
+export function requestMapConfiguration(request: Request) {
+  // Next may normalize the internal request URL to its listening port. Use the
+  // actual Host for the exact browser-origin gate; never trust forwarded hosts.
+  const host = request.headers.get("host"), caller = request.headers.get("origin");
+  const origin = host ? new URL(request.url).protocol + "//" + host : "";
+  return browserMapConfiguration(caller && caller !== origin ? "" : origin);
+}

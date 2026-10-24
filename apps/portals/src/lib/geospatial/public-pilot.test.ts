@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { addressFingerprint, Verification } from "./contracts";
 import { syntheticBooking, syntheticInput, syntheticPreparation } from "./fixtures";
 import { RoutingService, RoutingStore } from "./service";
-import { PUBLIC_LANDMARK, PUBLIC_LANDMARK_ADDRESS, PUBLIC_DOCUMENTATION_COORDINATES, PublicOnlyHeiGitProvider, RegisteredPublicGeocoder } from "./public-pilot.server";
+import { PUBLIC_LANDMARK, PUBLIC_LANDMARK_ADDRESS, PUBLIC_LANDMARK_QUERY, PUBLIC_DOCUMENTATION_COORDINATES, PublicOnlyHeiGitProvider, RegisteredPublicGeocoder } from "./public-pilot.server";
 
 async function scenario() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "recircuit-public-pilot-mocked-")), store = new RoutingStore(directory);
@@ -30,6 +30,8 @@ async function scenario() {
 it("connects actual public adapters through review, directed matrix, replay, geometry and immutable reload with mocked transport only", async () => {
   const s = await scenario(), before = JSON.stringify(s.booking), attempt = await s.service.geocode("deccan", { bookingId: s.booking.id });
   expect(attempt.state).toBe("review-required"); expect(s.requests).toHaveLength(1);
+  expect(new URL(s.requests[0]!.url).searchParams.get("text")).toBe(PUBLIC_LANDMARK_QUERY);
+  expect(attempt.addressFingerprint).toBe(addressFingerprint(s.booking));
   const cached = await s.geocoder.resolve({ tenant: "deccan", address: PUBLIC_LANDMARK_ADDRESS, addressFingerprint: addressFingerprint(s.booking) });
   expect(cached.retrievedAt).toBe(attempt.retrievedAt); expect(s.requests).toHaveLength(1);
   await expect(s.service.generate("deccan", "2026-10-24", randomUUID())).rejects.toThrow("NO_ELIGIBLE_PICKUPS");

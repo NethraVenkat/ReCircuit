@@ -1,5 +1,7 @@
 # Live provider gate — BLOCKED
 
+**Historical checkpoint:** the user subsequently supplied account preflight and explicitly authorized hostname-level restrictions. The local live-provider follow-up passed real browser tile enforcement and public-location routing; see [LIVE_PUBLIC_VERIFICATION.md](LIVE_PUBLIC_VERIFICATION.md). The original blocked observations below are retained as history. Production remains disabled.
+
 No fresh authenticated HeiGIT or MapTiler request was made during this remediation task. Current account plans and remaining free allowances were **not observed**, so no permission to incur paid usage was inferred from the presence of keys. Historic live probes in earlier reports remain historical and are not substituted for these gates.
 
 | Required gate | Actual result |

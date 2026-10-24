@@ -19,9 +19,9 @@ it.each(["not-json", "{}", '{"distances":[[0,-1],[1,0]],"durations":[[0,1],[1,0]
   const provider = new HeiGitProvider("unit-only-key", true, vi.fn().mockResolvedValue(new Response(body)));
   await expect(provider.matrix(request)).rejects.toThrow();
 });
-it.each([new Error("network failure"), new DOMException("aborted", "AbortError")])("network/abort failures do not retry", async failure => {
+it.each([new Error("network failure with credential context"), new DOMException("aborted", "AbortError")])("network/abort failures are redacted and do not retry", async failure => {
   const transport = vi.fn().mockRejectedValue(failure), provider = new HeiGitProvider("unit-only-key", true, transport);
-  await expect(provider.matrix(request)).rejects.toThrow(); expect(transport).toHaveBeenCalledTimes(1);
+  await expect(provider.matrix(request)).rejects.toThrow("HEIGIT_NETWORK_OR_TIMEOUT"); expect(transport).toHaveBeenCalledTimes(1);
 });
 it("preserves lon/lat order, directed indices, in-flight dedup and clone isolation", async () => {
   const transport = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ distances: [[0, 17], [31, 0]], durations: [[0, 3], [7, 0]] })));

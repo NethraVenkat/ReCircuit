@@ -1,5 +1,7 @@
 # Release-blocker result
 
+**Later local live-provider follow-up:** [LIVE_PUBLIC_VERIFICATION.md](LIVE_PUBLIC_VERIFICATION.md) records user-attested account preflight, explicitly authorized hostname restrictions, passing real browser tile enforcement and public HeiGIT routing, the working local map, focused corrections and checks. The table below preserves the earlier release-blocker checkpoint; its live-account blockers are superseded for this bounded local sample. Production remains disabled and unverified. The earlier E/final-state.json is unchanged; follow-up state is recorded separately in E/live-authorized-1792822660060/final-state.json.
+
 **IMPLEMENTED · LOCALLY VERIFIED · NATIVE DATABASE VERIFIED. NOT READY FOR PRODUCTION.**
 
 Branch: `remediation/routing-release-blockers-20261024`. Worktree: `C:\Users\Manish\Downloads\ReCircuit-Local\.data\release-blockers-20261024\worktree`. Starting checkpoint: `b302e9915c608c042b4be85ffdb8a1e6f3d78c76`. Exact final HEAD/status and local commits are captured after the final documentation commit in E/final-state.json. E = `C:\Users\Manish\Downloads\ReCircuit-Local\.data\release-blockers-20261024\evidence`.

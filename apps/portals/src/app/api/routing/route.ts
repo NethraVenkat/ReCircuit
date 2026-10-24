@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authorizeRouting, browserMapConfiguration } from "../../../lib/geospatial/authorization.server";
+import { authorizeRouting, requestMapConfiguration } from "../../../lib/geospatial/authorization.server";
 import { routingService } from "../../../lib/geospatial/runtime.server";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store", "Vary": "x-admin-token" };
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const id = url.searchParams.get("id");
     if (id) return NextResponse.json(await service.read(tenant, id), { headers });
     const date = url.searchParams.get("date"); if (!date) throw Error("SERVICE_DATE_REQUIRED");
-    return NextResponse.json({ ...(await service.preview(tenant, date)), history: await service.history(tenant), map: browserMapConfiguration(url.origin), planningOnly: true }, { headers });
+    return NextResponse.json({ ...(await service.preview(tenant, date)), history: await service.history(tenant), map: requestMapConfiguration(request), planningOnly: true }, { headers });
   } catch (error) { return failure(error); }
 }
 export async function POST(request: Request) {

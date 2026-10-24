@@ -8,16 +8,19 @@ import type { RoutingPersistence } from "./service";
 /** Closed public pilot registry, never a general customer-address permission. */
 export const PUBLIC_LANDMARK = { bookingId: "public-heigit-heidelberg-castle", tenant: "deccan" as const, addressLine: "Heidelberg Castle", locality: "Heidelberg", pincode: "69117" };
 export const PUBLIC_LANDMARK_ADDRESS = [PUBLIC_LANDMARK.addressLine, PUBLIC_LANDMARK.locality, PUBLIC_LANDMARK.pincode].join(", ");
+// Official venue name: https://www.schloss-heidelberg.de/besuchsinformation/anfahrt/
+// Keep the original address/fingerprint in stored evidence; search only this fixed public alias.
+export const PUBLIC_LANDMARK_QUERY = "Schloss Heidelberg";
 const addressHash = fingerprint([PUBLIC_LANDMARK.tenant, PUBLIC_LANDMARK.addressLine, PUBLIC_LANDMARK.locality, PUBLIC_LANDMARK.pincode]);
 export const PUBLIC_DOCUMENTATION_COORDINATES = [{ lon: 8.66044, lat: 49.41571 }, { lon: 8.67842, lat: 49.40664 }];
 const same = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => a.lat === b.lat && a.lon === b.lon;
 
 export class RegisteredPublicGeocoder extends HeiGitGeocoder {
-  constructor(key: string | undefined, enabled: boolean, transport: typeof fetch = fetch) { super(key, enabled, [PUBLIC_LANDMARK_ADDRESS], transport, 1); }
-  override get configurationId(): string { return fingerprint({ base: super.configurationId, registry: "named-public-landmark-v2" }); }
+  constructor(key: string | undefined, enabled: boolean, transport: typeof fetch = fetch) { super(key, enabled, [PUBLIC_LANDMARK_QUERY], transport, 1); }
+  override get configurationId(): string { return fingerprint({ base: super.configurationId, registry: "named-public-landmark-v3", address: PUBLIC_LANDMARK_ADDRESS, query: PUBLIC_LANDMARK_QUERY }); }
   override async resolve(query: Parameters<GeocodingProvider["resolve"]>[0]): ReturnType<GeocodingProvider["resolve"]> {
     if (query.tenant !== PUBLIC_LANDMARK.tenant || query.address !== PUBLIC_LANDMARK_ADDRESS || query.addressFingerprint !== addressHash) throw Error("GEOCODING_REGISTERED_PUBLIC_LOCATION_ONLY");
-    return super.resolve(query);
+    return super.resolve({ ...query, address: PUBLIC_LANDMARK_QUERY });
   }
 }
 

@@ -18,7 +18,9 @@ export class HeiGitProvider implements MatrixProvider {
     this.accounting.elementsRequested += matrixElements;
     if (endpoint === "directions/driving-car/geojson") this.accounting.geometryRequests++;
     // Automatic retries are intentionally disabled for the initial tightly budgeted hosted adapter.
-    const response = await this.transport("https://api.heigit.org/openrouteservice/v2/" + endpoint, { method: "POST", redirect: "error", signal: AbortSignal.timeout(8000), headers: { Authorization: this.key, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    let response: Response;
+    try { response = await this.transport("https://api.heigit.org/openrouteservice/v2/" + endpoint, { method: "POST", redirect: "error", signal: AbortSignal.timeout(8000), headers: { Authorization: this.key, "Content-Type": "application/json" }, body: JSON.stringify(body) }); }
+    catch { throw Error("HEIGIT_NETWORK_OR_TIMEOUT"); }
     const remaining = response.headers.get("x-ratelimit-remaining"); if (remaining && /^\d+$/.test(remaining)) this.accounting.quotaRemaining = Number(remaining);
     if (response.status === 429) throw Error("HEIGIT_RATE_LIMITED_RETRY_LATER");
     if (!response.ok) throw Error(`HEIGIT_HTTP_${response.status}`);

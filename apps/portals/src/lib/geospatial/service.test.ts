@@ -7,7 +7,7 @@ import { RoutingService, RoutingStore, type BookingSource } from "./service";
 import { syntheticBooking, syntheticInput, syntheticPreparation } from "./fixtures";
 import { bookingFingerprint, fingerprint, type MatrixSnapshot } from "./contracts";
 import type { MatrixProvider, MatrixRequest } from "./providers";
-import { authorizeRouting, browserMapConfiguration } from "./authorization.server";
+import { authorizeRouting, browserMapConfiguration, requestMapConfiguration } from "./authorization.server";
 import { verificationFromHousehold } from "./verification-bridge";
 import { HeiGitProvider } from "./heigit.server";
 import { optimize } from "./optimizer";
@@ -75,6 +75,22 @@ describe("authorization and credentials", () => {
     const provider = new HeiGitProvider("unit-only-server-key", true, transport, 1), input = { tenant: "deccan" as const, nodes: syntheticInput(1).matrix.nodes, departureAssumption: "static" };
     const result = await provider.matrix(input); expect(result.edges[1]![0]).toEqual({ state: "ok", metres: 20, seconds: 2 }); expect(transport.mock.calls[0]![0]).not.toContain("unit-only-server-key"); expect(transport.mock.calls[0]![1].headers.Authorization).toBe("unit-only-server-key");
     await expect(provider.matrix({ ...input, departureAssumption: "changed" })).rejects.toThrow("BUDGET");
+  });
+  it.each([
+    [{ host: "localhost:3200" }, true],
+    [{ host: "127.0.0.1:3200", origin: "http://127.0.0.1:3200" }, true],
+    [{ host: "localhost:3201" }, false],
+    [{ host: "127.0.0.1:3201" }, false],
+    [{ host: "rejected.recircuit.test:3200" }, false],
+    [{ host: "localhost:3200", origin: "http://localhost:3201" }, false],
+    [{ host: "localhost:3200", origin: "http://rejected.recircuit.test:3200" }, false],
+    [{ host: "rejected.recircuit.test:3200", "x-forwarded-host": "localhost:3200" }, false],
+    [{}, false],
+  ] as const)("gates map release on actual Host and caller Origin despite normalized internal URLs: %j", (headers, enabled) => {
+    vi.stubEnv("MAPTILER_API_KEY", "unit-only-public-key"); vi.stubEnv("MAPTILER_ALLOWED_ORIGINS", "http://localhost:3200,http://127.0.0.1:3200");
+    vi.stubEnv("MAPTILER_ORIGIN_RESTRICTIONS_VERIFIED", "true"); vi.stubEnv("ROUTING_MAP_ENABLED", "true");
+    const configuration = requestMapConfiguration(new Request("http://localhost:3200/api/routing", { headers }));
+    expect(configuration.enabled).toBe(enabled); if (!enabled) expect(configuration).not.toHaveProperty("key");
   });
 });
 it("geometry failure preserves the independent stop list and never fabricates a road", async () => {

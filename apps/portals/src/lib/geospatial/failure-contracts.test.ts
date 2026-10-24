@@ -37,7 +37,7 @@ it("provider matrix batching counts all elements and preserves ordered identifie
 });
 it("timeout and 429 fail without a successful matrix or uncontrolled retry", async () => {
   const provider = new HeiGitProvider("unit-only", true, vi.fn().mockRejectedValue(new DOMException("timeout", "TimeoutError")), 1);
-  await expect(provider.matrix({ tenant: "deccan", nodes: syntheticInput(1).matrix.nodes, departureAssumption: "static" })).rejects.toThrow("timeout"); expect(provider.accounting.httpAttempts).toBe(1);
+  await expect(provider.matrix({ tenant: "deccan", nodes: syntheticInput(1).matrix.nodes, departureAssumption: "static" })).rejects.toThrow("HEIGIT_NETWORK_OR_TIMEOUT"); expect(provider.accounting.httpAttempts).toBe(1);
   const limited = new HeiGitProvider("unit-only", true, vi.fn().mockResolvedValue(new Response("", { status: 429 })), 1);
   await expect(limited.matrix({ tenant: "deccan", nodes: syntheticInput(1).matrix.nodes, departureAssumption: "static" })).rejects.toThrow("RATE_LIMITED"); expect(limited.accounting.httpAttempts).toBe(1);
 });
