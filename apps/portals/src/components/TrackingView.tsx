@@ -83,8 +83,8 @@ export function TrackingView({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSearch} className="portal-tracking-search">
-        <div><label htmlFor="search_reference">Booking reference</label><input id="search_reference" type="text" data-testid="input-reference" required autoComplete="off" value={reference} onChange={e => setReference(e.target.value)} placeholder={`e.g. ${{deccan:"DEC",paperplus:"PPK",quickscrap:"QSH"}[recyclerId]}-12345`} className="px-4 py-2 border rounded text-slate-900 bg-white font-mono"/></div>
-        <button type="submit" data-testid="submit-track" disabled={loading} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded">{loading ? "Checking…" : "Track booking"}</button>
+        <div><label htmlFor="search_reference">Booking reference</label><input id="search_reference" type="text" data-testid="input-reference" required autoComplete="off" value={reference} onChange={e => setReference(e.target.value)} placeholder={`e.g. ${{deccan:"DEC",paperplus:"PPK",quickscrap:"QSH"}[recyclerId]}-12345`} className="px-4 py-2 border rounded-sm text-slate-900 bg-white font-mono"/></div>
+        <button type="submit" data-testid="submit-track" disabled={loading} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-sm">{loading ? "Checking…" : "Track booking"}</button>
       </form>
       {!searched && <p className="text-sm">Enter the reference saved when your request was submitted. A requested slot is not a dispatcher assignment.</p>}
       {loading && <p role="status" className="portal-notice">Reading the saved recycler record… No booking or status change is submitted.</p>}
@@ -94,7 +94,7 @@ export function TrackingView({
       {notFound && searched && (
         <div
           data-testid="not-found-message"
-          className="p-6 rounded border border-red-200 bg-red-50 text-red-900 text-sm max-w-xl"
+          className="p-6 rounded-sm border border-red-200 bg-red-50 text-red-900 text-sm max-w-xl"
         >
           <div className="flex items-center space-x-2 font-bold text-base text-red-700 mb-1">
             <span>⚠️</span>
@@ -111,7 +111,7 @@ export function TrackingView({
       {booking && (
         <div
           data-testid="tracking-result"
-          className="p-6 rounded-lg border bg-white shadow-sm space-y-6 text-slate-900"
+          className="p-6 rounded-lg border bg-white shadow-xs space-y-6 text-slate-900"
         >
           <p className="portal-notice">This is the saved recycler status. A received or confirmed request is not evidence of collection. Simulated downstream events are labelled in the history.</p>
           {/* Header row */}
@@ -183,7 +183,7 @@ export function TrackingView({
           </div>
           <div>
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">Booked Items</h4>
-            <div data-testid="tracking-items-list" className="border rounded divide-y text-xs">
+            <div data-testid="tracking-items-list" className="border rounded-sm divide-y text-xs">
               {(booking.items || []).map((item, i) => (
                 <div key={i} data-testid="tracking-item-row" className="p-2.5 flex justify-between bg-slate-50/50">
                   <span data-testid="tracking-item-name" className="font-bold">{item.name}</span>
@@ -213,7 +213,7 @@ export function TrackingView({
                     {evt.isSimulated && (
                       <span
                         data-testid="simulated-event-badge"
-                        className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300"
+                        className="px-2 py-0.5 rounded-sm text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300"
                       >
                         SIMULATED DOWNSTREAM EVENT
                       </span>

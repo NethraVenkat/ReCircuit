@@ -39,7 +39,7 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
         </div>
 
         {/* CPCB Badge */}
-        <div className="p-4 mx-3 my-3 bg-emerald-950/60 border border-emerald-700/50 rounded text-xs text-emerald-200">
+        <div className="p-4 mx-3 my-3 bg-emerald-950/60 border border-emerald-700/50 rounded-sm text-xs text-emerald-200">
           <span data-testid="cpcb-badge" className="font-semibold block text-emerald-300 mb-1">
             Official Compliance Badge:
           </span>
@@ -57,7 +57,7 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
                 aria-current={isActive ? "page" : undefined}
                 className={`flex items-center px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-emerald-700 text-white shadow-sm"
+                    ? "bg-emerald-700 text-white shadow-xs"
                     : "text-emerald-100 hover:bg-emerald-800 hover:text-white"
                 }`}
               >
@@ -83,7 +83,7 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
           </div>
           <Link
             href={config.routes.book}
-            className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-sm"
+            className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-xs"
           >
             Schedule Pickup
           </Link>

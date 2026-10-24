@@ -33,7 +33,7 @@ export function QuickScrapLayout({ children, activePath = "/" }: QuickScrapLayou
 
         <div className="portal-brand-row max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <span className="bg-orange-600 text-white px-2 py-0.5 rounded font-black text-base">QS</span>
+            <span className="bg-orange-600 text-white px-2 py-0.5 rounded-sm font-black text-base">QS</span>
             <div>
               <h1 className="font-bold text-lg text-white tracking-wider uppercase">QuickScrap Hyd</h1>
               <p className="text-[10px] text-slate-400">On-demand scrap & electronics pickup aggregator</p>
@@ -49,7 +49,7 @@ export function QuickScrapLayout({ children, activePath = "/" }: QuickScrapLayou
                   key={item.href}
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
-                  className={`px-3 py-1.5 rounded text-xs font-semibold uppercase tracking-wider transition-all ${
+                  className={`px-3 py-1.5 rounded-sm text-xs font-semibold uppercase tracking-wider transition-all ${
                     isActive
                       ? "bg-orange-600 text-white"
                       : "text-slate-300 hover:text-white hover:bg-slate-800"

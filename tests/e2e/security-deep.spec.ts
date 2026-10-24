@@ -173,7 +173,7 @@ test.describe("Stage 11: Security & Authorization Deep Verification Suite", () =
         text: "Toxic chemical waste container",
         items: [
           {
-            id: "d9e8f7a6-b5c4-4d3e-2f1a-0b9c8d7e6f5a",
+            id: "d9e8f7a6-b5c4-4d3e-8f1a-0b9c8d7e6f5a",
             rawText: "Hazardous toxic solvent",
             category: "hazardous",
             quantity: 1,

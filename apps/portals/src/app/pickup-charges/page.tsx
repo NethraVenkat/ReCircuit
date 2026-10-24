@@ -19,7 +19,7 @@ export default async function PickupChargesPage(): Promise<JSX.Element> {
               Commercial tariff schedule for residential collections across Hyderabad.
             </p>
           </div>
-          <div data-testid="fee-info-hidden" className="p-6 bg-amber-50 border border-amber-300 rounded text-amber-900 text-sm">
+          <div data-testid="fee-info-hidden" className="p-6 bg-amber-50 border border-amber-300 rounded-sm text-amber-900 text-sm">
             <p className="font-bold">Notice: Tariff revision in progress.</p>
             <p className="text-xs mt-1">Pickup fee thresholds, underweight surcharge, and payout figures are temporarily unlisted.</p>
           </div>
@@ -29,7 +29,7 @@ export default async function PickupChargesPage(): Promise<JSX.Element> {
   }
 
   const feeTable = (
-    <div className="bg-white p-6 rounded-lg border border-emerald-200 shadow-sm space-y-4">
+    <div className="bg-white p-6 rounded-lg border border-emerald-200 shadow-xs space-y-4">
       <h3 className="text-base font-bold text-emerald-900 border-b pb-2">
         {isChangedLayout ? "Discharge & Handling Compensation Table" : "Pickup Fee & Payout Schedule"}
       </h3>

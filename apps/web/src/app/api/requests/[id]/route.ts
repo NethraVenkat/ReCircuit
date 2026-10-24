@@ -6,16 +6,17 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const repo = getRepository();
-    const stored = await owned(params.id);
+    const stored = await owned(id);
     if (!stored) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
-    const audits = await repo.getAudits({ requestId: params.id });
+    const audits = await repo.getAudits({ requestId: id });
 
     return NextResponse.json({
       household: storedPolicyMetadata(stored.household),

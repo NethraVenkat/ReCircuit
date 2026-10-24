@@ -179,7 +179,7 @@ function AdminPageContent(): JSX.Element {
   if (adminDisabled) {
     return (
       <div className="portal-operator flex items-center justify-center">
-        <div data-testid="admin-disabled" className="max-w-md w-full bg-white p-8 rounded-lg border border-red-300 shadow-sm text-center space-y-4">
+        <div data-testid="admin-disabled" className="max-w-md w-full bg-white p-8 rounded-lg border border-red-300 shadow-xs text-center space-y-4">
           <span className="text-4xl block">🛑</span>
           <h1 className="text-xl font-bold text-slate-900">Operator console disabled</h1>
           <p className="text-sm text-slate-600">
@@ -193,7 +193,7 @@ function AdminPageContent(): JSX.Element {
   if (authenticated === false) {
     return (
       <div className="portal-operator flex items-center justify-center">
-        <div data-testid="admin-unauthorized" className="max-w-md w-full bg-white p-8 rounded-lg border shadow-sm text-center space-y-4">
+        <div data-testid="admin-unauthorized" className="max-w-md w-full bg-white p-8 rounded-lg border shadow-xs text-center space-y-4">
           <span className="text-4xl block">🔒</span>
           <h1 className="text-xl font-bold text-slate-900">Admin authentication required</h1>
           <p className="text-sm text-slate-600">
@@ -216,10 +216,10 @@ function AdminPageContent(): JSX.Element {
     <div className="portal-operator">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
-        <div className="bg-white p-6 rounded-lg border shadow-sm flex flex-wrap justify-between items-center gap-4">
+        <div className="bg-white p-6 rounded-lg border shadow-xs flex flex-wrap justify-between items-center gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="px-2.5 py-0.5 rounded text-xs font-bold uppercase bg-slate-800 text-white">
+              <span className="px-2.5 py-0.5 rounded-sm text-xs font-bold uppercase bg-slate-800 text-white">
                 Admin Console
               </span>
               <h1 className="text-2xl font-black text-slate-900">{config.name}</h1>
@@ -233,7 +233,7 @@ function AdminPageContent(): JSX.Element {
 
             <a
               href="/"
-              className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded"
+              className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-sm"
             >
               View Public Portal
             </a>
@@ -244,7 +244,7 @@ function AdminPageContent(): JSX.Element {
         {loading && <p role="status">Refreshing saved bookings…</p>}
 
         {/* Failure Switches for Agent Hardening Tests */}
-        <details className="bg-white p-6 rounded-lg border shadow-sm space-y-4"><summary className="font-bold cursor-pointer">Test failure switches</summary>
+        <details className="bg-white p-6 rounded-lg border shadow-xs space-y-4"><summary className="font-bold cursor-pointer">Test failure switches</summary>
           <div className="border-b pb-2 flex justify-between items-center">
             <div>
               <h2 className="text-base font-bold text-slate-900">Agent Test Failure Switches</h2>
@@ -257,7 +257,7 @@ function AdminPageContent(): JSX.Element {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Switch 1: Fail submit with HTTP 500 */}
-            <div className="p-4 rounded border bg-slate-50 space-y-2">
+            <div className="p-4 rounded-sm border bg-slate-50 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold">Fail Next Submit (HTTP 500)</span>
                 <input
@@ -267,7 +267,7 @@ function AdminPageContent(): JSX.Element {
                   disabled={pendingAction}
                   checked={switches.failNextSubmit}
                   onChange={() => handleToggleSwitch("failNextSubmit")}
-                  className="rounded text-red-600 w-4 h-4"
+                  className="rounded-sm text-red-600 w-4 h-4"
                 />
               </div>
               <p className="text-[11px] text-slate-600">
@@ -276,7 +276,7 @@ function AdminPageContent(): JSX.Element {
             </div>
 
             {/* Switch 2: Omit reference on confirmation */}
-            <div className="p-4 rounded border bg-slate-50 space-y-2">
+            <div className="p-4 rounded-sm border bg-slate-50 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold">Omit Next Reference</span>
                 <input
@@ -286,7 +286,7 @@ function AdminPageContent(): JSX.Element {
                   disabled={pendingAction}
                   checked={switches.omitNextReference}
                   onChange={() => handleToggleSwitch("omitNextReference")}
-                  className="rounded text-amber-600 w-4 h-4"
+                  className="rounded-sm text-amber-600 w-4 h-4"
                 />
               </div>
               <p className="text-[11px] text-slate-600">
@@ -295,7 +295,7 @@ function AdminPageContent(): JSX.Element {
             </div>
 
             {/* Switch 3: Serve changed layout on policy page */}
-            <div className="p-4 rounded border bg-slate-50 space-y-2">
+            <div className="p-4 rounded-sm border bg-slate-50 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold">Serve Changed Policy Layout</span>
                 <input
@@ -305,7 +305,7 @@ function AdminPageContent(): JSX.Element {
                   disabled={pendingAction}
                   checked={switches.changedPolicyLayout}
                   onChange={() => handleToggleSwitch("changedPolicyLayout")}
-                  className="rounded text-purple-600 w-4 h-4"
+                  className="rounded-sm text-purple-600 w-4 h-4"
                 />
               </div>
               <p className="text-[11px] text-slate-600">
@@ -314,7 +314,7 @@ function AdminPageContent(): JSX.Element {
             </div>
 
             {/* Switch 4: Hide fee info */}
-            <div className="p-4 rounded border bg-slate-50 space-y-2">
+            <div className="p-4 rounded-sm border bg-slate-50 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold">Hide Fee Info</span>
                 <input
@@ -324,7 +324,7 @@ function AdminPageContent(): JSX.Element {
                   disabled={pendingAction}
                   checked={switches.hideFeeInfo}
                   onChange={() => handleToggleSwitch("hideFeeInfo")}
-                  className="rounded text-rose-600 w-4 h-4"
+                  className="rounded-sm text-rose-600 w-4 h-4"
                 />
               </div>
               <p className="text-[11px] text-slate-600">
@@ -333,7 +333,7 @@ function AdminPageContent(): JSX.Element {
             </div>
 
             {/* Switch 5: Raise Fee (+₹40) */}
-            <div className="p-4 rounded border bg-slate-50 space-y-2">
+            <div className="p-4 rounded-sm border bg-slate-50 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-red-900">Raise Fee (+₹40) [Fee Drift]</span>
                 <input
@@ -343,7 +343,7 @@ function AdminPageContent(): JSX.Element {
                   disabled={pendingAction}
                   checked={Boolean(switches.raiseFee)}
                   onChange={() => handleToggleSwitch("raiseFee")}
-                  className="rounded text-red-600 w-4 h-4"
+                  className="rounded-sm text-red-600 w-4 h-4"
                 />
               </div>
               <p className="text-[11px] text-slate-600">
@@ -354,7 +354,7 @@ function AdminPageContent(): JSX.Element {
         </details>
 
         {/* Bookings Table & Simulated Actions */}
-        <div className="bg-white p-6 rounded-lg border shadow-sm space-y-4">
+        <div className="bg-white p-6 rounded-lg border shadow-xs space-y-4">
           <div className="flex justify-between items-center border-b pb-3">
             <div>
               <h2 className="text-base font-bold text-slate-900">Portal Bookings List</h2>
@@ -407,7 +407,7 @@ function AdminPageContent(): JSX.Element {
                       <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px]">{b.preferredSlot}</td>
                       <td className="py-2.5 px-3">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                          className={`inline-block px-2 py-0.5 rounded-sm text-[10px] font-black uppercase ${
                             b.status === "PICKED_UP" || b.status === "WEIGHED"
                               ? "bg-green-100 text-green-800"
                               : b.status === "SCHEDULED" || b.status === "CONFIRMED"
@@ -436,7 +436,7 @@ function AdminPageContent(): JSX.Element {
                             data-testid={`btn-confirm-${b.bookingReference}`}
                             onClick={() => handleAction("confirm", b.bookingReference)}
                             disabled={pendingAction || b.status !== "RECEIVED"}
-                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded font-bold text-[10px]"
+                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-sm font-bold text-[10px]"
                           >
                             Confirm
                           </button>
@@ -449,7 +449,7 @@ function AdminPageContent(): JSX.Element {
                               handleAction("schedule", b.bookingReference, { slot: selectedSlot || "Tomorrow 10:00–12:00 IST" })
                             }
                             disabled={pendingAction || b.status === "PICKED_UP" || b.status === "WEIGHED"}
-                            className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-30 text-white rounded font-bold text-[10px]"
+                            className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-30 text-white rounded-sm font-bold text-[10px]"
                           >
                             Schedule
                           </button>
@@ -460,7 +460,7 @@ function AdminPageContent(): JSX.Element {
                             data-testid={`btn-pickup-${b.bookingReference}`}
                             onClick={() => handleAction("picked_up", b.bookingReference)}
                             disabled={pendingAction || b.status === "PICKED_UP" || b.status === "WEIGHED"}
-                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-30 text-white rounded font-bold text-[10px]"
+                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-30 text-white rounded-sm font-bold text-[10px]"
                           >
                             Mark Picked Up
                           </button>
@@ -473,7 +473,7 @@ function AdminPageContent(): JSX.Element {
                             onClick={() =>
                               handleAction("weighed", b.bookingReference, { weightKg: parseFloat(inputWeight) })
                             }
-                            className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded font-bold text-[10px]"
+                            className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-sm font-bold text-[10px]"
                           >
                             Record Weight
                           </button>
@@ -494,7 +494,7 @@ function AdminPageContent(): JSX.Element {
                 id="operator-slot"
                 value={selectedSlot}
                 onChange={(e) => setSelectedSlot(e.target.value)}
-                className="px-2 py-1 border rounded text-xs bg-white"
+                className="px-2 py-1 border rounded-sm text-xs bg-white"
               >
                 {slots.map((s) => (
                   <option key={s} value={s}>
@@ -513,7 +513,7 @@ function AdminPageContent(): JSX.Element {
                 value={inputWeight}
                 onChange={(e) => setInputWeight(e.target.value)}
                 step="0.5"
-                className="w-16 px-2 py-1 border rounded text-xs bg-white text-center font-bold"
+                className="w-16 px-2 py-1 border rounded-sm text-xs bg-white text-center font-bold"
               />
             </div>
           </div>
@@ -522,7 +522,7 @@ function AdminPageContent(): JSX.Element {
               type="button"
               data-testid="btn-reset-demo"
               onClick={handleResetDemo}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded shadow"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-sm shadow-sm"
             >
               Reset Demo State
             </button>

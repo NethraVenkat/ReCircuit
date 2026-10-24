@@ -4,7 +4,7 @@ import { bookingFingerprint, fingerprint, type Verification } from "./contracts"
 
 const ObservedItem = z.object({ name: z.string(), quantity: z.number().int().positive(), weightKg: z.number().finite().positive() });
 const Evidence = z.object({ verified: z.literal(true), independent: z.literal(true), isUncertain: z.literal(false).optional(), bookingReference: z.string(), observedItems: z.array(ObservedItem), observedFeeText: z.string(), checkedAt: z.string().datetime() });
-const Record = z.object({ request: z.object({ id: z.string(), state: z.literal("APPROVED") }), plan: z.object({ legs: z.array(z.object({ id: z.string(), recyclerId: z.string(), bookingReference: z.string().optional(), state: z.string() })) }), household: z.object({ customer: z.object({ addressLine: z.string(), locality: z.string(), pincode: z.string() }), verifications: z.record(z.unknown()) }) });
+const Record = z.object({ request: z.object({ id: z.string(), state: z.literal("APPROVED") }), plan: z.object({ legs: z.array(z.object({ id: z.string(), recyclerId: z.string(), bookingReference: z.string().optional(), state: z.string() })) }), household: z.object({ customer: z.object({ addressLine: z.string(), locality: z.string(), pincode: z.string() }), verifications: z.record(z.string(), z.unknown()) }) });
 type Attestation = z.infer<typeof Verification>;
 const normalize = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 /** Read-only bridge from existing household independent-verification evidence, never operator assertions. */

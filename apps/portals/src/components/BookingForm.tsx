@@ -217,7 +217,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       onInvalid={e => (e.target as HTMLInputElement).setAttribute("aria-invalid", "true")}
       onInput={e => (e.target as HTMLInputElement).removeAttribute("aria-invalid")}
       aria-busy={loading}
-      className={`p-6 rounded-lg border shadow-sm space-y-6 ${
+      className={`p-6 rounded-lg border shadow-xs space-y-6 ${
         isDeccan
           ? "bg-white border-emerald-200"
           : isPaperPlus
@@ -256,7 +256,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="e.g. Ramesh Reddy"
-              className="w-full px-3 py-2 border rounded text-sm text-slate-900 bg-white"
+              className="w-full px-3 py-2 border rounded-sm text-sm text-slate-900 bg-white"
             />
           </div>
           <div>
@@ -271,7 +271,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="e.g. 9876543210"
-              className="w-full px-3 py-2 border rounded text-sm text-slate-900 bg-white"
+              className="w-full px-3 py-2 border rounded-sm text-sm text-slate-900 bg-white"
             />
           </div>
         </div>
@@ -289,7 +289,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               value={addressLine}
               onChange={(e) => setAddressLine(e.target.value)}
               placeholder="Plot 42, Road No 3"
-              className="w-full px-3 py-2 border rounded text-sm text-slate-900 bg-white"
+              className="w-full px-3 py-2 border rounded-sm text-sm text-slate-900 bg-white"
             />
           </div>
           <div>
@@ -303,7 +303,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               value={locality}
               onChange={(e) => setLocality(e.target.value)}
               placeholder="Kukatpally"
-              className="w-full px-3 py-2 border rounded text-sm text-slate-900 bg-white"
+              className="w-full px-3 py-2 border rounded-sm text-sm text-slate-900 bg-white"
             />
           </div>
           <div>
@@ -314,7 +314,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               data-testid="input-pincode"
               value={pincode}
               onChange={(e) => setPincode(e.target.value)}
-              className="w-full px-3 py-2 border rounded text-sm text-slate-900 bg-white font-medium"
+              className="w-full px-3 py-2 border rounded-sm text-sm text-slate-900 bg-white font-medium"
             >
               {SERVICEABLE_PINCODES.map((pin) => (
                 <option key={pin} value={pin}>
@@ -334,7 +334,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             data-testid="select-slot"
             value={preferredSlot}
             onChange={(e) => setPreferredSlot(e.target.value)}
-            className="w-full px-3 py-2 border rounded text-sm text-slate-900 bg-white"
+            className="w-full px-3 py-2 border rounded-sm text-sm text-slate-900 bg-white"
           >
             {slots.map((s) => (
               <option key={s} value={s}>
@@ -358,7 +358,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             <div
               key={idx}
               data-testid="item-row"
-              className="flex items-center justify-between p-3 rounded border text-sm bg-slate-50 text-slate-800"
+              className="flex items-center justify-between p-3 rounded-sm border text-sm bg-slate-50 text-slate-800"
             >
               <div>
                 <span data-testid="item-row-name" className="font-bold">{item.name}</span>
@@ -378,10 +378,10 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         </div>
 
         <div className="portal-item-fields pt-3">
-          <div><label htmlFor="input_item_name">Add item description</label><input id="input_item_name" type="text" data-testid="input-item-name" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="e.g. Newspaper or laptop" className="px-3 py-2 border rounded text-slate-900 bg-white"/></div>
-          <div><label htmlFor="input_item_qty">Quantity (units)</label><input id="input_item_qty" type="number" data-testid="input-item-qty" value={Number.isFinite(itemQty) ? itemQty : ""} onChange={e => setItemQty(e.target.valueAsNumber)} min="1" step="1" className="px-3 py-2 border rounded text-slate-900 bg-white"/></div>
-          <div><label htmlFor="input_item_weight">Total row weight (kg)</label><input id="input_item_weight" type="number" data-testid="input-item-weight" value={Number.isFinite(itemWeight) ? itemWeight : ""} onChange={e => setItemWeight(e.target.valueAsNumber)} min="0" step="any" className="px-3 py-2 border rounded text-slate-900 bg-white"/></div>
-          <button type="button" data-testid="add-item" onClick={handleAddItem} className="px-3 py-2 rounded border border-slate-400 bg-slate-200 text-slate-800 hover:bg-slate-300">+ Add item</button>
+          <div><label htmlFor="input_item_name">Add item description</label><input id="input_item_name" type="text" data-testid="input-item-name" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="e.g. Newspaper or laptop" className="px-3 py-2 border rounded-sm text-slate-900 bg-white"/></div>
+          <div><label htmlFor="input_item_qty">Quantity (units)</label><input id="input_item_qty" type="number" data-testid="input-item-qty" value={Number.isFinite(itemQty) ? itemQty : ""} onChange={e => setItemQty(e.target.valueAsNumber)} min="1" step="1" className="px-3 py-2 border rounded-sm text-slate-900 bg-white"/></div>
+          <div><label htmlFor="input_item_weight">Total row weight (kg)</label><input id="input_item_weight" type="number" data-testid="input-item-weight" value={Number.isFinite(itemWeight) ? itemWeight : ""} onChange={e => setItemWeight(e.target.valueAsNumber)} min="0" step="any" className="px-3 py-2 border rounded-sm text-slate-900 bg-white"/></div>
+          <button type="button" data-testid="add-item" onClick={handleAddItem} className="px-3 py-2 rounded-sm border border-slate-400 bg-slate-200 text-slate-800 hover:bg-slate-300">+ Add item</button>
         </div>
         <p className="portal-form-hint">Current total: {totalWeight} kg across {items.length} item rows.</p>
       </div>
@@ -390,7 +390,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       {isDeccan && containsLaptopOrPhone && (
         <div
           data-testid="data-wipe-panel"
-          className="p-4 rounded border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs space-y-2"
+          className="p-4 rounded-sm border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs space-y-2"
         >
           <div className="flex items-start space-x-2">
             <input
@@ -401,7 +401,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
               data-testid="data-wipe-ack"
               checked={dataWipeAck}
               onChange={(e) => setDataWipeAck(e.target.checked)}
-              className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              className="mt-0.5 rounded-sm border-emerald-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
             />
             <label htmlFor="data_wipe_ack" className="font-semibold leading-relaxed cursor-pointer">
               I acknowledge that any data stored on submitted laptops, hard drives, or mobile phones has been backed up
@@ -416,7 +416,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <div
           data-human-verification="required"
           data-testid="human-verification-panel"
-          className="p-4 rounded border-2 border-amber-500 bg-amber-100/90 text-amber-950 space-y-3"
+          className="p-4 rounded-sm border-2 border-amber-500 bg-amber-100/90 text-amber-950 space-y-3"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center space-x-1">
@@ -438,7 +438,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
           <div className="flex flex-col sm:flex-row items-center gap-4">
             {captchaSessionId && (
-              <div className="border border-amber-400 rounded p-1 bg-white shadow-inner">
+              <div className="border border-amber-400 rounded-sm p-1 bg-white shadow-inner">
                 {/* Image has no code text in the DOM or source! */}
                 <img
                   key={captchaKey}
@@ -463,7 +463,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
                 value={captchaCode}
                 onChange={(e) => setCaptchaCode(e.target.value.toUpperCase())}
                 placeholder="Enter 5 characters"
-                className="w-full px-3 py-2 border rounded font-mono font-bold tracking-widest text-center text-amber-950 uppercase bg-white"
+                className="w-full px-3 py-2 border rounded-sm font-mono font-bold tracking-widest text-center text-amber-950 uppercase bg-white"
               />
             </div>
           </div>
@@ -505,7 +505,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
           type="submit"
           data-testid="confirm-booking"
           disabled={loading || feeLoading || computedFee === null}
-          className={`w-full py-3 px-6 rounded-md font-bold text-sm shadow transition-all ${
+          className={`w-full py-3 px-6 rounded-md font-bold text-sm shadow-sm transition-all ${
             isDeccan
               ? "bg-emerald-700 hover:bg-emerald-800 text-white"
               : isPaperPlus

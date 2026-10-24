@@ -16,7 +16,7 @@ export default async function WhatWeTakePage(): Promise<JSX.Element> {
       <PaperPlusLayout activePath="/what-we-take">
         <div className="space-y-6">
           <h2 className="text-3xl font-black text-amber-950">What PaperPlus Buys & Full Rate Card</h2>
-          <div data-testid="fee-info-hidden" className="p-6 bg-amber-50 border-2 border-amber-300 rounded text-amber-950 text-sm">
+          <div data-testid="fee-info-hidden" className="p-6 bg-amber-50 border-2 border-amber-300 rounded-sm text-amber-950 text-sm">
             <p className="font-bold">Notice: Rate card updates underway.</p>
             <p className="text-xs mt-1">Scrap paper rates and minimum weight requirements are temporarily unlisted.</p>
           </div>
@@ -42,7 +42,7 @@ export default async function WhatWeTakePage(): Promise<JSX.Element> {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {config.rates.rateCard.map((entry) => (
-              <div key={entry.item} className="bg-white p-5 rounded-lg border-2 border-amber-300 shadow-sm">
+              <div key={entry.item} className="bg-white p-5 rounded-lg border-2 border-amber-300 shadow-xs">
                 <span className="text-3xl block mb-2">📄</span>
                 <h4 className="font-bold text-base text-amber-950">{entry.item}</h4>
                 <p className="text-2xl font-black text-amber-700 my-2">{entry.payout}</p>

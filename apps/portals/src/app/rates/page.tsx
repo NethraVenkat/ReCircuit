@@ -16,7 +16,7 @@ export default async function RatesPage(): Promise<JSX.Element> {
               QuickScrap Tariff & Aggregator Rate Card
             </h2>
           </div>
-          <div data-testid="fee-info-hidden" className="p-6 bg-slate-900 border border-amber-600/50 rounded text-amber-200 text-sm font-mono">
+          <div data-testid="fee-info-hidden" className="p-6 bg-slate-900 border border-amber-600/50 rounded-sm text-amber-200 text-sm font-mono">
             <p className="font-bold text-amber-400">Notice: Tariff undergoing revision.</p>
             <p className="text-xs mt-1 text-slate-300">Standard logistics fees and scrap payouts are temporarily unlisted.</p>
           </div>
@@ -38,7 +38,7 @@ export default async function RatesPage(): Promise<JSX.Element> {
         </div>
 
         {/* Flat Fee Highlight */}
-        <div className="p-4 bg-orange-950/40 border border-orange-800/60 rounded">
+        <div className="p-4 bg-orange-950/40 border border-orange-800/60 rounded-sm">
           <span className="text-xs font-bold text-orange-400 uppercase tracking-wider block mb-1">
             Standard Logistics Fee
           </span>
@@ -49,7 +49,7 @@ export default async function RatesPage(): Promise<JSX.Element> {
         </div>
 
         {/* Rates Table */}
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded space-y-3">
+        <div className="p-4 bg-slate-900 border border-slate-800 rounded-sm space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
             Material Payout Table (Aggregator Discount Applied)
           </h3>
@@ -92,7 +92,7 @@ export default async function RatesPage(): Promise<JSX.Element> {
         </div>
 
         {/* Status notice */}
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded text-xs text-slate-400 space-y-1">
+        <div className="p-4 bg-slate-900 border border-slate-800 rounded-sm text-xs text-slate-400 space-y-1">
           <span className="text-orange-400 font-bold block uppercase text-[11px]">
             ⚠️ Regulatory Notice (Synthetic Demo Data)
           </span>

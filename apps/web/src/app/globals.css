@@ -1,6 +1,13 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+/* Keep established v3 form/border defaults during the security migration. */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button { border-color: var(--color-gray-200, currentColor); }
+  input::placeholder, textarea::placeholder { color: var(--color-gray-400); }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  dialog { margin: auto; }
+}
 
 .rc-row .rc-stack{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px}
 :root{--rc-canvas:#F6F7F2;--rc-surface:#fff;--rc-surface-muted:#EEF2EA;--rc-text:#17251C;--rc-text-secondary:#526157;--rc-border:#D7DFD4;--rc-control-border:#7B897C;--rc-primary:#245C3D;--rc-primary-hover:#19452D;--rc-primary-soft:#E5EFE4;--rc-focus:#2457C5;--rc-success-text:#21613C;--rc-success-bg:#EAF4EC;--rc-warning-text:#805000;--rc-warning-bg:#FFF4D8;--rc-danger-text:#A12B2B;--rc-danger-bg:#FDECEC;--rc-info-text:#24527A;--rc-info-bg:#EAF2FA}

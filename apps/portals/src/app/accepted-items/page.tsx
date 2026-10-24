@@ -15,7 +15,7 @@ export default function AcceptedItemsPage(): JSX.Element {
         </div>
 
         {/* Accepted Items Table */}
-        <div className="bg-white p-6 rounded-lg border border-emerald-200 shadow-sm space-y-3">
+        <div className="bg-white p-6 rounded-lg border border-emerald-200 shadow-xs space-y-3">
           <h3 className="text-base font-bold text-emerald-900 border-b pb-2">✅ Permitted Electronic Items</h3>
           <p className="text-xs text-slate-600">
             Deccan E-Cycle collects and recycles the following categories of household and office electronics:

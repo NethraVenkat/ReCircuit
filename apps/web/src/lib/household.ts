@@ -12,20 +12,22 @@ export const customerSchema = z.object({
   locality: z.string().trim().min(1).max(100),
   pincode: z.string().regex(/^\d{6}$/),
 });
-export function owner(create = false): string | null {
-  let token = cookies().get("rc-household")?.value;
+export async function owner(create = false): Promise<string | null> {
+  const jar = await cookies();
+  let token = jar.get("rc-household")?.value;
   if (!token && create) {
     token = randomBytes(32).toString("hex");
-    cookies().set("rc-household", token, { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 90 });
+    jar.set("rc-household", token, { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 90 });
   }
   return token ? createHash("sha256").update(token).digest("hex") : null;
 }
 export async function owned(id: string) {
   if (!z.string().uuid().safeParse(id).success) throw new Error("NOT_FOUND");
-  const userId = owner();
+  const userId = await owner();
   if (!userId) throw new Error("NOT_FOUND");
   const record = await getRepository().getRequest(id, userId);
-  if (!record || !owner() || record.request.userId !== owner()) throw new Error("NOT_FOUND");
+  const currentOwner = await owner();
+  if (!record || !currentOwner || record.request.userId !== currentOwner) throw new Error("NOT_FOUND");
   return record;
 }
 export function sameOrigin(req: Request): void {

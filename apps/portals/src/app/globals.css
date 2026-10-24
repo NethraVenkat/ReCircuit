@@ -1,6 +1,13 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+/* Keep established v3 form/border defaults during the security migration. */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button { border-color: var(--color-gray-200, currentColor); }
+  input::placeholder, textarea::placeholder { color: var(--color-gray-400); }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  dialog { margin: auto; }
+}
 
 .routing-workspace .routing-check{display:flex;align-items:center;gap:10px;padding:8px 0}.routing-workspace .routing-check input{width:18px;height:18px;min-height:18px;flex:0 0 18px}
 

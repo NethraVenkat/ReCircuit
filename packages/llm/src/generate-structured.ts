@@ -1,4 +1,3 @@
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { z } from "zod";
 import type { GenerateStructuredOptions, LlmAdapter, LlmProvider } from "./types.js";
 import { LlmOutputError, LlmConfigurationError } from "./types.js";
@@ -11,8 +10,8 @@ import { GroqAdapter } from "./adapters/groq.js";
 export function selectedProvider(): string {
   return (process.env.LLM_PROVIDER || (process.env.GROQ_API_KEY?.trim() ? "groq" : "fake")).toLowerCase();
 }
-export function structuredSchema(schema: z.ZodType<unknown, z.ZodTypeDef, unknown>): Record<string, unknown> {
-  return zodToJsonSchema(schema, { $refStrategy: "none" });
+export function structuredSchema(schema: z.ZodType<unknown, unknown>): Record<string, unknown> {
+  return z.toJSONSchema(schema, { target: "draft-7", io: "input" });
 }
 export function getAdapter(provider?: string): LlmAdapter {
   const chosen = (provider || selectedProvider()).toLowerCase() as LlmProvider;
@@ -89,7 +88,7 @@ export async function generateStructured<T>(
         // Build error explanation to append for retry
         let errorDesc = "Invalid JSON or schema validation failure.";
         if (err instanceof z.ZodError) {
-          errorDesc = `Validation error: ${JSON.stringify(err.errors)}`;
+          errorDesc = `Validation error: ${JSON.stringify(err.issues)}`;
         } else if (err instanceof SyntaxError) {
           errorDesc = `Invalid JSON syntax: ${err.message}`;
         }

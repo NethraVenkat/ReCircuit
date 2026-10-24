@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "apps/portals/src"),
@@ -13,6 +14,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Bound parallel WASM databases and filesystem-heavy workers on developer machines.
+    maxWorkers: 4,
     env: { CAPTCHA_SECRET: "vitest-only-captcha-secret", RECIRCUIT_DATA_DIR: path.resolve(__dirname, ".data", "unit-isolated-" + Date.now()) },
     globals: true,
     environment: "node",

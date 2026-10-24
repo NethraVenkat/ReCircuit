@@ -22,18 +22,18 @@ export function PaperPlusLayout({ children, activePath = "/" }: PaperPlusLayoutP
     <div className="portal-shell portal-shell--paperplus min-h-screen bg-amber-50/40 text-amber-950 flex flex-col">
       <a className="portal-skip" href="#portal-main">Skip to content</a>
       {/* Header and Branding */}
-      <header className="bg-white border-b border-amber-200 shadow-sm">
+      <header className="bg-white border-b border-amber-200 shadow-xs">
         {/* Top Banner */}
         <div className="portal-banner bg-amber-600 text-amber-50 px-6 py-2 text-xs flex justify-between items-center font-medium">
           <span>Hyderabad Paper & Scrap Buyers · Kukatpally / KPHB / Madhapur</span>
-          <span data-testid="cpcb-badge" className="bg-amber-700/80 px-2.5 py-0.5 rounded text-[11px]">
+          <span data-testid="cpcb-badge" className="bg-amber-700/80 px-2.5 py-0.5 rounded-sm text-[11px]">
             {config.badge}
           </span>
         </div>
 
         <div className="portal-brand-row max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full bg-amber-500 text-white font-black flex items-center justify-center text-xl shadow">
+            <div className="w-10 h-10 rounded-full bg-amber-500 text-white font-black flex items-center justify-center text-xl shadow-sm">
               PP
             </div>
             <div>

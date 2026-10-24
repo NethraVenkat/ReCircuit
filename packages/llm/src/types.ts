@@ -4,7 +4,7 @@ export type ModelTier = "fast" | "strong";
 export type LlmProvider = "anthropic" | "openai" | "gemini" | "groq" | "fake";
 
 export interface GenerateStructuredOptions<T> {
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>;
+  schema: z.ZodType<T, unknown>;
   system: string;
   user: string;
   modelTier?: ModelTier;

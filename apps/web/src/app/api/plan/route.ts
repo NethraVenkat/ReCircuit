@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     if (new Set(intakeResult.items.map(i => i.id)).size !== intakeResult.items.length) throw new Error("Item identities must be unique");
     if (body.requestId) intakeResult.requestId = body.requestId;
     const domainRequest = createDomainRequestFromIntake(intakeResult);
-    domainRequest.userId = owner(true)!;
+    domainRequest.userId = (await owner(true))!;
     domainRequest.description = text;
     if (body.feeCapInr !== undefined) domainRequest.feeCapInr = body.feeCapInr;
 

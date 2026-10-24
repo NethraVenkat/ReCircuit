@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -41,7 +41,8 @@
     ".next-audit-quickscrap/types/**/*.ts",
     ".next-release-local-3101/types/**/*.ts",
     ".next-release-local-3102/types/**/*.ts",
-    ".next-release-local-3103/types/**/*.ts"
+    ".next-release-local-3103/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

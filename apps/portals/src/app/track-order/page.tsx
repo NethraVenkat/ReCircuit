@@ -5,12 +5,13 @@ import { TrackingView } from "@/components/TrackingView";
 export const dynamic = "force-dynamic";
 
 interface TrackOrderPageProps {
-  searchParams: { ref?: string; client?: string };
+  searchParams: Promise<{ ref?: string; client?: string }>;
 }
 
-export default function TrackOrderPage({ searchParams }: TrackOrderPageProps): JSX.Element {
-  const initialRef = searchParams.ref || "";
-  const initialClient = searchParams.client || "";
+export default async function TrackOrderPage({ searchParams }: TrackOrderPageProps): Promise<JSX.Element> {
+  const query = await searchParams;
+  const initialRef = query.ref || "";
+  const initialClient = query.client || "";
 
   return (
     <QuickScrapLayout activePath="/track-order">

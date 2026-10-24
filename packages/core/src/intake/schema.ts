@@ -128,7 +128,7 @@ export const ValidatedIntakeResultSchema = z.object({
   feeCapInr: z.number().int().nonnegative().nullable(),
   items: z.array(IntakeItemSchema),
   clarifications: z.array(IntakeClarificationSchema),
-  evidence: z.record(z.unknown()).optional(),
+  evidence: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type IntakeItem = z.infer<typeof IntakeItemSchema>;

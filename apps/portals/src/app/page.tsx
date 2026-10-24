@@ -8,8 +8,8 @@ import { QuickScrapLayout } from "@/components/QuickScrapLayout";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage(): JSX.Element {
-  const headersList = headers();
+export default async function HomePage(): Promise<JSX.Element> {
+  const headersList = await headers();
   const host = headersList.get("host");
   const recyclerId = resolveRecyclerId(host);
 
@@ -26,7 +26,7 @@ export default function HomePage(): JSX.Element {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-sm">
+            <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-xs">
               <h3 className="font-bold text-emerald-900 mb-2">Accepted Electronics</h3>
               <p className="text-xs text-slate-600 leading-relaxed mb-4">
                 {config.rates.acceptedSummary}
@@ -39,7 +39,7 @@ export default function HomePage(): JSX.Element {
               </Link>
             </div>
 
-            <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-sm">
+            <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-xs">
               <h3 className="font-bold text-emerald-900 mb-2">Pickup Charges & Rates</h3>
               <p className="text-xs text-slate-600 leading-relaxed mb-4">
                 {config.rates.payoutDescription}
@@ -52,14 +52,14 @@ export default function HomePage(): JSX.Element {
               </Link>
             </div>
 
-            <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-sm">
+            <div className="p-5 bg-white rounded-lg border border-emerald-200 shadow-xs">
               <h3 className="font-bold text-emerald-900 mb-2">Book E-Waste Pickup</h3>
               <p className="text-xs text-slate-600 leading-relaxed mb-4">
                 Schedule a door-to-door pickup across Hyderabad with certified data wipe destruction.
               </p>
               <Link
                 href={config.routes.book}
-                className="inline-block bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded text-xs font-bold shadow-sm"
+                className="inline-block bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-sm text-xs font-bold shadow-xs"
               >
                 Book Now →
               </Link>
@@ -67,14 +67,14 @@ export default function HomePage(): JSX.Element {
           </div>
 
           {/* Policy prose table */}
-          <div className="bg-white p-6 rounded-lg border border-emerald-200 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-lg border border-emerald-200 shadow-xs space-y-4">
             <h3 className="text-lg font-bold text-emerald-950">CPCB Certified Operating Standards</h3>
             <p className="text-sm text-slate-700 leading-relaxed">
               Deccan E-Cycle operates strictly in compliance with the Ministry of Environment, Forest and Climate Change
               E-Waste Management Rules 2022. All household and institutional electronics undergo serialized asset tracking,
               component dismantling, and eco-friendly metal recovery.
             </p>
-            <div className="text-xs bg-emerald-50 text-emerald-900 p-3 rounded border border-emerald-200 font-medium">
+            <div className="text-xs bg-emerald-50 text-emerald-900 p-3 rounded-sm border border-emerald-200 font-medium">
               {config.rates.rejectedSummary}
             </div>
           </div>
@@ -96,7 +96,7 @@ export default function HomePage(): JSX.Element {
             <div className="pt-2">
               <Link
                 href={config.routes.book}
-                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-black px-6 py-2.5 rounded shadow text-sm"
+                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-black px-6 py-2.5 rounded-sm shadow-sm text-sm"
               >
                 Schedule Doorstep Pickup →
               </Link>
@@ -104,21 +104,21 @@ export default function HomePage(): JSX.Element {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-5 rounded-lg border border-amber-200 shadow-sm text-center">
+            <div className="bg-white p-5 rounded-lg border border-amber-200 shadow-xs text-center">
               <div className="text-3xl mb-2">📰</div>
               <h3 className="font-bold text-base text-amber-950">Newspaper (Raddi)</h3>
               <p className="text-2xl font-black text-amber-700 my-1">₹12 / kg</p>
               <p className="text-xs text-amber-900/70">English & Telugu daily newspapers</p>
             </div>
 
-            <div className="bg-white p-5 rounded-lg border border-amber-200 shadow-sm text-center">
+            <div className="bg-white p-5 rounded-lg border border-amber-200 shadow-xs text-center">
               <div className="text-3xl mb-2">📦</div>
               <h3 className="font-bold text-base text-amber-950">Corrugated Cardboard</h3>
               <p className="text-2xl font-black text-amber-700 my-1">₹6 / kg</p>
               <p className="text-xs text-amber-900/70">Delivery cartons & packaging boxes</p>
             </div>
 
-            <div className="bg-white p-5 rounded-lg border border-amber-200 shadow-sm text-center">
+            <div className="bg-white p-5 rounded-lg border border-amber-200 shadow-xs text-center">
               <div className="text-3xl mb-2">📚</div>
               <h3 className="font-bold text-base text-amber-950">Old Books & Magazines</h3>
               <p className="text-2xl font-black text-amber-700 my-1">₹10 / kg</p>
@@ -148,7 +148,7 @@ export default function HomePage(): JSX.Element {
   return (
     <QuickScrapLayout activePath="/">
       <div className="space-y-6">
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded">
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-sm">
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-2xl font-bold text-white uppercase tracking-wider">QuickScrap Hyd Aggregator</h2>
@@ -158,7 +158,7 @@ export default function HomePage(): JSX.Element {
             </div>
             <Link
               href={config.routes.book}
-              className="bg-orange-600 hover:bg-orange-500 text-white font-bold px-4 py-2 rounded text-xs uppercase"
+              className="bg-orange-600 hover:bg-orange-500 text-white font-bold px-4 py-2 rounded-sm text-xs uppercase"
             >
               Book Instant Pickup
             </Link>
@@ -167,7 +167,7 @@ export default function HomePage(): JSX.Element {
 
         {/* Accordions / Sections */}
         <div className="space-y-4" data-testid="quickscrap-accordions">
-          <details open className="p-4 bg-slate-900 border border-slate-800 rounded group" data-testid="quickscrap-accordion">
+          <details open className="p-4 bg-slate-900 border border-slate-800 rounded-sm group" data-testid="quickscrap-accordion">
             <summary className="text-sm font-bold text-orange-400 uppercase tracking-wide cursor-pointer select-none">
               1. Flat Fee Structure & Logistics
             </summary>
@@ -177,31 +177,31 @@ export default function HomePage(): JSX.Element {
             </p>
           </details>
 
-          <details open className="p-4 bg-slate-900 border border-slate-800 rounded group" data-testid="quickscrap-accordion">
+          <details open className="p-4 bg-slate-900 border border-slate-800 rounded-sm group" data-testid="quickscrap-accordion">
             <summary className="text-sm font-bold text-orange-400 uppercase tracking-wide cursor-pointer select-none">
               2. Accepted Materials & Rate Card
             </summary>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-3 mt-1">
-              <div className="p-2 bg-slate-950 border border-slate-800 rounded">
+              <div className="p-2 bg-slate-950 border border-slate-800 rounded-sm">
                 <span className="text-slate-400 block">Dead Laptop</span>
                 <span className="text-white font-bold text-sm">₹180 / unit</span>
               </div>
-              <div className="p-2 bg-slate-950 border border-slate-800 rounded">
+              <div className="p-2 bg-slate-950 border border-slate-800 rounded-sm">
                 <span className="text-slate-400 block">Dead Phone</span>
                 <span className="text-white font-bold text-sm">₹40 / unit</span>
               </div>
-              <div className="p-2 bg-slate-950 border border-slate-800 rounded">
+              <div className="p-2 bg-slate-950 border border-slate-800 rounded-sm">
                 <span className="text-slate-400 block">Newspaper</span>
                 <span className="text-white font-bold text-sm">₹9 / kg</span>
               </div>
-              <div className="p-2 bg-slate-950 border border-slate-800 rounded">
+              <div className="p-2 bg-slate-950 border border-slate-800 rounded-sm">
                 <span className="text-slate-400 block">Cardboard</span>
                 <span className="text-white font-bold text-sm">₹4 / kg</span>
               </div>
             </div>
           </details>
 
-          <details open className="p-4 bg-slate-900 border border-slate-800 rounded group" data-testid="quickscrap-accordion">
+          <details open className="p-4 bg-slate-900 border border-slate-800 rounded-sm group" data-testid="quickscrap-accordion">
             <summary className="text-sm font-bold text-orange-400 uppercase tracking-wide cursor-pointer select-none">
               3. Regulatory Disclosure & Status
             </summary>

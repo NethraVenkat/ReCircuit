@@ -15,6 +15,6 @@ if(process.env.ROUTING_STORE_BACKEND==='supabase-local-test'){
 }
 await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(3200,'127.0.0.1',()=>s.close(resolve));});
 console.log('Local routing preview: http://127.0.0.1:3200/admin/routing; MapTiler browser exposure disabled');
-const child=spawn(process.execPath,[path.join(repo,'node_modules/next/dist/bin/next'),'dev','-H','127.0.0.1','-p','3200'],{cwd:path.join(repo,'apps/portals'),env,stdio:'inherit',windowsHide:true});
+const child=spawn(process.execPath,[path.join(repo,'node_modules/next/dist/bin/next'),'dev','--webpack','-H','127.0.0.1','-p','3200'],{cwd:path.join(repo,'apps/portals'),env,stdio:'inherit',windowsHide:true});
 child.on('exit',code=>process.exitCode=code??1);process.on('SIGINT',()=>child.kill());process.on('SIGTERM',()=>child.kill());
 if(process.env.ROUTING_STOP_FILE)setInterval(()=>{if(fs.existsSync(process.env.ROUTING_STOP_FILE)){child.kill();process.exit(0);}},1000);

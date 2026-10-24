@@ -5,12 +5,13 @@ import { TrackingView } from "@/components/TrackingView";
 export const dynamic = "force-dynamic";
 
 interface StatusPageProps {
-  searchParams: { ref?: string; client?: string };
+  searchParams: Promise<{ ref?: string; client?: string }>;
 }
 
-export default function StatusPage({ searchParams }: StatusPageProps): JSX.Element {
-  const initialRef = searchParams.ref || "";
-  const initialClient = searchParams.client || "";
+export default async function StatusPage({ searchParams }: StatusPageProps): Promise<JSX.Element> {
+  const query = await searchParams;
+  const initialRef = query.ref || "";
+  const initialClient = query.client || "";
 
   return (
     <PaperPlusLayout activePath="/status">
