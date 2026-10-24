@@ -15,10 +15,10 @@ export default async function TrackOrderPage({ searchParams }: TrackOrderPagePro
 
   return (
     <QuickScrapLayout activePath="/track-order">
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 portal-tracking-page">
         <div className="border-b border-slate-800 pb-3">
           <h2 className="text-xl font-bold uppercase tracking-wider text-white">QuickScrap Order Tracking</h2>
-          <p className="text-xs text-slate-400 mt-1 font-mono">
+          <p className="text-xs text-slate-600 mt-1 font-sans">
             Enter your QSH-XXXXX order reference to monitor collection dispatch and weighbridge records.
           </p>
         </div>

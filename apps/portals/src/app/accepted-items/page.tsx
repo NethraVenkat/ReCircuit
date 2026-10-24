@@ -43,7 +43,7 @@ export default function AcceptedItemsPage(): JSX.Element {
                 <tr>
                   <td className="py-2.5 px-3 font-semibold text-slate-800">Desktops & Monitors</td>
                   <td className="py-2.5 px-3 text-slate-600">CPUs, motherboards, LCD/LED monitors, power supplies</td>
-                  <td className="py-2.5 px-3 text-slate-600">Free certified disposal</td>
+                  <td className="py-2.5 px-3 text-slate-600">Disposal included</td>
                 </tr>
                 <tr>
                   <td className="py-2.5 px-3 font-semibold text-slate-800">Household Batteries</td>
@@ -58,7 +58,7 @@ export default function AcceptedItemsPage(): JSX.Element {
                 <tr>
                   <td className="py-2.5 px-3 font-semibold text-slate-800">Small Consumer Electronics</td>
                   <td className="py-2.5 px-3 text-slate-600">Keyboards, mice, routers, set-top boxes, calculators</td>
-                  <td className="py-2.5 px-3 text-slate-600">Free certified disposal</td>
+                  <td className="py-2.5 px-3 text-slate-600">Disposal included</td>
                 </tr>
               </tbody>
             </table>

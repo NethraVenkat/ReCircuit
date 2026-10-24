@@ -1,4 +1,5 @@
 "use client";
+import { RecyclingLoader } from "../../../../packages/ui/recycling-loader";
 import { bookingStatusLabel } from "../lib/status-presentation";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -30,7 +31,7 @@ export function TrackingView({
     if (!ref.trim() && !clientId.trim()) return;
     const current = ++sequence.current;
     setLoading(true);
-    setBooking(null); setRequestError("");
+    setRequestError("");
     setNotFound(false);
     setSearched(true);
 
@@ -82,13 +83,13 @@ export function TrackingView({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="portal-tracking-view space-y-6" aria-busy={loading}>
       <form onSubmit={handleSearch} className="portal-tracking-search">
-        <div><label htmlFor="search_reference">Booking reference</label><input id="search_reference" type="text" data-testid="input-reference" required autoComplete="off" value={reference} onChange={e => setReference(e.target.value)} placeholder={`e.g. ${{deccan:"DEC",paperplus:"PPK",quickscrap:"QSH"}[recyclerId]}-12345`} className="px-4 py-2 border rounded-sm text-slate-900 bg-white font-mono"/></div>
-        <button type="submit" data-testid="submit-track" disabled={loading} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-sm">{loading ? "Checking…" : "Track booking"}</button>
+        <div><label htmlFor="search_reference">Booking reference</label><input id="search_reference" type="text" data-testid="input-reference" required autoComplete="off" value={reference} onChange={e => setReference(e.target.value)} placeholder={`e.g. ${{deccan:"DEC",paperplus:"PPK",quickscrap:"QSH"}[recyclerId]}-12345`} className="px-4 py-2 border rounded-sm text-slate-900 bg-white font-sans"/></div>
+        <button type="submit" data-testid="submit-track" disabled={loading} className="portal-button">{loading ? "Checking…" : "Track booking"}</button>
       </form>
       {!searched && <p className="text-sm">Enter the reference saved when your request was submitted. A requested slot is not a dispatcher assignment.</p>}
-      {loading && <p role="status" className="portal-notice">Reading the saved recycler record… No booking or status change is submitted.</p>}
+      {loading && <RecyclingLoader label="Finding your booking..."/>}
       {requestError && <PortalFeedback message={requestError} title="The tracking service could not return a result. This does not establish that your booking is missing."/>}
 
       {/* 404 / Not Found message */}
@@ -103,7 +104,7 @@ export function TrackingView({
           </div>
           <p>
             We could not find any saved booking with reference{" "}
-            <span className="font-mono font-bold">{reference}</span>. Please verify the reference code and try again.
+            <span className="font-sans font-bold">{reference}</span>. Please verify the reference code and try again.
           </p>
         </div>
       )}
@@ -119,18 +120,18 @@ export function TrackingView({
           <div className="flex flex-wrap items-center justify-between border-b pb-4 gap-4">
             <div>
               <span className="text-xs text-slate-500 font-semibold block uppercase tracking-wider">
-                Booking Reference
+                Booking reference
               </span>
               <span
                 data-testid="booking-reference"
-                className="text-2xl font-black font-mono tracking-wider text-slate-900"
+                className="text-2xl font-black font-sans tracking-wider text-slate-900"
               >
                 {booking.bookingReference}
               </span>
             </div>
             <div>
               <span className="text-xs text-slate-500 font-semibold block uppercase tracking-wider">
-                Current Status
+                Current status
               </span>
               <span
                 data-testid="tracking-status"
@@ -138,7 +139,7 @@ export function TrackingView({
                   booking.status === "PICKED_UP" || booking.status === "WEIGHED"
                     ? "bg-green-100 text-green-800 border border-green-300"
                     : booking.status === "SCHEDULED" || booking.status === "CONFIRMED"
-                    ? "bg-blue-100 text-blue-800 border border-blue-300"
+                    ? "bg-green-100 text-green-800 border border-green-300"
                     : "bg-amber-100 text-amber-800 border border-amber-300"
                 }`}
               >
@@ -150,15 +151,15 @@ export function TrackingView({
           {/* Details Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div>
-              <span className="font-bold text-slate-500 block">Customer Name</span>
+              <span className="font-bold text-slate-500 block">Customer name</span>
               <span className="font-semibold text-slate-800 text-sm">{booking.fullName}</span>
             </div>
             <div>
-              <span className="font-bold text-slate-500 block">Contact Phone</span>
-              <span className="font-semibold text-slate-800 text-sm font-mono">{booking.phone}</span>
+              <span className="font-bold text-slate-500 block">Contact phone</span>
+              <span className="font-semibold text-slate-800 text-sm font-sans">{booking.phone}</span>
             </div>
             <div>
-              <span className="font-bold text-slate-500 block">Address & Locality</span>
+              <span className="font-bold text-slate-500 block">Address & locality</span>
               <span className="font-semibold text-slate-800 text-sm">
                 {booking.addressLine}, {booking.locality} ({booking.pincode})
               </span>
@@ -166,13 +167,13 @@ export function TrackingView({
             <TrackingSlotDetails booking={booking}/>
             {booking.pickupOtp && (
               <div>
-                <span className="font-bold text-emerald-700 block">Pickup OTP Code</span>
-                <span className="font-black text-emerald-900 text-sm font-mono">{booking.pickupOtp}</span>
+                <span className="font-bold text-emerald-700 block">Pickup collection code</span>
+                <span className="font-black text-emerald-900 text-sm font-sans">{booking.pickupOtp}</span>
               </div>
             )}
             {booking.weightKg !== undefined && (
               <div>
-                <span className="font-bold text-emerald-700 block">Verified Depot Weight</span>
+                <span className="font-bold text-emerald-700 block">Recorded depot weight</span>
                 <span className="font-black text-emerald-900 text-sm">{booking.weightKg} kg</span>
               </div>
             )}
@@ -183,7 +184,7 @@ export function TrackingView({
             Pickup fee: {booking.chargedFeeInr == null ? "UNKNOWN" : `₹${booking.chargedFeeInr}`}
           </div>
           <div>
-            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">Booked Items</h4>
+            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">Booked items</h4>
             <div data-testid="tracking-items-list" className="border rounded-sm divide-y text-xs">
               {(booking.items || []).map((item, i) => (
                 <div key={i} data-testid="tracking-item-row" className="p-2.5 flex justify-between bg-slate-50/50">
@@ -201,7 +202,7 @@ export function TrackingView({
           {/* Historical Timeline */}
           <div>
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-3">
-              Status Event History & Proof Audit
+              Collection history
             </h4>
             <div data-testid="tracking-history" className="space-y-2 border-l-2 border-slate-200 pl-4 ml-2">
               {(booking.events || []).map((evt) => (
@@ -209,13 +210,13 @@ export function TrackingView({
                   <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-slate-400" />
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-bold text-slate-900">{bookingStatusLabel({ ...booking, status: evt.status })}</span>
-                    <span className="text-[11px] text-slate-400 font-mono">
+                    <span className="text-[11px] text-slate-400 font-sans">
                       {new Date(evt.createdAt).toLocaleString()}
                     </span>
                     {evt.isSimulated && (
                       <span
                         data-testid="simulated-event-badge"
-                        className="px-2 py-0.5 rounded-sm text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300"
+                        className="px-2 py-0.5 rounded-sm text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-900 border border-slate-300"
                       >
                         Simulated event
                       </span>

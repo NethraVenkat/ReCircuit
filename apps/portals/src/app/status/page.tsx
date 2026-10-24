@@ -15,10 +15,10 @@ export default async function StatusPage({ searchParams }: StatusPageProps): Pro
 
   return (
     <PaperPlusLayout activePath="/status">
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 portal-tracking-page">
         <div>
-          <h2 className="text-3xl font-black text-amber-950">PaperPlus Pickup Status</h2>
-          <p className="text-sm text-amber-800 font-semibold mt-1">
+          <h2 className="text-3xl font-black text-emerald-950">Track your pickup</h2>
+          <p className="text-sm text-emerald-800 font-semibold mt-1">
             Enter your PPK-XXXXX booking reference below to check collection, weighing, and payout status.
           </p>
         </div>

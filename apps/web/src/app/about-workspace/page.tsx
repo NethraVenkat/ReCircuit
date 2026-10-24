@@ -1,2 +1,2 @@
-import { WorkspaceExplanation } from "../../../../../packages/ui/demo-banner";
-export default function AboutWorkspace() { return <WorkspaceExplanation/>; }
+import { notFound } from "next/navigation";
+export default function RetiredWorkspacePage(): never { notFound(); }

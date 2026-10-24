@@ -17,9 +17,9 @@ export default async function TrackPage({ searchParams }: TrackPageProps): Promi
     <DeccanLayout activePath="/track">
       <div className="space-y-6 portal-tracking-page">
         <div>
-          <h2 className="text-2xl font-black text-emerald-950">Track E-Waste Consignment</h2>
+          <h2 className="text-2xl font-black text-emerald-950">Track your pickup</h2>
           <p className="text-sm text-emerald-800 font-medium mt-1">
-            Verify real-time booking status, pickup dispatch, weighing and certification records.
+            Find your saved status, assigned pickup window and collection history.
           </p>
         </div>
 

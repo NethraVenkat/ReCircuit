@@ -1,4 +1,5 @@
 "use client";
+import { RecyclingLoader } from "../../../../packages/ui/recycling-loader";
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -221,8 +222,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         isDeccan
           ? "bg-white border-emerald-200"
           : isPaperPlus
-          ? "bg-amber-50/60 border-amber-300"
-          : "bg-slate-900 border-slate-800 text-slate-100"
+          ? "bg-emerald-50/60 border-emerald-300"
+          : "bg-white border-slate-800 text-slate-900"
       }`}
     >
       {/* Hidden Client Request ID for Idempotency Protection */}
@@ -350,7 +351,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       <div className="space-y-3 pt-2">
         <h3 className="text-base font-bold border-b pb-2 flex justify-between items-center">
           <span>Items to Recycle / Sell</span>
-          {isPaperPlus && <span className="text-xs text-amber-700 font-semibold">Min 5 kg Total Required</span>}
+          {isPaperPlus && <span className="text-xs text-emerald-700 font-semibold">Min 5 kg Total Required</span>}
         </h3>
 
         <div className="space-y-2">
@@ -405,7 +406,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             />
             <label htmlFor="data_wipe_ack" className="font-semibold leading-relaxed cursor-pointer">
               I acknowledge that any data stored on submitted laptops, hard drives, or mobile phones has been backed up
-              or will be permanently destroyed in accordance with Deccan E-Cycle CPCB certified recycling procedures.
+              or requires destruction by the recycler. This declaration does not establish that data destruction or collection has occurred.
             </label>
           </div>
         </div>
@@ -416,29 +417,29 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <div
           data-human-verification="required"
           data-testid="human-verification-panel"
-          className="p-4 rounded-sm border-2 border-amber-500 bg-amber-100/90 text-amber-950 space-y-3"
+          className="p-4 rounded-sm border-2 border-emerald-500 bg-emerald-100/90 text-emerald-950 space-y-3"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center space-x-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center space-x-1">
               <span>🛡️ Security Verification Required</span>
             </span>
             <button
               type="button"
               onClick={refreshCaptcha}
-              className="text-[11px] text-amber-800 hover:text-amber-950 underline font-semibold"
+              className="text-[11px] text-emerald-800 hover:text-emerald-950 underline font-semibold"
             >
               Refresh Image
             </button>
           </div>
 
-          <p className="text-xs text-amber-800">
+          <p className="text-xs text-emerald-800">
             Please enter the 5-character verification code shown below. The code is rendered as an image for human
             verification.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4">
             {captchaSessionId && (
-              <div className="border border-amber-400 rounded-sm p-1 bg-white shadow-inner">
+              <div className="border border-emerald-400 rounded-sm p-1 bg-white shadow-inner">
                 {/* Image has no code text in the DOM or source! */}
                 <img
                   key={captchaKey}
@@ -463,7 +464,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
                 value={captchaCode}
                 onChange={(e) => setCaptchaCode(e.target.value.toUpperCase())}
                 placeholder="Enter 5 characters"
-                className="w-full px-3 py-2 border rounded-sm font-mono font-bold tracking-widest text-center text-amber-950 uppercase bg-white"
+                className="w-full px-3 py-2 border rounded-sm font-sans font-bold tracking-widest text-center text-emerald-950 uppercase bg-white"
               />
             </div>
           </div>
@@ -478,7 +479,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <div className="text-xs uppercase font-bold tracking-wider text-slate-500">
           Review Pickup Details & Fee
         </div>
-        {feeLoading ? <p role="status">Checking the pickup fee…</p> : computedFee !== null && typeof computedFee === "number" ? (
+        {feeLoading ? <RecyclingLoader label="Checking the pickup fee…"/> : computedFee !== null && typeof computedFee === "number" ? (
           <div
             data-testid="portal-computed-fee"
             className="text-base font-bold text-slate-900"
@@ -499,6 +500,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         </p>
       </div>
 
+      {loading && <RecyclingLoader label="Submitting your pickup request..."/>}
       {/* Confirm Booking Button */}
       <div className="pt-2">
         <button
@@ -509,8 +511,8 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
             isDeccan
               ? "bg-emerald-700 hover:bg-emerald-800 text-white"
               : isPaperPlus
-              ? "bg-amber-600 hover:bg-amber-700 text-white"
-              : "bg-orange-600 hover:bg-orange-700 text-white"
+              ? "bg-emerald-800 hover:bg-emerald-700 text-white"
+              : "bg-emerald-800 hover:bg-emerald-700 text-white"
           } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           {loading ? "Submitting Pickup Request..." : "Confirm booking"}

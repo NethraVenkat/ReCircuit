@@ -6,5 +6,5 @@ export function bookingStatusLabel(booking: PortalBooking): string {
     const slot = trackingSlots(booking).assignedSlot;
     return slot && confirmedSlotWindow(slot, slot.slice(0, 10)) ? "Scheduled pickup" : "Scheduling details needed";
   }
-  return ({ RECEIVED: "Request received", CONFIRMED: "Awaiting scheduling", PICKED_UP: "Collected", WEIGHED: "Collection completed", CANCELLED: "Cancelled" } as Record<string, string>)[booking.status] || "Status review needed";
+  return ({ RECEIVED: "Request received", CONFIRMED: "Awaiting scheduling", PICKED_UP: "Collection recorded", WEIGHED: "Weight recorded", CANCELLED: "Cancelled" } as Record<string, string>)[booking.status] || "Status review needed";
 }

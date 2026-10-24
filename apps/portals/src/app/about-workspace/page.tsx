@@ -1,2 +1,2 @@
-import { WorkspaceExplanation } from "../../../../../packages/ui/demo-banner";
-export default function AboutWorkspace(): JSX.Element { return <main><WorkspaceExplanation/></main>; }
+import { notFound } from "next/navigation";
+export default function RetiredWorkspacePage(): never { notFound(); }
