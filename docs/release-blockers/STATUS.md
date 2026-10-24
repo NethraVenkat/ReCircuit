@@ -8,7 +8,7 @@ Evidence E: `.data/release-blockers-20261024/evidence`; append-only `execution.j
 | Gate | Status | Current evidence / outstanding work |
 |---|---|---|
 | Dependency migration | PASS | Full audit 13→0; production-only 4→0. Fresh final audits both exit 0. Clean lockfile install and installed-tree validation exit 0. Full suite 503 pass; three explicitly opt-in skips (seed/child exercised separately, live not run). 18 browser regressions pass; routing API 11 checks, UI eight states/all widths and genuine 200% zoom pass. Final lint/typecheck/both production builds exit 0. Actual production startup/public-page smoke passes, within the backend limitation below. Local checkpoint commit recorded in execution evidence. |
-| Native PostgreSQL / real PostgREST | NOT STARTED | Must follow verified security checkpoint. Previous embedded SQL/custom bridge results do not satisfy this gate. |
+| Native PostgreSQL / real PostgREST | PASS | Real PostgreSQL 18.6 / PostgREST 16.5, independent native backends and application processes, actual Next/UI adapter, rollback/reapply, backup/restore, database/app restart and complete proposal replay passed. NATIVE_DATABASE.md records scope, preserved failures and exact evidence. Production identity/privacy remains separate. |
 | Live HeiGIT / MapTiler | NOT STARTED | Fresh account/quota/restriction evidence required before live calls. Actual browser key remains withheld. |
 | Final cross-system regression | NOT STARTED | Requires attributable native infrastructure and live gates where available; all skipped/blocked portions must remain explicit. |
 | Production activation | BLOCKED | No deployment authorization or customer-address privacy review; production routing remains refused. |

@@ -12,6 +12,10 @@ if(process.env.ROUTING_STORE_BACKEND==='supabase-local-test'){
  const url=new URL(process.env.ROUTING_TEST_SUPABASE_URL||'https://invalid.example');
  if(url.protocol!=='http:'||!['127.0.0.1','localhost'].includes(url.hostname)||url.origin!==process.env.ROUTING_TEST_SUPABASE_URL)throw Error('Explicit loopback test RPC origin required');
  Object.assign(env,{ROUTING_STORE_BACKEND:'supabase-local-test',ROUTING_SHARED_TEST_MODE:'true',SUPABASE_URL:url.origin,SUPABASE_SERVICE_ROLE_KEY:'synthetic-local-test-service-role'});
+ if(process.env.ROUTING_NATIVE_POSTGREST_TEST_MODE==='true'){
+  if(!process.env.ROUTING_TEST_POSTGREST_TOKEN?.trim())throw Error('Explicit isolated PostgREST test token required');
+  Object.assign(env,{ROUTING_NATIVE_POSTGREST_TEST_MODE:'true',ROUTING_NATIVE_POSTGREST_TOKEN:process.env.ROUTING_TEST_POSTGREST_TOKEN});
+ }
 }
 await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(3200,'127.0.0.1',()=>s.close(resolve));});
 console.log('Local routing preview: http://127.0.0.1:3200/admin/routing; MapTiler browser exposure disabled');

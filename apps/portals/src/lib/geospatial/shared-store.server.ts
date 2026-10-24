@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { cloudRpc } from "@recircuit/db";
+import { routingRpc } from "./native-postgrest.server";
 import { RouteProposalRecord, Tenant } from "./contracts";
 import { Settings, type RoutingPersistence, type WorkspaceSettings } from "./service";
 import type { RecyclerId } from "../types";
@@ -9,7 +9,7 @@ type Rpc = <T>(name: string, args: object) => Promise<T>;
 /** Shared SQL leases, not process-local locks. No automatic release of crashed holders. */
 export class SupabaseRoutingStore implements RoutingPersistence {
   private readonly leases = new AsyncLocalStorage<{ tenant: RecyclerId; token: string }>();
-  constructor(private readonly rpc: Rpc = cloudRpc) {}
+  constructor(private readonly rpc: Rpc = routingRpc) {}
   async withLock<T>(tenant: RecyclerId, run: () => Promise<T>): Promise<T> {
     Tenant.parse(tenant); const token = randomUUID();
     if (await this.rpc("routing_lock", { p_tenant: tenant, p_token: token, p_release: false }) !== true) throw Error("ROUTING_BUSY");
