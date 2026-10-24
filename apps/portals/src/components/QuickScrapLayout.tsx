@@ -68,7 +68,7 @@ export function QuickScrapLayout({ children, activePath = "/" }: QuickScrapLayou
 
       {/* Footer */}
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-500 py-6 text-center text-xs">
-        <p className="text-slate-400">QuickScrap Hyd Aggregator — Synthetic Demo Data for Hackathon 2026</p>
+        <p className="text-slate-400">QuickScrap Hyd · Service information</p>
         <p className="text-[11px] mt-1 text-slate-600">
           Independent third-party aggregator. State regulatory status: in-progress.
         </p>

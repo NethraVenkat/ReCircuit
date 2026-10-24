@@ -27,7 +27,7 @@ export function PaperPlusLayout({ children, activePath = "/" }: PaperPlusLayoutP
         <div className="portal-banner bg-amber-600 text-amber-50 px-6 py-2 text-xs flex justify-between items-center font-medium">
           <span>Hyderabad Paper & Scrap Buyers · Kukatpally / KPHB / Madhapur</span>
           <span data-testid="cpcb-badge" className="bg-amber-700/80 px-2.5 py-0.5 rounded-sm text-[11px]">
-            {config.badge}
+            Registration information
           </span>
         </div>
 

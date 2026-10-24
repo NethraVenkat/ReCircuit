@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getRepository } from "@recircuit/db";
 import { owned, failure } from "../../../../lib/household";
 import { storedPolicyMetadata } from "../../../../lib/policy-presentation";
+import { sampleBookingStatuses } from "../../../../lib/sample-booking-status";
 export const dynamic = "force-dynamic";
 
 export async function GET(
@@ -17,9 +18,10 @@ export async function GET(
     }
 
     const audits = await repo.getAudits({ requestId: id });
+    const statuses = await sampleBookingStatuses([stored]);
 
     return NextResponse.json({
-      household: storedPolicyMetadata(stored.household),
+      household: storedPolicyMetadata({ ...stored.household, bookingStatus: statuses.get(id) }),
       request: stored.request,
       items: stored.items,
       plan: stored.plan,

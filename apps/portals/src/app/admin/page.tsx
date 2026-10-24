@@ -1,5 +1,7 @@
 "use client";
 
+import { useRecordList, RecordListControls, RecordListPagination } from "../../../../../packages/ui/record-list";
+import { trackingSlots } from "../../lib/tracking-slots";
 import { bookingStatusLabel } from "../../lib/status-presentation";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { PortalFeedback } from "@/components/PortalFeedback";
@@ -47,6 +49,8 @@ function AdminPageContent(): JSX.Element {
   const [selectedSlot, setSelectedSlot] = useState("");
   const [inputWeight, setInputWeight] = useState("4.5");
 
+  const list = useRecordList(bookings, b => [b.fullName, b.bookingReference, ...b.items.map(i => i.name)].join(" "), b => b.status);
+  const listStatuses = [...new Set(bookings.map(b => b.status))].map(value => ({ value, label: bookingStatusLabel(bookings.find(b => b.status === value)!) }));
   const slots = useMemo(() => getAvailableSlots(), []);
 
   const loadData = useCallback(async (): Promise<void> => {
@@ -357,6 +361,7 @@ function AdminPageContent(): JSX.Element {
             </button>
           </div>
 
+          <RecordListControls list={list} statuses={listStatuses} searchLabel="Search bookings"/>
           {bookings.length === 0 ? (
             <p className="text-xs text-slate-500 py-6 text-center italic">
               No bookings logged yet for {config.name}. Use the public portal booking form to create one.
@@ -376,21 +381,22 @@ function AdminPageContent(): JSX.Element {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {bookings.map((b) => (
+                  {list.rows.map((b) => (
                     <tr key={b.id} className="hover:bg-slate-50/50">
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{b.bookingReference}</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-slate-900"><a href={`${config.routes.track}?ref=${encodeURIComponent(b.bookingReference)}`}>{b.bookingReference}</a></td>
                       <td className="py-2.5 px-3">
-                        <span className="font-semibold block">{b.fullName}</span>
+                        <span className="font-semibold block">{b.fullName}</span>{b.provenance && <details><summary>Record provenance</summary><p>{b.provenance.scenario}</p><p>Sample record; simulated operational events. No real collection is claimed.</p><pre>{JSON.stringify(b.provenance, null, 2)}</pre></details>}
                         <span className="text-[11px] text-slate-500">{b.phone}</span>
                       </td>
                       <td className="py-2.5 px-3">
                         {b.items.map((it, idx) => (
                           <div key={idx} className="text-[11px] text-slate-600">
-                            {it.name} {it.weightKg ? `(${it.weightKg}kg)` : ""}
+                            {it.name} · Qty {it.quantity ?? "Unknown"} · {it.weightKg ?? "Unknown"} kg
                           </div>
                         ))}
+                        <p className="text-[11px] text-slate-600">Pickup fee: {b.chargedFeeInr == null ? "Not recorded" : `₹${b.chargedFeeInr}`}</p>
                       </td>
-                      <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px]">{b.preferredSlot}</td>
+                      <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px]"><span className="block">Requested: {trackingSlots(b).requestedSlot || "Not recorded"}</span><span className="block">Assigned: {trackingSlots(b).assignedSlot || "Not assigned"}</span></td>
                       <td className="py-2.5 px-3">
                         <span
                           className={`inline-block px-2 py-0.5 rounded-sm text-[10px] font-black uppercase ${
@@ -473,6 +479,7 @@ function AdminPageContent(): JSX.Element {
             </div>
           )}
 
+          <RecordListPagination list={list}/>
           {/* Quick inputs for schedule slot and weight */}
           <div className="portal-operator-controls border-t">
             <div>

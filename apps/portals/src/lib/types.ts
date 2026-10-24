@@ -25,6 +25,7 @@ export interface BookingEvent {
 }
 
 export interface PortalBooking {
+  provenance?: { kind: "sample"; isSimulated: true; scenario: string; datasetVersion: string };
   id: string;
   recyclerId: RecyclerId;
   bookingReference: string;

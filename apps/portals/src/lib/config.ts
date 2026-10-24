@@ -204,7 +204,7 @@ export function isRouteAllowedForRecycler(pathname: string, recyclerId: Recycler
   if (m) cleanPath = m[1] || "/";
   const routingPage = ["/admin/routing", "/admin/routing/preparation", "/admin/routing/fleet", "/admin/routing/proposals"].includes(cleanPath)
     || /^\/admin\/routing\/proposals\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanPath);
-  return Boolean(allowed && (allowed.includes(cleanPath) || routingPage));
+  return Boolean(allowed && (allowed.includes(cleanPath) || routingPage || cleanPath === "/about-workspace"));
 }
 
 /**

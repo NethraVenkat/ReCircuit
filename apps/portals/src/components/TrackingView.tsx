@@ -197,6 +197,7 @@ export function TrackingView({
             </div>
           </div>
 
+          {booking.provenance && <details><summary>Record provenance</summary><pre>{JSON.stringify(booking.provenance, null, 2)}</pre></details>}
           {/* Historical Timeline */}
           <div>
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-3">

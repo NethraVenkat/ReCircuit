@@ -1,0 +1,20 @@
+import { afterEach, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { sampleBookingStatuses } from "./sample-booking-status";
+import { syntheticBooking } from "../../../portals/src/lib/geospatial/fixtures";
+afterEach(() => vi.unstubAllEnvs());
+it("reads current sample booking lifecycle without rewriting household approval/history and requires dispatcher evidence", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "recircuit-sample-projection-")); await fs.mkdir(path.join(root, "portal"));
+  await fs.writeFile(path.join(root, "demo-manifest.json"), JSON.stringify({ kind: "recircuit-fictional-demo-v1", scenarioVersion: "rich-v2" }));
+  vi.stubEnv("RECIRCUIT_DEMO_MODE", "true"); vi.stubEnv("RECIRCUIT_PERSISTENCE", "local"); vi.stubEnv("RECIRCUIT_DEMO_ROOT", root); vi.stubEnv("RECIRCUIT_DATA_DIR", path.join(root, "household-app"));
+  const b = { ...syntheticBooking(), provenance: { kind: "sample" as const, isSimulated: true as const, scenario: "ready", datasetVersion: "rich-v2" } };
+  const record = { request: { id: "household" }, plan: { legs: [{ recyclerId: "deccan", bookingReference: b.bookingReference }] }, household: { provenance: { kind: "sample" }, bookingStatus: "SCHEDULED" } }, before = JSON.stringify(record);
+  const save = () => fs.writeFile(path.join(root, "portal/deccan.json"), JSON.stringify({ bookings: [b] }));
+  await save(); expect((await sampleBookingStatuses([record])).get("household")).toBe("SCHEDULED");
+  b.status = "CANCELLED"; await save(); expect((await sampleBookingStatuses([record])).get("household")).toBe("CANCELLED");
+  b.status = "SCHEDULED"; b.events = []; await save(); expect((await sampleBookingStatuses([record])).get("household")).toBe("SCHEDULING_DETAILS_NEEDED");
+  expect(JSON.stringify(record)).toBe(before);
+  vi.stubEnv("NODE_ENV", "production"); expect((await sampleBookingStatuses([record])).size).toBe(0);
+});

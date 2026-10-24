@@ -43,7 +43,7 @@ export function DeccanLayout({ children, activePath = "/" }: DeccanLayoutProps):
           <span data-testid="cpcb-badge" className="font-semibold block text-emerald-300 mb-1">
             Official Compliance Badge:
           </span>
-          {config.badge}
+          Registration information
         </div>
 
         {/* Sidebar Nav */}
