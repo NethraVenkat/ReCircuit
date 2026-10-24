@@ -53,6 +53,9 @@ it("persists booking → independent evidence → dispatch → preparation → v
   await expect(schedule("2026-10-24")).rejects.toThrow("NO_LONGER_ACTIVE");
   const second = (await repo.createBooking({ ...data, clientRequestId: data.clientRequestId + "-second" })).booking;
   await repo.updateBookingStatus("deccan", second.bookingReference, "SCHEDULED", "Scheduled", { slot: "2026-10-24 (10:00-12:00 IST)" });
+  records.push({ request: { id: "local-second-approved-request", state: "APPROVED" }, plan: { legs: [{ id: "second-leg", recyclerId: "deccan", bookingReference: second.bookingReference, state: "REQUEST_CONFIRMED" }] }, household: { customer: second, verifications: { "second-leg": { verified: true, independent: true, isUncertain: false, bookingReference: second.bookingReference, observedItems: second.items, observedFeeText: "INR 180", checkedAt: new Date().toISOString() } } } });
+  await service.review("deccan", { bookingId: second.id, coordinate: input.pickups[0]!.coordinate, serviceSeconds: 60, assumptionVersion: "simulated-second-test" }, "local-test-dispatcher");
+  expect((await preview()).conversions).toEqual([expect.objectContaining({ eligible: true })]);
   await repo.updateBookingStatus("deccan", second.bookingReference, "PICKED_UP", "Collected");
   expect((await preview()).conversions).toEqual([]);
   const reloadedRepo = new FileRepository(path.join(root, "portal"));
