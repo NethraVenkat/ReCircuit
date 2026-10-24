@@ -1,5 +1,7 @@
 # Release-blocker result
 
+**MapTiler-only completion:** [MAPTILER_LIVE_VERIFICATION.md](MAPTILER_LIVE_VERIFICATION.md) records separate PASS results for allowed-host tiles, denied-host enforcement and actual workspace rendering, plus stop-list fallback and exact application-origin checks. It reuses historical geometry with an explicit stale label; zero HeiGIT requests were made. The local basemap is open on port 3200. Production remains disabled.
+
 **Coordinate-expiry follow-up:** [PUBLIC_COORDINATE_EXPIRY.md](PUBLIC_COORDINATE_EXPIRY.md) diagnoses the subsequent public-coordinate rejection, preserves the unchanged allowlist, corrects stale preview eligibility and records a freshly reviewed version 2 using real HeiGIT matrix/directions responses. Its focused checks and evidence are separate from the historical checkpoint below.
 
 **Later local live-provider follow-up:** [LIVE_PUBLIC_VERIFICATION.md](LIVE_PUBLIC_VERIFICATION.md) records user-attested account preflight, explicitly authorized hostname restrictions, passing real browser tile enforcement and public HeiGIT routing, the working local map, focused corrections and checks. The table below preserves the earlier release-blocker checkpoint; its live-account blockers are superseded for this bounded local sample. Production remains disabled and unverified. The earlier E/final-state.json is unchanged; follow-up state is recorded separately in E/live-authorized-1792822660060/final-state.json.
