@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const { tenant } = authorizeRouting(request), url = new URL(request.url), service = routingService();
     const id = url.searchParams.get("id");
     if (id) return NextResponse.json(await service.read(tenant, id), { headers });
+    if (url.searchParams.get("view") === "proposals") return NextResponse.json({ proposals: await service.catalog(tenant), planningOnly: true }, { headers });
     const date = url.searchParams.get("date"); if (!date) throw Error("SERVICE_DATE_REQUIRED");
     return NextResponse.json({ ...(await service.preview(tenant, date)), history: await service.history(tenant), map: requestMapConfiguration(request), planningOnly: true }, { headers });
   } catch (error) { return failure(error); }

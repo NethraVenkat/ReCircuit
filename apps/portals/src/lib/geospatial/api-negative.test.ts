@@ -14,7 +14,7 @@ import { GET, POST } from "../../app/api/routing/route";
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 it("actual HTTP handler rejects corrupt saved evidence, streamed overflow and provider/write failures without leakage", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "routing-http-negative-")), store = new RoutingStore(directory), booking = syntheticBooking("synthetic-stop-000"), input = syntheticInput(1), provider = { configurationId: "http-test", matrix: async () => input.matrix };
-  const service = new RoutingService({ list: async () => [booking], verification: async () => Verification.parse(syntheticPreparation(booking).verification) }, store, provider); holder.service = service;
+  const service = new RoutingService({ list: async tenant => tenant === "deccan" ? [booking] : [], verification: async () => Verification.parse(syntheticPreparation(booking).verification) }, store, provider); holder.service = service;
   await service.vehicles("deccan", input.vehicles); await service.review("deccan", { bookingId: booking.id, coordinate: input.pickups[0]!.coordinate, serviceSeconds: 60, assumptionVersion: "HTTP synthetic" }, "synthetic-operator");
   const saved = await service.generate("deccan", "2026-10-24", randomUUID()), filename = path.join(directory, "deccan/proposals/00000001.json"), original = await fs.readFile(filename), before = JSON.stringify(booking);
   const server = http.createServer(async (incoming, outgoing) => {
@@ -27,6 +27,13 @@ it("actual HTTP handler rejects corrupt saved evidence, streamed overflow and pr
   vi.stubEnv("ROUTING_ENABLED", "true"); vi.stubEnv("ADMIN_TOKEN", "unit-http-token"); vi.stubEnv("RECYCLER_ID", "deccan"); vi.stubEnv("ROUTING_ALLOWED_ORIGINS", base);
   const generate = () => fetch(base + "/api/routing", { method: "POST", headers, body: JSON.stringify({ action: "generate", payload: { serviceDate: "2026-10-24", requestKey: randomUUID() } }) });
   try {
+    const missingToken = await fetch(base + "/api/routing?view=proposals"); expect(missingToken.status).toBe(401);
+    const catalog = await fetch(base + "/api/routing?view=proposals", { headers }); expect(catalog.status).toBe(200); expect(catalog.headers.get("cache-control")).toBe("no-store"); expect(catalog.headers.get("vary")).toBe("x-admin-token");
+    expect((await catalog.json()).proposals[0].id).toBe(saved.id);
+    vi.stubEnv("RECYCLER_ID", "paperplus");
+    const foreignRead = await fetch(base + "/api/routing?id=" + saved.id, { headers }); expect(foreignRead.status).toBe(404);
+    const otherCatalog = await fetch(base + "/api/routing?view=proposals", { headers }); expect(otherCatalog.status).toBe(200); expect((await otherCatalog.json()).proposals).toEqual([]);
+    vi.stubEnv("RECYCLER_ID", "deccan");
     const corrupt = JSON.parse(original.toString()); corrupt.optimization.solution.metres++;
     await fs.writeFile(filename, JSON.stringify(corrupt)); const read = await fetch(base + "/api/routing?id=" + saved.id, { headers }); expect(read.status).toBe(400); expect((await read.json()).error).toBe("STORED_PROPOSAL_INVALID"); await fs.writeFile(filename, original);
     const payload = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(35000)); controller.enqueue(new Uint8Array(35000)); controller.close(); } });

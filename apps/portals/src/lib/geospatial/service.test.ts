@@ -22,6 +22,23 @@ async function setup() {
   return { booking, base, source, store, service, provider, directory };
 }
 describe("authorized services, persistence and concurrency", () => {
+  it("lists validated owned proposal metadata, recomputes freshness locally and never calls providers", async () => {
+    const s = await setup(), value = await s.service.generate("deccan", "2026-10-24", randomUUID());
+    s.source.list = async tenant => tenant === "deccan" ? [s.booking] : [];
+    const matrix = vi.spyOn(s.provider, "matrix"), before = await fs.readFile(path.join(s.directory, "deccan/proposals/00000001.json"), "utf8");
+    const rows = await s.service.catalog("deccan");
+    expect(rows).toEqual([{ id: value.id, version: value.version, createdAt: value.createdAt, serviceDate: value.input.serviceDate, correlationId: value.correlationId, current: true, metres: value.optimization.solution.metres, served: 1, vehicles: 1, matrix: { provider: value.input.matrix.provider, profile: value.input.matrix.profile, retrievedAt: value.input.matrix.retrievedAt, expiresAt: value.input.matrix.expiresAt } }]);
+    expect(await s.service.catalog("paperplus")).toEqual([]);
+    await expect(s.service.read("paperplus", value.id)).rejects.toThrow("PROPOSAL_NOT_FOUND");
+    const later = new RoutingService(s.source, s.store, s.provider, () => new Date("2100-01-01T00:00:00Z"));
+    expect((await later.catalog("deccan"))[0]!.current).toBe(false);
+    expect(matrix).not.toHaveBeenCalled(); expect(await fs.readFile(path.join(s.directory, "deccan/proposals/00000001.json"), "utf8")).toBe(before);
+  });
+  it("does not present corrupt stored proposals as valid history metadata", async () => {
+    const s = await setup(); await s.service.generate("deccan", "2026-10-24", randomUUID());
+    const filename = path.join(s.directory, "deccan/proposals/00000001.json"), stored = JSON.parse(await fs.readFile(filename, "utf8")); stored.optimization.solution.metres++;
+    await fs.writeFile(filename, JSON.stringify(stored)); await expect(s.service.catalog("deccan")).rejects.toThrow("STORED_PROPOSAL_INVALID");
+  });
   it("runs booking → conversion → matrix → optimization → independent validation → save → reload without booking mutations", async () => {
     const s = await setup(), before = JSON.stringify(s.booking), key = randomUUID();
     const preview = await s.service.preview("deccan", "2026-10-24"); expect(preview.conversions[0]!.eligible).toBe(true);

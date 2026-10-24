@@ -19,6 +19,11 @@ export const Settings = z.object({ tenant: z.enum(["deccan", "paperplus", "quick
 export type WorkspaceSettings = z.infer<typeof Settings>;
 export interface SavedProposal { id: string; tenant: RecyclerId; version: number; createdAt: string; correlationId: string; requestKey: string; sourceFingerprint: string; input: PlanningInput; optimization: Optimization; independentValidation: { valid: boolean; errors: string[] }; baselineValidation: { valid: boolean; errors: string[] }; comparison: ReturnType<typeof compare>; planningOnly: true; geometry?: Array<RouteGeometry & { vehicleId: string; matrixMismatch: boolean }>; geometryError?: string }
 export interface SavedProposal { preparationSnapshot?: { settingsVersion: number; geocoderConfiguration: string; coordinates: Array<{ bookingId: string; geocode: z.infer<typeof Geocode> }> } }
+export interface ProposalSummary {
+  id: string; version: number; createdAt: string; serviceDate: string; correlationId: string;
+  current: boolean; metres: number; served: number; vehicles: number;
+  matrix: { provider: string; profile: string; retrievedAt: string; expiresAt: string };
+}
 export interface RoutingPersistence {
   history<T>(tenant: RecyclerId, kind: "settings" | "proposals"): Promise<T[]>;
   append(tenant: RecyclerId, kind: "settings" | "proposals", value: { tenant: RecyclerId; version: number }): Promise<void>;
@@ -154,6 +159,9 @@ export class RoutingService {
   }
   async read(tenant: RecyclerId, id: string) {
     z.string().uuid().parse(id); const all = await this.store.history<SavedProposal>(tenant, "proposals"), proposal = all.find(p => p.id === id && p.tenant === tenant); if (!proposal) throw Error("PROPOSAL_NOT_FOUND");
+    return this.present(tenant, proposal, await this.sources(tenant));
+  }
+  private present(tenant: RecyclerId, proposal: SavedProposal, current: { sourceFingerprint: string; settings: WorkspaceSettings }) {
     RouteProposalRecord.parse(proposal);
     if (proposal.input.tenant !== tenant) throw Error("STORED_PROPOSAL_INVALID");
     if (proposal.preparationSnapshot) {
@@ -163,12 +171,19 @@ export class RoutingService {
     const validation = validateProposal(proposal.input, proposal.optimization.solution);
     const baselineValidation = validateProposal(proposal.input, proposal.optimization.baseline);
     if (!validation.valid || !baselineValidation.valid || proposal.optimization.inputFingerprint !== fingerprint(proposal.input)) throw Error("STORED_PROPOSAL_INVALID");
-    const current = await this.sources(tenant);
     const coordinateEvidenceFresh = proposal.input.pickups.every(pickup => {
       const review = current.settings.reviews[pickup.id]?.geocode, attempt = current.settings.geocoding[pickup.id];
       return !review?.sourceResultId || !!attempt && attempt.id === review.sourceResultId && Date.parse(attempt.expiresAt) > this.now().getTime();
     });
     return { ...proposal, comparison: compare(proposal.optimization.solution, proposal.optimization.baseline), current: current.sourceFingerprint === proposal.sourceFingerprint && coordinateEvidenceFresh && Date.parse(proposal.input.matrix.expiresAt) > this.now().getTime(), status: "PROPOSAL_ONLY_NOT_DISPATCH" as const };
+  }
+  /** Validated, tenant-owned local metadata only; never invokes a provider. */
+  async catalog(tenant: RecyclerId): Promise<ProposalSummary[]> {
+    const all = await this.store.history<SavedProposal>(tenant, "proposals"), source = await this.sources(tenant);
+    return all.filter(p => p.tenant === tenant).map(p => {
+      const value = this.present(tenant, p, source);
+      return { id: value.id, version: value.version, createdAt: value.createdAt, serviceDate: value.input.serviceDate, correlationId: value.correlationId, current: value.current, metres: value.optimization.solution.metres, served: value.optimization.solution.served, vehicles: value.optimization.solution.routes.length, matrix: { provider: value.input.matrix.provider, profile: value.input.matrix.profile, retrievedAt: value.input.matrix.retrievedAt, expiresAt: value.input.matrix.expiresAt } };
+    });
   }
   async history(tenant: RecyclerId) { return (await this.store.history<SavedProposal>(tenant, "proposals")).filter(p => p.tenant === tenant).map(p => ({ id: p.id, version: p.version, createdAt: p.createdAt, serviceDate: p.input.serviceDate, correlationId: p.correlationId })); }
 }

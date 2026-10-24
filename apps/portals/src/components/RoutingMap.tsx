@@ -38,7 +38,12 @@ export function RoutingMap({ proposal, configuration }: { proposal: SavedProposa
       fit();
       // Refit when the workspace column changes size, including desktop → mobile.
       // Panning and zoom controls do not resize the container or reset the view.
-      resize = new ResizeObserver(() => { if (!disposed && map) { map.invalidateSize({ pan: false }); fit(); } });
+      resize = new ResizeObserver(() => {
+        const element = target.current;
+        // Route transitions can deliver a final resize before passive cleanup.
+        // A detached/zero-size map must not refit and request another tile.
+        if (!disposed && map && element?.isConnected && element.clientWidth > 0 && element.clientHeight > 0) { map.invalidateSize({ pan: false }); fit(); }
+      });
       resize.observe(target.current);
     }).catch(() => { if (!disposed) { map?.remove(); setError("Map renderer unavailable. No automatic retry."); } });
     return () => { disposed = true; resize?.disconnect(); map?.remove(); };
