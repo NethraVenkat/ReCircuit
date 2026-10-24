@@ -73,9 +73,13 @@ export class RoutingService {
     ServiceDate.parse(serviceDate); const source = await this.sources(tenant);
     const conversions = source.bookings.map((b, i) => {
       const review = source.settings.reviews[b.id];
-      const geocode = review?.geocode.sourceResultId && review.geocode.providerConfiguration !== this.geocoder.configurationId ? null : review?.geocode ?? null;
+      const attempt = source.settings.geocoding[b.id];
+      const expired = !!review?.geocode.sourceResultId && attempt?.id === review.geocode.sourceResultId && Date.parse(attempt.expiresAt) <= this.now().getTime();
+      const missingEvidence = !!review?.geocode.sourceResultId && (!attempt || attempt.id !== review.geocode.sourceResultId || attempt.providerConfiguration !== this.geocoder.configurationId || review.geocode.providerConfiguration !== this.geocoder.configurationId);
+      const geocode = expired || missingEvidence ? null : review?.geocode ?? null;
       const assigned = trackingSlots(b).assignedSlot, confirmed = confirmedSlotWindow(assigned, serviceDate);
-      return bookingToPickup(b, { tenant, serviceDate, timezone: "Asia/Kolkata", verification: source.verification[i], geocode, serviceSeconds: review?.serviceSeconds ?? null, assumptionVersion: review?.assumptionVersion ?? "not-recorded", confirmedWindow: confirmed, confirmedWindowEvidenceId: confirmed ? fingerprint(b.events) : null });
+      const conversion = bookingToPickup(b, { tenant, serviceDate, timezone: "Asia/Kolkata", verification: source.verification[i], geocode, serviceSeconds: review?.serviceSeconds ?? null, assumptionVersion: review?.assumptionVersion ?? "not-recorded", confirmedWindow: confirmed, confirmedWindowEvidenceId: confirmed ? fingerprint(b.events) : null });
+      return expired && !conversion.eligible ? { ...conversion, reasons: conversion.reasons.map(reason => reason === "COORDINATE_REVIEW_REQUIRED" ? "COORDINATE_EVIDENCE_EXPIRED" : reason) } : conversion;
     });
     // Address access occurs only after API authorization; never return names/phone numbers.
     return { tenant, serviceDate, timezone: "Asia/Kolkata", sourceFingerprint: source.sourceFingerprint, settings: source.settings, conversions, addresses: source.bookings.map(b => ({ id: b.id, reference: b.bookingReference, address: [b.addressLine, b.locality, b.pincode].join(", ") })) };
@@ -160,7 +164,11 @@ export class RoutingService {
     const baselineValidation = validateProposal(proposal.input, proposal.optimization.baseline);
     if (!validation.valid || !baselineValidation.valid || proposal.optimization.inputFingerprint !== fingerprint(proposal.input)) throw Error("STORED_PROPOSAL_INVALID");
     const current = await this.sources(tenant);
-    return { ...proposal, comparison: compare(proposal.optimization.solution, proposal.optimization.baseline), current: current.sourceFingerprint === proposal.sourceFingerprint && Date.parse(proposal.input.matrix.expiresAt) > this.now().getTime(), status: "PROPOSAL_ONLY_NOT_DISPATCH" as const };
+    const coordinateEvidenceFresh = proposal.input.pickups.every(pickup => {
+      const review = current.settings.reviews[pickup.id]?.geocode, attempt = current.settings.geocoding[pickup.id];
+      return !review?.sourceResultId || !!attempt && attempt.id === review.sourceResultId && Date.parse(attempt.expiresAt) > this.now().getTime();
+    });
+    return { ...proposal, comparison: compare(proposal.optimization.solution, proposal.optimization.baseline), current: current.sourceFingerprint === proposal.sourceFingerprint && coordinateEvidenceFresh && Date.parse(proposal.input.matrix.expiresAt) > this.now().getTime(), status: "PROPOSAL_ONLY_NOT_DISPATCH" as const };
   }
   async history(tenant: RecyclerId) { return (await this.store.history<SavedProposal>(tenant, "proposals")).filter(p => p.tenant === tenant).map(p => ({ id: p.id, version: p.version, createdAt: p.createdAt, serviceDate: p.input.serviceDate, correlationId: p.correlationId })); }
 }

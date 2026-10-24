@@ -1,5 +1,7 @@
 # Release-blocker result
 
+**Coordinate-expiry follow-up:** [PUBLIC_COORDINATE_EXPIRY.md](PUBLIC_COORDINATE_EXPIRY.md) diagnoses the subsequent public-coordinate rejection, preserves the unchanged allowlist, corrects stale preview eligibility and records a freshly reviewed version 2 using real HeiGIT matrix/directions responses. Its focused checks and evidence are separate from the historical checkpoint below.
+
 **Later local live-provider follow-up:** [LIVE_PUBLIC_VERIFICATION.md](LIVE_PUBLIC_VERIFICATION.md) records user-attested account preflight, explicitly authorized hostname restrictions, passing real browser tile enforcement and public HeiGIT routing, the working local map, focused corrections and checks. The table below preserves the earlier release-blocker checkpoint; its live-account blockers are superseded for this bounded local sample. Production remains disabled and unverified. The earlier E/final-state.json is unchanged; follow-up state is recorded separately in E/live-authorized-1792822660060/final-state.json.
 
 **IMPLEMENTED · LOCALLY VERIFIED · NATIVE DATABASE VERIFIED. NOT READY FOR PRODUCTION.**
