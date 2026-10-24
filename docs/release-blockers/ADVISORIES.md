@@ -27,3 +27,7 @@ Fresh before: {"info":0,"low":0,"moderate":6,"high":4,"critical":3,"total":13}. 
 - https://tailwindcss.com/docs/upgrade-guide
 
 Next 15.5.28 was evaluated: its registry metadata still pins PostCSS 8.4.31, so it would retain the parser advisory. Next 16.4.3 pins 8.5.23. Node 24.21.0 satisfies selected engines. React 18 remains in Next 16 peer support but emits a deprecation warning; Next 17 will require a separate React migration. No unsupported overrides, audit suppression, audit force fix, lockfile deletion or removed regression assertions. Lifecycle hooks disabled; platform-only absent packages recorded. Stagehand was not the implemented worker backend; historical architecture documents remain historical.
+
+## Final delivered dependency scope
+
+Final full and omit-dev audits both exit0 with zero advisories. Final clean installs and production-only runtime/startup checks are recorded in EXECUTION.md. Playwright1.64.1 is explicitly a worker runtime dependency; @recircuit/db explicitly a portal dependency. No version change was needed for these already-installed packages. Audit counts are affected packages rather than unique advisory identifiers. ESLint8 upstream support deprecation remains a maintenance limitation, not a reported npm advisory.
