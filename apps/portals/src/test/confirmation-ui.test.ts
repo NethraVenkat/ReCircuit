@@ -10,5 +10,5 @@ it.each(["", "DEC-NOT-FOUND"])("does not invent booking success from confirmatio
 });
 it("shows recorded quantity, weight, fee and preference without inventing dispatch", () => {
   const html = renderToStaticMarkup(createElement(BookingConfirmation, { booking, reference: booking.bookingReference, duplicate: true, trackPath: "/track" }));
-  expect(html).toContain("Customer requested morning"); expect(html).toContain("Not assigned"); expect(html).toContain("2.5"); expect(html).toContain("₹180"); expect(html).toContain("RECEIVED"); expect(html).not.toContain("Pickup Scheduled Successfully"); expect(html).not.toContain("As Selected");
+  expect(html).toContain("Customer requested morning"); expect(html).toContain("Not assigned"); expect(html).toContain("2.5"); expect(html).toContain("₹180"); expect(html).toContain("Request received"); expect(html).not.toContain("Pickup Scheduled Successfully"); expect(html).not.toContain("As Selected");
 });

@@ -1,0 +1,45 @@
+/* Shared visual contract taken from the approved routing workspace. */
+:root {
+  --ui-primary:#205b3c; --ui-ink:#182d22; --ui-muted:#53665a;
+  --ui-border:#dce5dc; --ui-canvas:#f5f7f3; --ui-sidebar:#143c2b;
+  --ui-card:#fff; --ui-radius:12px; --ui-focus:#1d4ed8;
+  --ui-font:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --rc-primary:var(--ui-primary); --rc-text:var(--ui-ink);
+  --rc-text-secondary:var(--ui-muted); --rc-border:var(--ui-border);
+  --rc-canvas:var(--ui-canvas); --portal-border:var(--ui-border);
+}
+body {font-family:var(--ui-font);color:var(--ui-ink);background:var(--ui-canvas);line-height:1.55}
+:is(.rc-panel,.rc-metric,.rc-comparison-card,.portal-card,.routing-card){border-color:var(--ui-border);border-radius:var(--ui-radius);background:var(--ui-card)}
+:is(.rc-panel,.portal-card,.routing-card){padding:24px}
+:is(.rc-workspace,.portal-content,.portal-operator,.routing-workspace){color:var(--ui-ink)}
+:is(.rc-header,.portal-header){border-color:var(--ui-border)}
+:is(.portal-sidebar,.portal-shell--paperplus .portal-nav,.portal-shell--quickscrap .portal-header){background:var(--ui-sidebar);color:#fff}
+.portal-shell {background:var(--ui-canvas);color:var(--ui-ink)}
+.portal-shell .portal-nav{background:var(--ui-sidebar)}
+.portal-shell .portal-nav a{color:#d3e2d8;background:transparent;border-color:transparent}
+.portal-shell .portal-nav a:hover,.portal-shell .portal-nav a[aria-current=page]{color:#fff;background:#2a5741;border-color:#b9db91}
+.portal-shell .portal-card {color:var(--ui-ink)}
+.portal-shell--quickscrap .portal-content :is(.bg-slate-900,.bg-slate-950,.bg-slate-800){background:#fff;color:var(--ui-ink);border-color:var(--ui-border)}
+.portal-shell--quickscrap .portal-content :is(.text-slate-100,.text-slate-200,.text-slate-300,.text-slate-400,.text-slate-500,.text-slate-600){color:var(--ui-muted)}
+.portal-shell--quickscrap .portal-content :is(.text-orange-300,.text-orange-400,.text-orange-500){color:var(--ui-primary)}
+.portal-shell--quickscrap .portal-content :is(h1,h2,h3,strong){color:var(--ui-ink)}
+.portal-shell--quickscrap .portal-content .text-white{color:var(--ui-ink)}
+.portal-shell--quickscrap .portal-content :is(button,a).text-white{color:#fff}
+.portal-shell--quickscrap .portal-content :is(input,select,textarea){background:#fff;color:var(--ui-ink)}
+.portal-shell--quickscrap .portal-content{color:var(--ui-ink)}
+.portal-shell--quickscrap .portal-content .portal-form-hint{color:var(--ui-muted)}
+.portal-shell--quickscrap .portal-content [class*="bg-orange-950"]{background:#fff;border-color:var(--ui-border)}
+.portal-shell--quickscrap .portal-content :is(button,a).bg-orange-600{background:var(--ui-primary);color:#fff}
+:is(.rc-button,.portal-button,.routing-button){display:inline-flex;align-items:center;justify-content:center;min-height:44px;gap:8px;padding:10px 16px;border:1px solid var(--ui-primary);border-radius:8px;background:var(--ui-primary);color:#fff;font-weight:600;font-size:14px}
+:is(.rc-button--secondary,.portal-button--secondary,.routing-button--secondary){background:#fff;color:var(--ui-primary)}
+:is(.rc-badge,.portal-status,.routing-badge){border-radius:999px;font-size:13px;line-height:1.4;padding:4px 10px}
+:is(.rc-workspace,.portal-shell,.portal-operator,.routing-shell) :is(input:not([type=checkbox]):not([type=radio]),select,textarea){border-radius:8px;min-height:44px;border-color:#82968a;font:inherit}
+:is(.rc-workspace,.portal-shell,.portal-operator,.routing-shell) :focus-visible{outline:3px solid var(--ui-focus);outline-offset:3px}
+:is(.rc-workspace,.portal-content,.portal-operator) :is(h1,h2,h3){color:var(--ui-ink);font-weight:650;letter-spacing:-.02em}
+:is(.portal-sidebar,.portal-nav,.portal-header) :is(h1,h2,h3){color:inherit}
+:is(.rc-workspace,.portal-content,.routing-workspace) h1{font-size:30px;line-height:1.2}
+:is(.rc-notice,.portal-notice,.routing-notice){border-radius:8px;padding:16px;font-size:14px;line-height:1.55}
+.demo-workspace-banner{padding:10px 24px;background:#fff4d8;color:#684400;border-bottom:1px solid #e9d49e;font:600 14px/1.5 var(--ui-font);position:relative;z-index:2}
+.demo-workspace-banner details{display:inline;margin-left:16px;font-weight:400}
+.demo-workspace-banner summary{display:inline;cursor:pointer;text-decoration:underline}
+@media(max-width:600px){:is(.rc-panel,.portal-card,.routing-card){padding:20px}:is(.rc-workspace,.portal-content,.routing-workspace) h1{font-size:26px}.demo-workspace-banner{padding:10px 16px}.demo-workspace-banner details{display:block;margin-left:0}}

@@ -1,5 +1,6 @@
 "use client";
 
+import { bookingStatusLabel } from "../../lib/status-presentation";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { PortalFeedback } from "@/components/PortalFeedback";
 import { useSearchParams } from "next/navigation";
@@ -101,26 +102,11 @@ function AdminPageContent(): JSX.Element {
           "Content-Type": "application/json",
           ...(activeToken ? { "x-admin-token": activeToken } : {}),
         },
-        body: JSON.stringify({ action, reference, ...extra }),
+        body: JSON.stringify({ action, reference, expectedUpdatedAt: bookings.find(b => b.bookingReference === reference)?.updatedAt, ...extra }),
       });
       const data = await res.json();
       if (data.ok) {
-        const statusMap: Record<string, string> = {
-          confirm: "CONFIRMED",
-          schedule: "SCHEDULED",
-          pickup: "PICKED_UP",
-          weigh: "WEIGHED",
-          receive: "RECEIVED_AT_RECYCLER",
-          process: "PROCESSED",
-          recycle: "RECYCLED",
-          certificate: "CERTIFICATE_ISSUED",
-        };
-        const statusUpper = statusMap[action] || action.toUpperCase();
-        setActionMessage(
-          `Success: Executed "${action}" (${statusUpper}) on ${reference} (SIMULATED DOWNSTREAM EVENT)${
-            data.pickupOtp ? ` - OTP Generated: ${data.pickupOtp}` : ""
-          }`
-        );
+        setActionMessage(`Pickup ${reference} updated. This is a simulated event.${data.pickupOtp ? ` Collection code: ${data.pickupOtp}` : ""}`);
         loadData();
       } else {
         setActionMessage(`Error: ${data.error || "Action failed"}`);
@@ -415,7 +401,7 @@ function AdminPageContent(): JSX.Element {
                               : "bg-amber-100 text-amber-800"
                           }`}
                         >
-                          {b.status}
+                          {bookingStatusLabel(b)}
                         </span>
                         {b.pickupOtp && (
                           <span className="block text-[10px] text-emerald-700 font-mono font-bold mt-0.5">
@@ -446,14 +432,15 @@ function AdminPageContent(): JSX.Element {
                             type="button"
                             data-testid={`btn-schedule-${b.bookingReference}`}
                             onClick={() =>
-                              handleAction("schedule", b.bookingReference, { slot: selectedSlot || "Tomorrow 10:00–12:00 IST" })
+                              handleAction("schedule", b.bookingReference, { slot: selectedSlot })
                             }
-                            disabled={pendingAction || b.status === "PICKED_UP" || b.status === "WEIGHED"}
+                            disabled={pendingAction || ["PICKED_UP", "WEIGHED", "CANCELLED"].includes(b.status)}
                             className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-30 text-white rounded-sm font-bold text-[10px]"
                           >
                             Schedule
                           </button>
 
+                          <button type="button" disabled={pendingAction || ["CANCELLED", "PICKED_UP", "WEIGHED"].includes(b.status)} className="portal-button portal-button--secondary" onClick={() => handleAction("cancel", b.bookingReference)}>Cancel pickup</button>
                           {/* Picked Up (OTP) */}
                           <button
                             type="button"

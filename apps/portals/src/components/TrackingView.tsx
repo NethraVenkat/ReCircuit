@@ -1,4 +1,5 @@
 "use client";
+import { bookingStatusLabel } from "../lib/status-presentation";
 
 import React, { useState, useEffect, useRef } from "react";
 import type { PortalBooking, RecyclerId } from "@/lib/types";
@@ -141,7 +142,7 @@ export function TrackingView({
                     : "bg-amber-100 text-amber-800 border border-amber-300"
                 }`}
               >
-                {booking.status}
+                {bookingStatusLabel(booking)}
               </span>
             </div>
           </div>
@@ -206,7 +207,7 @@ export function TrackingView({
                 <div key={evt.id} className="relative pb-2">
                   <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-slate-400" />
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold text-slate-900 uppercase font-mono">{evt.status}</span>
+                    <span className="text-xs font-bold text-slate-900">{bookingStatusLabel({ ...booking, status: evt.status })}</span>
                     <span className="text-[11px] text-slate-400 font-mono">
                       {new Date(evt.createdAt).toLocaleString()}
                     </span>
@@ -215,11 +216,12 @@ export function TrackingView({
                         data-testid="simulated-event-badge"
                         className="px-2 py-0.5 rounded-sm text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300"
                       >
-                        SIMULATED DOWNSTREAM EVENT
+                        Simulated event
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-600 mt-1">{trackingEventMessage(evt)}</p>
+                  <p className="text-xs text-slate-600 mt-1">{trackingEventMessage(evt).replace(/\s*\(SIMULATED DOWNSTREAM EVENT\)/g, "")}</p>
+                  <details><summary>Event details</summary><p>{evt.eventType} · {evt.status}</p><p>{trackingEventMessage(evt)}</p></details>
                 </div>
               ))}
             </div>

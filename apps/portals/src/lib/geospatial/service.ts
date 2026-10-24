@@ -88,7 +88,7 @@ export class RoutingService {
       return [expired && !conversion.eligible ? { ...conversion, reasons: conversion.reasons.map(reason => reason === "COORDINATE_REVIEW_REQUIRED" ? "COORDINATE_EVIDENCE_EXPIRED" : reason) } : conversion];
     });
     // Address access occurs only after API authorization; never return names/phone numbers.
-    return { tenant, serviceDate, timezone: "Asia/Kolkata", sourceFingerprint: source.sourceFingerprint, settings: source.settings, conversions, addresses: source.bookings.filter(b => conversions.some(c => (c.eligible ? c.pickup.id : c.id) === b.id)).map(b => ({ id: b.id, reference: b.bookingReference, displayName: b.fullName, address: [b.addressLine, b.locality, b.pincode].join(", ") })) };
+    return { tenant, serviceDate, timezone: "Asia/Kolkata", sourceFingerprint: source.sourceFingerprint, settings: source.settings, conversions, addresses: source.bookings.filter(b => conversions.some(c => (c.eligible ? c.pickup.id : c.id) === b.id)).map(b => ({ id: b.id, reference: b.bookingReference, displayName: b.fullName, requestedSlot: trackingSlots(b).requestedSlot, assignedSlot: trackingSlots(b).assignedSlot, address: [b.addressLine, b.locality, b.pincode].join(", ") })) };
   }
   async review(tenant: RecyclerId, raw: unknown, reviewer: string) {
     const body = z.object({ bookingId: z.string().min(1).max(160), coordinate: Coordinate, serviceSeconds: z.number().positive().max(86400), assumptionVersion: z.string().min(1).max(160), candidateResultId: z.string().uuid().optional(), candidateId: z.string().min(1).max(160).optional(), correctionReason: z.string().min(1).max(500).optional() }).strict().parse(raw);

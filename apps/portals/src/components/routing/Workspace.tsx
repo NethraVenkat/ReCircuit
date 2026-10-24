@@ -9,7 +9,7 @@ import { navigationSection, routingDate, routingHref } from "../../lib/geospatia
 export type PresentedProposal = SavedProposal & { current: boolean };
 export interface Preview {
   tenant: string; serviceDate: string; sourceFingerprint: string; conversions: Conversion[]; settings: WorkspaceSettings;
-  addresses: Array<{ id: string; reference: string; address: string }>;
+  addresses: Array<{ id: string; reference: string; displayName?: string; requestedSlot?: string | null; assignedSlot?: string | null; address: string }>;
   history: Array<{ id: string; version: number; createdAt: string; serviceDate: string; correlationId: string }>;
   map: { enabled: boolean; key?: string; reason?: string };
 }

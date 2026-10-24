@@ -100,7 +100,10 @@ export class Verifier {
       const simulatedBadge = page.locator('[data-testid="simulated-event-badge"]');
 
       const observedRef = (await refEl.textContent())?.trim() || "";
-      const observedStatus = (await statusEl.textContent())?.trim() || "";
+      const displayedStatus = (await statusEl.textContent())?.trim() || "";
+      // Preserve the verifier's lifecycle contract when the portal presents readable labels.
+      const statusLabels: Record<string, string> = { "Request received": "RECEIVED", "Awaiting scheduling": "CONFIRMED", "Scheduled pickup": "SCHEDULED", "Collected": "PICKED_UP", "Collection completed": "WEIGHED", "Cancelled": "CANCELLED" };
+      const observedStatus = statusLabels[displayedStatus] || displayedStatus;
       const observedFeeText = (await feeEl.textContent().catch(() => null))?.trim() || "";
       const isSimulatedDownstream = (await simulatedBadge.count()) > 0;
 
@@ -113,7 +116,7 @@ export class Verifier {
       }
 
       // 4. TC4 Invariant: Do not report collected without explicit signed evidence
-      if ((observedStatus === "PICKED_UP" || observedStatus === "COLLECTED") && !isCollected(leg.state)) {
+      if (["PICKED_UP", "COLLECTED", "WEIGHED"].includes(observedStatus) && !isCollected(leg.state)) {
         // Portal simulated event or downstream update cannot automatically claim pickup on user leg without pickup confirmation
         throw new VerifierError(
           `TC4 Invariant Violation: Recycler portal displays "${observedStatus}", but no pickup confirmation evidence exists for this leg.`,
