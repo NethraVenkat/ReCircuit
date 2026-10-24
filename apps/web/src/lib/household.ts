@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import { z } from "zod";
 import { getRepository } from "@recircuit/db";
+import { assertSameOrigin } from "./request-origin";
 
 export const customerSchema = z.object({
   fullName: z.string().trim().min(1).max(100),
@@ -31,8 +32,7 @@ export async function owned(id: string) {
   return record;
 }
 export function sameOrigin(req: Request): void {
-  const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin) throw new Error("ORIGIN_DENIED");
+  assertSameOrigin(req);
 }
 export async function locked<T>(id: string, run: () => Promise<T>): Promise<T> {
   if (!z.string().uuid().safeParse(id).success) throw new Error("NOT_FOUND");

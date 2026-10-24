@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@recircuit/db": "*",
     "@supabase/supabase-js": "^2.45.4",
     "leaflet": "^1.9.4",
     "next": "16.4.3",

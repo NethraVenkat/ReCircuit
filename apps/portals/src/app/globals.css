@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @config "../../tailwind.config.ts";
 
+/* Native date-picker subcontrols also retain the workspace focus indicator. */
+.routing-workspace input:focus-within{outline:3px solid #1d4ed8;outline-offset:3px}
+.routing-history-list{display:grid;gap:8px;max-height:min(60vh,440px);overflow-y:auto;overflow-x:hidden;padding:8px;scroll-padding:8px}
+.routing-workspace .routing-history-list button{width:100%;background:#fff;color:#245c3d;text-align:left;font-size:14px;overflow-wrap:anywhere}
+.routing-workspace .routing-history-list button[aria-pressed="true"]{background:#e7f3eb;border-color:#14532d;color:#14532d}
+
 /* Keep established v3 form/border defaults during the security migration. */
 @layer base {
   *, ::after, ::before, ::backdrop, ::file-selector-button { border-color: var(--color-gray-200, currentColor); }

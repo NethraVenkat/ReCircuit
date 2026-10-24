@@ -103,13 +103,16 @@ describe("packages/db Repository Test Suite", () => {
     let pgRepo: PgRepository;
 
     beforeAll(async () => {
+      const started = Date.now();
       pgDb = new PGlite();
       const rootDir = path.resolve(__dirname, "../../..");
       await pgDb.exec(fs.readFileSync(path.join(rootDir, "supabase/migrations/0001_init.sql"), "utf-8"));
       await pgDb.exec(fs.readFileSync(path.join(rootDir, "supabase/migrations/0002_portal.sql"), "utf-8"));
       await pgDb.exec(fs.readFileSync(path.join(rootDir, "supabase/migrations/0003_booking_fee.sql"), "utf-8"));
       pgRepo = new PgRepository(pgDb);
-    });
+      console.info(JSON.stringify({ fixture: "repository-sql", initializationMs: Date.now() - started }));
+    }, 30000); // Bound cold WASM initialization separately from repository assertions.
+    afterAll(async () => { await pgDb?.close(); }, 10000);
 
     it("saves and retrieves requests via PostgreSQL queries", async () => {
       const reqId = randomUUID();

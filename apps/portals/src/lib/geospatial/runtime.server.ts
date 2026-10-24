@@ -6,22 +6,9 @@ import { verificationFromHousehold } from "./verification-bridge";
 import { syntheticBooking, syntheticInput } from "./fixtures";
 import { fingerprint, type MatrixSnapshot } from "./contracts";
 import type { MatrixProvider, MatrixRequest } from "./providers";
-import { HeiGitProvider } from "./heigit.server";
-import { HeiGitGeocoder } from "./geocoding.server";
+import { PublicOnlyHeiGitProvider, RegisteredPublicGeocoder } from "./public-pilot.server";
 import { DisabledGeocoder, type GeocodingProvider } from "./geocoding";
 import { SupabaseRoutingStore } from "./shared-store.server";
-
-class PublicOnlyHeiGitProvider extends HeiGitProvider {
-  async matrix(request: MatrixRequest) {
-    const publicCoordinates = [{ lon: 8.66044, lat: 49.41571 }, { lon: 8.67842, lat: 49.40664 }];
-    if (request.nodes.some(n => !n.id.startsWith("public-ors-docs-") || !publicCoordinates.some(c => c.lat === n.coordinate.lat && c.lon === n.coordinate.lon))) throw Error("HEIGIT_PUBLIC_TEST_COORDINATES_ONLY");
-    return super.matrix(request);
-  }
-  async geometry(nodes: Array<{ lat: number; lon: number }>) {
-    if (nodes.some(n => ![{ lon: 8.66044, lat: 49.41571 }, { lon: 8.67842, lat: 49.40664 }].some(c => c.lat === n.lat && c.lon === n.lon))) throw Error("HEIGIT_PUBLIC_TEST_COORDINATES_ONLY");
-    return super.geometry(nodes);
-  }
-}
 
 class RegisteredScenarioProvider implements MatrixProvider {
   readonly configurationId = "registered-synthetic-four-stop-v1";
@@ -50,14 +37,14 @@ export function routingService(): RoutingService {
   const directory = process.env.ROUTING_DATA_DIR, records = process.env.ROUTING_HOUSEHOLD_EVIDENCE_DIR;
   if (!directory || !path.isAbsolute(directory) || !records || !path.isAbsolute(records)) throw Error("ROUTING_STORAGE_CONFIGURATION_REQUIRED");
   if (!["synthetic", "heigit-public"].includes(process.env.ROUTING_MATRIX_PROVIDER || "synthetic") || !["disabled", "synthetic", "heigit-public"].includes(process.env.ROUTING_GEOCODER_PROVIDER || "disabled")) throw Error("ROUTING_PROVIDER_CONFIGURATION_REQUIRED");
-  const provider: MatrixProvider = process.env.ROUTING_MATRIX_PROVIDER === "heigit-public" ? new PublicOnlyHeiGitProvider(process.env.HEIGIT_API_KEY, process.env.ROUTING_EXTERNAL_PUBLIC_ENABLED === "true" && process.env.ROUTING_FREE_QUOTA_CONFIRMED === "true", fetch, 2) : new RegisteredScenarioProvider();
-  const geocoder = process.env.ROUTING_GEOCODER_PROVIDER === "synthetic" ? new RegisteredScenarioGeocoder() : process.env.ROUTING_GEOCODER_PROVIDER === "heigit-public" ? new HeiGitGeocoder(process.env.HEIGIT_API_KEY, process.env.ROUTING_EXTERNAL_PUBLIC_ENABLED === "true" && process.env.ROUTING_FREE_QUOTA_CONFIRMED === "true", ["Heidelberg Castle, Heidelberg, 69117"]) : new DisabledGeocoder();
+  const geocoder = process.env.ROUTING_GEOCODER_PROVIDER === "synthetic" ? new RegisteredScenarioGeocoder() : process.env.ROUTING_GEOCODER_PROVIDER === "heigit-public" ? new RegisteredPublicGeocoder(process.env.HEIGIT_API_KEY, process.env.ROUTING_EXTERNAL_PUBLIC_ENABLED === "true" && process.env.ROUTING_FREE_QUOTA_CONFIRMED === "true") : new DisabledGeocoder();
   let store: import("./service").RoutingPersistence = new RoutingStore(directory);
   if (process.env.ROUTING_STORE_BACKEND === "supabase-local-test") {
     const url = new URL(process.env.SUPABASE_URL || "https://invalid.example");
     if (process.env.ROUTING_SHARED_TEST_MODE !== "true" || url.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(url.hostname) || url.origin !== process.env.SUPABASE_URL) throw Error("ROUTING_SHARED_LOCAL_TEST_CONFIGURATION_REQUIRED");
     store = new SupabaseRoutingStore();
   } else if (process.env.ROUTING_STORE_BACKEND && process.env.ROUTING_STORE_BACKEND !== "local") throw Error("ROUTING_STORAGE_CONFIGURATION_REQUIRED");
+  const provider: MatrixProvider = process.env.ROUTING_MATRIX_PROVIDER === "heigit-public" ? new PublicOnlyHeiGitProvider(process.env.HEIGIT_API_KEY, process.env.ROUTING_EXTERNAL_PUBLIC_ENABLED === "true" && process.env.ROUTING_FREE_QUOTA_CONFIRMED === "true", store, geocoder.configurationId) : new RegisteredScenarioProvider();
   service = new RoutingService({ list: tenant => getRepository().listBookings(tenant), verification: async (tenant, booking) => {
     const names = await fs.readdir(records);
     if (names.length > 500) throw Error("EVIDENCE_LIMIT");

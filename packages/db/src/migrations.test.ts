@@ -10,7 +10,7 @@
  *  - Database enums match TypeScript enums without drift.
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import fs from "fs";
 import path from "path";
@@ -19,6 +19,7 @@ describe("PostgreSQL Migrations & Schema Offline Verification", () => {
   let db: PGlite;
 
   beforeAll(async () => {
+    const started = Date.now();
     db = new PGlite();
 
     const rootDir = path.resolve(__dirname, "../../..");
@@ -31,7 +32,9 @@ describe("PostgreSQL Migrations & Schema Offline Verification", () => {
     await db.exec(migration2);
     await db.exec(fs.readFileSync(path.join(rootDir, "supabase/migrations/0003_booking_fee.sql"), "utf8"));
     await db.exec(seed);
-  });
+    console.info(JSON.stringify({ fixture: "legacy-sql-migrations", initializationMs: Date.now() - started }));
+  }, 30000); // Bound cold WASM setup separately from application/test deadlines.
+  afterAll(async () => { await db?.close(); }, 10000);
 
   it("stores submitted fees as nullable numeric values with a nonnegative constraint", async () => {
     const column = await db.query<{ data_type: string; is_nullable: string }>(
