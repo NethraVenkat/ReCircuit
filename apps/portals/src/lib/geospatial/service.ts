@@ -76,7 +76,8 @@ export class RoutingService {
   }
   async preview(tenant: RecyclerId, serviceDate: string) {
     ServiceDate.parse(serviceDate); const source = await this.sources(tenant);
-    const conversions = source.bookings.map((b, i) => {
+    const conversions = source.bookings.flatMap((b, i) => {
+      if (b.status !== "SCHEDULED" || !confirmedSlotWindow(trackingSlots(b).assignedSlot, serviceDate)) return [];
       const review = source.settings.reviews[b.id];
       const attempt = source.settings.geocoding[b.id];
       const expired = !!review?.geocode.sourceResultId && attempt?.id === review.geocode.sourceResultId && Date.parse(attempt.expiresAt) <= this.now().getTime();
@@ -84,10 +85,10 @@ export class RoutingService {
       const geocode = expired || missingEvidence ? null : review?.geocode ?? null;
       const assigned = trackingSlots(b).assignedSlot, confirmed = confirmedSlotWindow(assigned, serviceDate);
       const conversion = bookingToPickup(b, { tenant, serviceDate, timezone: "Asia/Kolkata", verification: source.verification[i], geocode, serviceSeconds: review?.serviceSeconds ?? null, assumptionVersion: review?.assumptionVersion ?? "not-recorded", confirmedWindow: confirmed, confirmedWindowEvidenceId: confirmed ? fingerprint(b.events) : null });
-      return expired && !conversion.eligible ? { ...conversion, reasons: conversion.reasons.map(reason => reason === "COORDINATE_REVIEW_REQUIRED" ? "COORDINATE_EVIDENCE_EXPIRED" : reason) } : conversion;
+      return [expired && !conversion.eligible ? { ...conversion, reasons: conversion.reasons.map(reason => reason === "COORDINATE_REVIEW_REQUIRED" ? "COORDINATE_EVIDENCE_EXPIRED" : reason) } : conversion];
     });
     // Address access occurs only after API authorization; never return names/phone numbers.
-    return { tenant, serviceDate, timezone: "Asia/Kolkata", sourceFingerprint: source.sourceFingerprint, settings: source.settings, conversions, addresses: source.bookings.map(b => ({ id: b.id, reference: b.bookingReference, address: [b.addressLine, b.locality, b.pincode].join(", ") })) };
+    return { tenant, serviceDate, timezone: "Asia/Kolkata", sourceFingerprint: source.sourceFingerprint, settings: source.settings, conversions, addresses: source.bookings.filter(b => conversions.some(c => (c.eligible ? c.pickup.id : c.id) === b.id)).map(b => ({ id: b.id, reference: b.bookingReference, displayName: b.fullName, address: [b.addressLine, b.locality, b.pincode].join(", ") })) };
   }
   async review(tenant: RecyclerId, raw: unknown, reviewer: string) {
     const body = z.object({ bookingId: z.string().min(1).max(160), coordinate: Coordinate, serviceSeconds: z.number().positive().max(86400), assumptionVersion: z.string().min(1).max(160), candidateResultId: z.string().uuid().optional(), candidateId: z.string().min(1).max(160).optional(), correctionReason: z.string().min(1).max(500).optional() }).strict().parse(raw);

@@ -75,7 +75,7 @@ export interface BookingRepository {
     reference: string,
     status: PortalBookingStatus,
     detail: string,
-    options?: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean }
+    options?: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean; expectedUpdatedAt?: string }
   ): Promise<PortalBooking | null>;
   getFailureSwitches(recyclerId: RecyclerId): Promise<FailureSwitches>;
   updateFailureSwitches(recyclerId: RecyclerId, switches: Partial<FailureSwitches>): Promise<FailureSwitches>;

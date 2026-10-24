@@ -10,6 +10,8 @@ import type {
 } from "../types";
 import { RECYCLER_CONFIGS, generateReference } from "../config";
 import { dispatcherSlotDetail } from "../tracking-slots";
+import { trackingSlots } from "../tracking-slots";
+import { confirmedSlotWindow } from "../geospatial/windows";
 
 interface StoreData {
   bookings: PortalBooking[];
@@ -42,10 +44,20 @@ export class FileRepository implements BookingRepository {
       release = resolve;
     });
     await prev;
+    const lock = path.join(this.baseDir, ".repository-lock");
+    let acquired = false;
     try {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try { await fs.promises.mkdir(lock); acquired = true; break; }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+      }
+      if (!acquired) throw Error("BOOKING_STORE_BUSY");
       return await fn();
     } finally {
-      release();
+      try { if (acquired) await fs.promises.rmdir(lock); } finally { release(); }
     }
   }
 
@@ -70,7 +82,7 @@ export class FileRepository implements BookingRepository {
         switches: { ...DEFAULT_SWITCHES, ...(parsed.switches || {}) },
       };
     } catch {
-      return { bookings: [], switches: { ...DEFAULT_SWITCHES } };
+      throw Error("BOOKING_STORE_UNREADABLE");
     }
   }
 
@@ -116,13 +128,7 @@ export class FileRepository implements BookingRepository {
           }
           continue;
         }
-        try {
-          fs.copyFileSync(src, dest);
-          fs.unlinkSync(src);
-          return;
-        } catch {
-          throw err;
-        }
+        throw err;
       }
     }
   }
@@ -251,14 +257,24 @@ export class FileRepository implements BookingRepository {
     reference: string,
     status: PortalBookingStatus,
     detail: string,
-    options: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean } = {}
+    options: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean; expectedUpdatedAt?: string } = {}
   ): Promise<PortalBooking | null> {
     return this.withLock(() => {
       const store = this.readStore(recyclerId);
       const booking = store.bookings.find((b) => b.bookingReference.toUpperCase() === reference.trim().toUpperCase());
       if (!booking) return null;
 
-      const now = new Date().toISOString();
+      if (options.expectedUpdatedAt && options.expectedUpdatedAt !== booking.updatedAt) throw Error("BOOKING_CHANGED_RELOAD_REQUIRED");
+      if (["CANCELLED", "WEIGHED"].includes(booking.status) && status !== booking.status || booking.status === "PICKED_UP" && !["PICKED_UP", "WEIGHED"].includes(status)) throw Error("PICKUP_NO_LONGER_ACTIVE");
+
+      if (status === "SCHEDULED") {
+        const slot = options.slot?.trim() ?? "";
+        if (!confirmedSlotWindow(slot, slot.slice(0, 10))) throw Error("EXPLICIT_DISPATCH_WINDOW_REQUIRED");
+        if (["CANCELLED", "PICKED_UP", "WEIGHED"].includes(booking.status)) throw Error("PICKUP_NO_LONGER_ACTIVE");
+        if (booking.status === status && trackingSlots(booking).assignedSlot === slot) return booking;
+      }
+
+      const now = new Date(Math.max(Date.now(), Date.parse(booking.updatedAt) + 1)).toISOString();
       booking.status = status;
       booking.updatedAt = now;
 

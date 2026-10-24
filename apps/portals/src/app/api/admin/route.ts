@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveRecyclerId } from "@/lib/config";
 import { getRepository } from "@/lib/repository";
+import { confirmedSlotWindow } from "@/lib/geospatial/windows";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +80,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   return response;
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
+async function postAdmin(request: Request): Promise<NextResponse> {
   const auth = checkAuth(request);
   if (auth.status !== 200) {
     return auth.response;
@@ -97,6 +98,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const action = typeof body.action === "string" ? body.action : "";
+  const expectedUpdatedAt = typeof body.expectedUpdatedAt === "string" ? body.expectedUpdatedAt : undefined;
 
   if (action === "toggle_switch") {
     const rawSwitchName = String(body.switchName);
@@ -131,14 +133,22 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   if (action === "schedule") {
-    const slot = typeof body.slot === "string" ? body.slot : "Tomorrow 10:00–12:00 IST";
+    const slot = typeof body.slot === "string" ? body.slot.trim() : "";
+    if (!confirmedSlotWindow(slot, slot.slice(0, 10))) {
+      return NextResponse.json({ ok: false, error: "Choose an explicit service date and time window." }, { status: 400 });
+    }
     const updated = await repo.updateBookingStatus(
       recyclerId,
       reference,
       "SCHEDULED",
       `Pickup scheduled for slot: ${slot} (SIMULATED DOWNSTREAM EVENT)`,
-      { slot, isSimulated: true }
+      { slot, isSimulated: true, expectedUpdatedAt }
     );
+    return NextResponse.json({ ok: Boolean(updated), booking: updated });
+  }
+
+  if (action === "cancel") {
+    const updated = await repo.updateBookingStatus(recyclerId, reference, "CANCELLED", "Pickup cancelled by dispatcher (SIMULATED DOWNSTREAM EVENT)", { isSimulated: true, expectedUpdatedAt });
     return NextResponse.json({ ok: Boolean(updated), booking: updated });
   }
 
@@ -168,5 +178,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
+}
+
+export async function POST(request: Request): Promise<NextResponse> {
+  try { return await postAdmin(request); }
+  catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    const conflict = code === "BOOKING_CHANGED_RELOAD_REQUIRED" || code === "PICKUP_NO_LONGER_ACTIVE";
+    return NextResponse.json({ ok: false, error: conflict ? "This pickup changed or is no longer active. Refresh the booking list before continuing." : "The booking update could not be saved. Refresh the stored status before retrying." }, { status: conflict ? 409 : 503 });
+  }
 }
 

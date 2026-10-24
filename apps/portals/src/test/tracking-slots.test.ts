@@ -60,18 +60,18 @@ it("preserves the customer's preference across persisted file-store scheduling a
   const dir = mkdtempSync(path.join(tmpdir(), "recircuit-slot-test-"));
   const repo = new FileRepository(dir);
   const created = await repo.createBooking(input);
-  await repo.updateBookingStatus("deccan", created.booking.bookingReference, "SCHEDULED", "Dispatcher scheduled pickup", { slot: "Afternoon" });
+  await repo.updateBookingStatus("deccan", created.booking.bookingReference, "SCHEDULED", "Dispatcher scheduled pickup", { slot: "2026-10-24 (15:00-17:00 IST)" });
   const saved = await new FileRepository(dir).getBookingByReference("deccan", created.booking.bookingReference);
   expect(saved?.preferredSlot).toBe(input.preferredSlot);
-  expect(trackingSlots(saved!)).toEqual({ requestedSlot: input.preferredSlot, assignedSlot: "Afternoon" });
+  expect(trackingSlots(saved!)).toEqual({ requestedSlot: input.preferredSlot, assignedSlot: "2026-10-24 (15:00-17:00 IST)" });
 });
 it("uses the existing atomic Supabase RPC without overwriting preferred_slot", async () => {
   mocks.rpc.mockClear();
   const repo = new SupabaseRepository("https://example.supabase.co", "unit-only");
   vi.spyOn(repo, "getBookingByReference").mockResolvedValue(booking());
-  await repo.updateBookingStatus("deccan", "DEC-00001", "SCHEDULED", "Dispatcher scheduled pickup", { slot: "Afternoon", isSimulated: true });
+  await repo.updateBookingStatus("deccan", "DEC-00001", "SCHEDULED", "Dispatcher scheduled pickup", { slot: "2026-10-24 (15:00-17:00 IST)", isSimulated: true });
   expect(mocks.rpc).toHaveBeenCalledTimes(1);
   const args = mocks.rpc.mock.calls[0]![1] as { p_options: object; p_detail: string; p_status: string };
   expect(args.p_options).not.toHaveProperty("slot"); expect(args.p_status).toBe("SCHEDULED");
-  expect(trackingSlots(booking([event(args.p_detail)], "SCHEDULED"))).toEqual({ requestedSlot: input.preferredSlot, assignedSlot: "Afternoon" });
+  expect(trackingSlots(booking([event(args.p_detail)], "SCHEDULED"))).toEqual({ requestedSlot: input.preferredSlot, assignedSlot: "2026-10-24 (15:00-17:00 IST)" });
 });

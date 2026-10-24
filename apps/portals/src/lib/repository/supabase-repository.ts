@@ -91,8 +91,10 @@ export class SupabaseRepository implements BookingRepository {
     reference: string,
     status: PortalBookingStatus,
     detail: string,
-    options: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean } = {}
+    options: { pickupOtp?: string; weightKg?: number; slot?: string; isSimulated?: boolean; expectedUpdatedAt?: string } = {}
   ): Promise<PortalBooking | null> {
+    // Hosted compare-and-set needs a reviewed transactional RPC migration.
+    if (options.expectedUpdatedAt) throw Error("HOSTED_CONCURRENT_DISPATCH_NOT_ENABLED");
     const { slot, ...persistedOptions } = options;
     let eventDetail = detail;
     if (status === "SCHEDULED" && slot?.trim()) {

@@ -8,7 +8,7 @@ const Record = z.object({ request: z.object({ id: z.string(), state: z.literal("
 type Attestation = z.infer<typeof Verification>;
 const normalize = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 /** Read-only bridge from existing household independent-verification evidence, never operator assertions. */
-export function verificationFromHousehold(tenant: RecyclerId, booking: PortalBooking, records: unknown[]): Attestation | null {
+export function verificationFromHousehold(tenant: RecyclerId, booking: PortalBooking, records: unknown[], allowSimulated = false): Attestation | null {
   if (booking.recyclerId !== tenant) return null;
   const candidates: Attestation[] = [];
   for (const raw of records) {
@@ -18,8 +18,15 @@ export function verificationFromHousehold(tenant: RecyclerId, booking: PortalBoo
     for (const leg of r.plan.legs) {
       if (leg.recyclerId !== tenant || leg.bookingReference !== booking.bookingReference || leg.state !== "REQUEST_CONFIRMED") continue;
       const parsed = Evidence.safeParse(r.household.verifications[leg.id]); if (!parsed.success) continue;
+      const rawEvidence = r.household.verifications[leg.id] as { isSimulated?: boolean };
+      if (rawEvidence.isSimulated && !allowSimulated) continue;
       const v = parsed.data;
-      if (v.bookingReference !== booking.bookingReference || !Number.isFinite(Date.parse(booking.updatedAt)) || Date.parse(v.checkedAt) < Date.parse(booking.updatedAt)) continue;
+      // Dispatch lifecycle events do not alter what the independent browser observed.
+      // Recheck address, items and fee below rather than expiring evidence on scheduling.
+      if (v.bookingReference !== booking.bookingReference || !Number.isFinite(Date.parse(booking.createdAt)) || Date.parse(v.checkedAt) < Date.parse(booking.createdAt)) continue;
+      if (Date.parse(v.checkedAt) < Date.parse(booking.updatedAt) && !booking.events.some(e =>
+        e.createdAt === booking.updatedAt && e.eventType === `STATUS_UPDATED_${e.status}` &&
+        ["CONFIRMED", "SCHEDULED", "CANCELLED", "PICKED_UP", "WEIGHED"].includes(e.status))) continue;
       const fee = /(?:₹|INR)\s*(\d+(?:\.\d+)?)/.exec(v.observedFeeText);
       if (!fee || Number(fee[1]) !== booking.chargedFeeInr) continue;
       const observed = v.observedItems.map(i => [normalize(i.name), i.quantity, i.weightKg]).sort(), expected = booking.items.map(i => [normalize(i.name), i.quantity, i.weightKg]).sort();

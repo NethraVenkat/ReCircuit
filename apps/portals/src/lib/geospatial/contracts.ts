@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import type { PortalBooking, RecyclerId } from "../types";
 import { trackingSlots } from "../tracking-slots";
+import { confirmedSlotWindow } from "./windows";
 
 export const Tenant = z.enum(["deccan", "paperplus", "quickscrap"]);
 export const Id = z.string().min(1).max(160);
@@ -81,7 +82,9 @@ export function bookingToPickup(b: PortalBooking, rawContext: unknown): Conversi
   if (!parsed.success) return { eligible: false, id: b.id, reasons: ["INVALID_PREPARATION"] };
   const p = parsed.data, reasons: string[] = [], version = bookingFingerprint(b), address = addressFingerprint(b);
   if (b.recyclerId !== p.tenant) reasons.push("TENANT_MISMATCH");
-  if (!["RECEIVED", "CONFIRMED", "SCHEDULED"].includes(b.status)) reasons.push("LIFECYCLE_EXCLUDED");
+  if (b.status !== "SCHEDULED") reasons.push("LIFECYCLE_EXCLUDED");
+  const assignedWindow = confirmedSlotWindow(trackingSlots(b).assignedSlot, p.serviceDate);
+  if (!assignedWindow || !p.confirmedWindow || !p.confirmedWindowEvidenceId || fingerprint(assignedWindow) !== fingerprint(p.confirmedWindow)) reasons.push("DISPATCHER_SCHEDULE_REQUIRED");
   if (!b.id || !b.bookingReference || !b.addressLine?.trim() || !b.pincode?.trim()) reasons.push("IDENTITY_OR_ADDRESS_MISSING");
   if (!p.verification || p.verification.tenant !== p.tenant || p.verification.bookingId !== b.id || p.verification.bookingFingerprint !== version) reasons.push("INDEPENDENT_VERIFICATION_REQUIRED");
   const loadKg = b.items.reduce((n, i) => n + (i.weightKg ?? NaN), 0);

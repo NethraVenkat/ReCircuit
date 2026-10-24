@@ -382,11 +382,11 @@ describe("ReCircuit Mock Recycler Portals Test Suite", () => {
         ref,
         "SCHEDULED",
         "Assigned slot window (SIMULATED DOWNSTREAM EVENT)",
-        { slot: "2026-11-02 15:00 IST", isSimulated: true }
+        { slot: "2026-11-02 (15:00-17:00 IST)", isSimulated: true }
       );
       expect(b2?.status).toBe("SCHEDULED");
       expect(b2?.preferredSlot).toBe("2026-11-01 10:00 IST");
-      expect(trackingSlots(b2!)).toEqual({ requestedSlot: "2026-11-01 10:00 IST", assignedSlot: "2026-11-02 15:00 IST" });
+      expect(trackingSlots(b2!)).toEqual({ requestedSlot: "2026-11-01 10:00 IST", assignedSlot: "2026-11-02 (15:00-17:00 IST)" });
 
       // 3. Picked Up (with 6-digit OTP)
       const otp = "842190";
