@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { filterSavedProposals, isReadyForPlanning, navigationSection, routingDate, routingHref } from "./navigation";
+import { currentServiceDate, filterSavedProposals, isReadyForPlanning, navigationSection, routingDate, routingHref } from "./navigation";
 import { syntheticInput } from "./fixtures";
 import type { ProposalSummary } from "./service";
 import { isRouteAllowedForRecycler } from "../config";
@@ -18,10 +18,22 @@ it("admits exactly the new routing pages for each server tenant while retaining 
   expect(isRouteAllowedForRecycler("/schedule", "deccan")).toBe(false); expect(isRouteAllowedForRecycler("/book-pickup", "quickscrap")).toBe(false); expect(isRouteAllowedForRecycler("/rates", "paperplus")).toBe(false);
 });
 it("preserves only the explicit non-secret route context and validates service dates", () => {
-  expect(routingDate("2026-02-30")).toBe("2026-10-24"); expect(routingDate("2026-10-25")).toBe("2026-10-25");
+  expect(routingDate("2026-02-30", new Date("2026-10-25T01:00:00Z"))).toBe("2026-10-25"); expect(routingDate("2026-10-25")).toBe("2026-10-25");
   const extra = { q: "version 2", freshness: "stale", token: "private-should-not-enter-url" };
   expect(routingHref("/admin/routing/proposals", "2026-10-25", extra)).toBe("/admin/routing/proposals?date=2026-10-25&q=version+2&freshness=stale");
   expect(navigationSection("/admin/routing/proposals/123")).toBe("proposals"); expect(navigationSection("/admin/routing/fleet")).toBe("fleet");
+});
+it("defaults to the current IST day across midnight, month and year boundaries, preserving explicit dates", () => {
+  for (const [before, after, previous, next] of [
+    ["2026-10-24T18:29:59.999Z", "2026-10-24T18:30:00.000Z", "2026-10-24", "2026-10-25"],
+    ["2026-10-31T18:29:59.999Z", "2026-10-31T18:30:00.000Z", "2026-10-31", "2026-11-01"],
+    ["2026-12-31T18:29:59.999Z", "2026-12-31T18:30:00.000Z", "2026-12-31", "2027-01-01"],
+  ]) {
+    expect(currentServiceDate(new Date(before!))).toBe(previous);
+    expect(routingDate(null, new Date(after!))).toBe(next);
+    expect(routingDate("invalid", new Date(after!))).toBe(next);
+    expect(routingDate("2026-10-20", new Date(after!))).toBe("2026-10-20");
+  }
 });
 it("searches actual metadata, combines filters and treats expired evidence as stale without rewriting rows", () => {
   const base: ProposalSummary = { id: "owned-id", version: 1, createdAt: "2026-10-24T00:00:00Z", serviceDate: "2026-10-24", correlationId: "trace-one", current: true, metres: 300, served: 1, vehicles: 1, matrix: { provider: "synthetic-only", profile: "driving-car", retrievedAt: "2026-10-24T00:00:00Z", expiresAt: "2026-10-24T01:00:00Z" } };

@@ -36,33 +36,29 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
   const [captchaCode, setCaptchaCode] = useState("");
   const [captchaKey, setCaptchaKey] = useState(0);
 
-  // Default item based on recycler
-  const getDefaultItems = (rId: string): BookingItemInput[] => {
-    if (rId === "deccan") return [{ name: "Dell Laptop", quantity: 1, weightKg: 2.2 }];
-    if (rId === "paperplus") return [{ name: "Old Newspaper", quantity: 1, weightKg: 8.0 }];
-    return [{ name: "Old Electronics & Books", quantity: 2, weightKg: 6.0 }];
-  };
-
-  // Items list
-  const [items, setItems] = useState<BookingItemInput[]>(() => getDefaultItems(recyclerId));
+  // Customer-entered items only; examples remain in test fixtures.
+  const [items, setItems] = useState<BookingItemInput[]>([]);
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState<number>(1);
-  const [itemWeight, setItemWeight] = useState<number>(5);
+  const [itemWeight, setItemWeight] = useState<number>(NaN);
 
   const totalWeight = items.reduce((sum, item) => sum + (item.weightKg ?? 0), 0);
   const [computedFee, setComputedFee] = useState<number | null>(null);
-  const [feeLoading, setFeeLoading] = useState(true);
+  const [feeLoading, setFeeLoading] = useState(false);
   const [feeError, setFeeError] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [validationErrors, setValidationErrors] = useState<{ field: string; message: string }[]>([]);
 
-  const slots = getAvailableSlots();
+  // Populate time-dependent options after hydration so an IST date rollover
+  // between the server response and client render cannot mismatch the HTML.
+  const [slots, setSlots] = useState<string[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
     const apiPrefix = getApiPrefix(recyclerId);
+    if (items.length === 0) { setFeeLoading(false); setComputedFee(null); setFeeError(""); return; }
     setFeeLoading(true); setComputedFee(null); setFeeError("");
     fetch(`${apiPrefix}/api/fee?weight=${totalWeight}`, { headers: { "x-recycler-id": recyclerId }, signal: controller.signal })
       .then(async res => { if (!res.ok) throw new Error(`Fee lookup returned HTTP ${res.status}`); return res.json(); })
@@ -70,7 +66,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
       .catch((error: Error) => { if (!controller.signal.aborted) setFeeError(error.message); })
       .finally(() => { if (!controller.signal.aborted) setFeeLoading(false); });
     return () => controller.abort();
-  }, [totalWeight, recyclerId]);
+  }, [totalWeight, recyclerId, items.length]);
   useEffect(() => { if (errorMessage) document.getElementById("portal-form-error")?.focus(); }, [errorMessage]);
 
   // Initialize defaults
@@ -79,9 +75,9 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
     const randId = `req-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
     setHydrated(true);
     setClientRequestId(randId);
-    if (slots.length > 0) {
-      setPreferredSlot(slots[0] || "");
-    }
+    const available = getAvailableSlots();
+    setSlots(available);
+    setPreferredSlot(available[0] || "");
 
     // Initialize CAPTCHA for PaperPlus
     if (recyclerId === "paperplus") {
@@ -139,7 +135,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (loading || feeLoading || computedFee === null) return;
+    if (loading || feeLoading || computedFee === null || items.length === 0) return;
     setLoading(true);
     setErrorMessage("");
     setValidationErrors([]);
@@ -309,21 +305,16 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
           </div>
           <div>
             <label htmlFor="pincode" className="block text-xs font-semibold mb-1">Pincode (Hyderabad) *</label>
-            <select
-              id="pincode"
-              name="pincode"
-              data-testid="input-pincode"
-              value={pincode}
-              onChange={(e) => setPincode(e.target.value)}
+            <input
+              id="pincode" name="pincode" type="text" inputMode="numeric"
+              pattern="[0-9]{6}" maxLength={6} required list="serviceable-pincodes"
+              data-testid="input-pincode" aria-describedby="pincode-help"
+              value={pincode} onChange={(e) => setPincode(e.target.value)}
               className="w-full px-3 py-2 border rounded-sm text-sm text-slate-900 bg-white font-medium"
-            >
-              {SERVICEABLE_PINCODES.map((pin) => (
-                <option key={pin} value={pin}>
-                  {pin}
-                </option>
-              ))}
-              <option value="500001">500001 (Non-serviceable test)</option>
-            </select>
+            />
+            <datalist id="serviceable-pincodes">{SERVICEABLE_PINCODES.map(pin => <option key={pin} value={pin}/>)}</datalist>
+            <p id="pincode-help" className="portal-form-hint">Enter your six-digit pincode, including one outside the suggested service area, to check coverage.</p>
+            {pincode.length === 6 && !SERVICEABLE_PINCODES.includes(pincode as typeof SERVICEABLE_PINCODES[number]) && <p role="status" className="portal-form-hint">This pincode is outside our current service area. Pickup cannot be booked for this address.</p>}
           </div>
         </div>
 
@@ -354,6 +345,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
           {isPaperPlus && <span className="text-xs text-emerald-700 font-semibold">Min 5 kg Total Required</span>}
         </h3>
 
+        {items.length === 0 && <p data-testid="empty-items" className="portal-form-hint">No items added. Enter a description, quantity and total row weight, then choose Add item.</p>}
         <div className="space-y-2">
           {items.map((item, idx) => (
             <div
@@ -479,7 +471,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <div className="text-xs uppercase font-bold tracking-wider text-slate-500">
           Review Pickup Details & Fee
         </div>
-        {feeLoading ? <RecyclingLoader label="Checking the pickup fee…"/> : computedFee !== null && typeof computedFee === "number" ? (
+        {items.length === 0 ? <p>Add your items to calculate the pickup charge.</p> : feeLoading ? <RecyclingLoader label="Checking the pickup fee…"/> : computedFee !== null && typeof computedFee === "number" ? (
           <div
             data-testid="portal-computed-fee"
             className="text-base font-bold text-slate-900"
@@ -506,7 +498,7 @@ export function BookingForm({ recyclerId }: BookingFormProps): JSX.Element {
         <button
           type="submit"
           data-testid="confirm-booking"
-          disabled={loading || feeLoading || computedFee === null}
+          disabled={loading || feeLoading || computedFee === null || items.length === 0}
           className={`w-full py-3 px-6 rounded-md font-bold text-sm shadow-sm transition-all ${
             isDeccan
               ? "bg-emerald-700 hover:bg-emerald-800 text-white"

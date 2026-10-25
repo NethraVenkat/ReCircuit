@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Conversion } from "../../lib/geospatial/contracts";
 import type { SavedProposal, WorkspaceSettings } from "../../lib/geospatial/service";
-import { navigationSection, routingDate, routingHref } from "../../lib/geospatial/navigation";
+import { currentServiceDate, navigationSection, routingDate, routingHref } from "../../lib/geospatial/navigation";
 
 export type PresentedProposal = SavedProposal & { current: boolean };
 export interface Preview {
@@ -40,8 +40,23 @@ const links = [
   { section: "fleet", path: "/admin/routing/fleet", label: "Fleet & depots" },
   { section: "proposals", path: "/admin/routing/proposals", label: "Saved proposals" },
 ];
-export function RoutingWorkspace({ children }: { children: React.ReactNode }) {
-  const path = usePathname(), params = useSearchParams(), router = useRouter(), date = routingDate(params.get("date")), section = navigationSection(path);
+export function RoutingWorkspace({ children, initialServiceDate }: { children: React.ReactNode; initialServiceDate: string }) {
+  // Reuse the request's date for hydration, then advance at IST midnight and on tab return.
+  const [today, setToday] = useState(initialServiceDate);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const update = () => {
+      const now = new Date(), day = currentServiceDate(now);
+      setToday(day);
+      clearTimeout(timer);
+      timer = setTimeout(update, Date.parse(day + "T00:00:00+05:30") + 86400000 - now.getTime() + 1);
+    };
+    update();
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    return () => { clearTimeout(timer); window.removeEventListener("focus", update); document.removeEventListener("visibilitychange", update); };
+  }, []);
+  const path = usePathname(), params = useSearchParams(), router = useRouter(), date = routingDate(params.get("date"), new Date(today + "T00:00:00+05:30")), section = navigationSection(path);
   const title = path.startsWith("/admin/routing/proposals/") ? "Proposal details" : links.find(item => item.section === section)!.label;
   const descriptions: Record<string, string> = { overview: "Review the saved route, current preparation and the next planning action.", preparation: "Review eligibility, public-location evidence and explicit planning assumptions.", fleet: "Inspect capacity, material compatibility, operating windows and depot configuration.", proposals: "Browse immutable planning versions and their actual stored evidence." };
   const [token, setToken] = useState(""), [entry, setEntry] = useState(""), [preview, setPreview] = useState<Preview | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [revision, setRevision] = useState(0), [ready, setReady] = useState(false);
@@ -81,12 +96,12 @@ export function RoutingWorkspace({ children }: { children: React.ReactNode }) {
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   const href = (destination: string) => routingHref(destination, date), authenticated = !!token && preview?.serviceDate === date;
-  return <div className="routing-shell"><a className="routing-skip" href="#routing-main">Skip to routing content</a><aside className="routing-navigation"><Link className="routing-brand" href="/admin"><span className="routing-brand-mark"><RouteMark/></span><span>ReCircuit<small>Recycler workspace</small></span></Link><p className="routing-nav-label">Operations</p><nav aria-label="Routing workspace">{links.map((item, index) => <Link key={item.section} href={href(item.path)} prefetch={false} aria-current={section === item.section ? "page" : undefined}><span aria-hidden="true">0{index + 1}</span>{item.label}</Link>)}<Link href="/admin"><span aria-hidden="true">↗</span>Operator console</Link></nav><div className="routing-pilot-note"><span className="routing-status-dot"/>Local pilot<p>Planning proposals only. No driver assignment or dispatch.</p></div></aside>
+  return <div className="routing-shell"><a className="routing-skip" href="#routing-main">Skip to routing content</a><aside className="routing-navigation"><Link className="routing-brand" href="/admin"><span className="routing-brand-mark"><RouteMark/></span><span>ReCircuit<small>Recycler workspace</small></span></Link><p className="routing-nav-label">Operations</p><nav aria-label="Routing workspace">{links.map((item, index) => <Link key={item.section} href={href(item.path)} prefetch={false} aria-current={section === item.section ? "page" : undefined}><span aria-hidden="true">0{index + 1}</span>{item.label}</Link>)}<Link href="/admin"><span aria-hidden="true">↗</span>Operator console</Link></nav><div className="routing-pilot-note"><span className="routing-status-dot"/>Route planning<p>Planning proposals only. No driver assignment or dispatch.</p></div></aside>
     <main id="routing-main" className="routing-workspace"><header className="routing-page-header"><div><p className="routing-eyebrow">Operations / Pickup planning</p><h1>{title}</h1><p>{descriptions[section]}</p></div><span className="routing-badge">Proposal only</span></header>
-      <section className="routing-card routing-session" aria-label="Routing access and service date"><div className="routing-session-bar"><label>Service date<input type="date" value={date} required onChange={event => { if (!event.target.value) return; epoch.current++; setPreview(null); router.push(routingHref(path, event.target.value)); }}/></label><p>{token ? <>Connected to <strong>{preview?.tenant || "the authorized recycler"}</strong>. Token remains in this layout’s memory only.</> : "Enter the operator token to read this page. Refreshing requires token entry again."}</p>{token && <div className="routing-action-group"><button type="button" disabled={busy} className="routing-button routing-button--secondary" onClick={() => void refresh()}>Refresh local data</button><button type="button" className="routing-button routing-button--secondary" onClick={forget}>Forget token</button></div>}</div>
+      <section className="routing-card routing-session" aria-label="Routing access and service date"><div className="routing-session-bar"><label>Service date<input type="date" value={date} required onChange={event => { if (!event.target.value) return; epoch.current++; setPreview(null); router.push(routingHref(path, event.target.value)); }}/></label><p>{token ? <>Connected to <strong>{preview?.tenant || "the authorized recycler"}</strong>. Token remains in this layout’s memory only.</> : "Enter the operator token to read this page. Refreshing requires token entry again."}</p>{token && <div className="routing-action-group"><button type="button" disabled={busy} className="routing-button routing-button--secondary" onClick={() => void refresh()}>Refresh planning data</button><button type="button" className="routing-button routing-button--secondary" onClick={forget}>Forget token</button></div>}</div>
       {!token && <form onSubmit={event => void connect(event)} className="routing-entry"><label>Operator token<input type="password" autoComplete="off" required disabled={!ready || busy} value={entry} onChange={event => setEntry(event.target.value)}/></label><button className="routing-button" disabled={!ready || busy}>{!ready ? "Preparing workspace…" : busy ? "Reading…" : "Unlock routing workspace"}</button><p className="routing-hint">Header authentication only. The token never enters URLs, localStorage, sessionStorage or cookies.</p></form>}</section>
-      {error && <RoutingError code={error}/>} {busy && <RecyclingLoader label="Reading or saving local planning evidence…"/>}
+      {error && <RoutingError code={error}/>} {busy && <RecyclingLoader label="Reading or saving planning evidence…"/>}
       {authenticated && preview ? <Context.Provider value={{ preview, date, busy, revision, query: new URLSearchParams(params.toString()), href, navigate: destination => router.push(destination), request, act }}>{children}</Context.Provider> : !busy && !error ? <section className="routing-card routing-welcome"><div className="routing-welcome-mark"><RouteMark/></div><h2>Open {title.toLowerCase()}</h2><p>Use the authorized operator token above. Your destination and service date remain in the URL; credentials are never saved. Navigation does not calculate routes or contact external routing providers.</p></section> : null}
-      <footer className="routing-footer">ReCircuit · Local public-location pilot. Planning never confirms slots, dispatches vehicles or changes booking collection status.</footer>
+      <footer className="routing-footer">ReCircuit · Pickup route planning. Planning never confirms slots, dispatches vehicles or changes booking collection status.</footer>
     </main></div>;
 }

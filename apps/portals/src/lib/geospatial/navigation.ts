@@ -6,9 +6,12 @@ export function isReadyForPlanning(conversion: Conversion, settings: { reviews: 
   return !source || !!attempt && attempt.id === source && Date.parse(attempt.expiresAt) > now;
 }
 /** Only non-secret service-date/filter context is allowed in navigation URLs. */
-export function routingDate(value: string | null): string {
+export function currentServiceDate(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+export function routingDate(value: string | null, now = new Date()): string {
   if (value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + "T00:00:00Z")) && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value) return value;
-  return "2026-10-24";
+  return currentServiceDate(now);
 }
 export function routingHref(path: string, date: string, filters: { q?: string; freshness?: string; proposalDate?: string } = {}): string {
   const query = new URLSearchParams({ date: routingDate(date) });
